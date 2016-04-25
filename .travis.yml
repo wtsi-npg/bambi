@@ -12,8 +12,8 @@ matrix:
     - os: linux
       compiler: gcc
       env: CFLAGS="-std=gnu99 -O0"
-    - os: osx
-      compiler: gcc
+#    - os: osx
+#      compiler: gcc
 
 env:
   global:
