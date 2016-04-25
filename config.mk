@@ -25,7 +25,7 @@
 
 
 HTSDIR = ../htslib
-### include $(HTSDIR)/src/htslib.mk
+include $(HTSDIR)/htslib.mk
 HTSLIB = $(HTSDIR)/libhts.a
 HTSLIB_LIB = $(HTSLIB)
 BGZIP = $(HTSDIR)/bin/bgzip
