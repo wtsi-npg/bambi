@@ -105,7 +105,7 @@ void bc_push(bc_array_t *bc, bc_details_t *bcd)
     if (bc->end == bc->max) {
         // expand the array
         bc->max *= 2;
-        bc->entries = realloc(bc->entries, bc->max * sizeof(bc_details_t));
+        bc->entries = realloc(bc->entries, bc->max * sizeof(bc_details_t *));
     }
     bc->entries[bc->end] = bcd;
     bc->end++;
@@ -133,7 +133,7 @@ bc_array_t *bc_init(void)
     bc->end = 0;
     bc->max = 100;
     bc->tag_len = 0;
-    bc->entries = calloc(bc->max, sizeof(bc_details_t));
+    bc->entries = calloc(bc->max, sizeof(bc_details_t *));
 
     // initialise first entry for null metrics
     bc_details_t *bcd = calloc(1, sizeof(bc_details_t));
