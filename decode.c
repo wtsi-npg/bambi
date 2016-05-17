@@ -342,8 +342,8 @@ int writeMetrics(bc_array_t *barcodeArray, opts_t *opts)
     int total_reads = bcd->reads;
     int total_pf_reads = bcd->pf_reads;
     int total_pf_reads_assigned = 0;
-    int max_reads = bcd->reads;
-    int max_pf_reads = bcd->pf_reads;
+    int max_reads = 0;
+    int max_pf_reads = 0;
     int nReads = 0;
     int n;
 
