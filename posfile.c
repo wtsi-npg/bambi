@@ -46,8 +46,6 @@ posfile_t *posfile_open(char *fname)
 
     // Should we handle compressed (.gz) files?
 
-printf("Trying to open position file: %s\n", fname);
-
     char *base = basename(fname);
     char *ext = rindex(base,'.');
     if (ext) ext++;

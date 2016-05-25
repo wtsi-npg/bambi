@@ -360,9 +360,9 @@ void checkFiles(char *name, char *fname)
         success++;
     }
 
-    sprintf(command,"samtools view test/i2b/out/xxx.bam | head > /tmp/got.txt");
+    sprintf(command,"samtools view test/i2b/out/xxx.bam | head | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > /tmp/got.txt");
     system(command);
-    sprintf(command,"samtools view %s | head > /tmp/expected.txt", fname);
+    sprintf(command,"samtools view %s | head | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > /tmp/expected.txt", fname);
     system(command);
     result = system("diff /tmp/got.txt /tmp/expected.txt");
     if (result) {
@@ -372,9 +372,9 @@ void checkFiles(char *name, char *fname)
         success++;
     }
 
-    sprintf(command,"samtools view test/i2b/out/xxx.bam | tail > /tmp/got.txt");
+    sprintf(command,"samtools view test/i2b/out/xxx.bam | tail | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > /tmp/got.txt");
     system(command);
-    sprintf(command,"samtools view %s | tail > /tmp/expected.txt",fname);
+    sprintf(command,"samtools view %s | tail | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > /tmp/expected.txt", fname);
     system(command);
     result = system("diff /tmp/got.txt /tmp/expected.txt");
     if (result) {
