@@ -37,11 +37,18 @@ DEALINGS IN THE SOFTWARE.  */
 #include <libgen.h>
 #include <libxml/parser.h>
 #include <libxml/xpath.h>
+#include <time.h>
 
 #include <cram/sam_header.h>
 
+#include "posfile.h"
+#include "filterfile.h"
+#include "bclfile.h"
+
 #define DEFAULT_BARCODE_TAG "BC"
 #define DEFAULT_QUALITY_TAG "QT"
+
+char *strptime(const char *s, const char *format, struct tm *tm);
 
 /*
  * index array type
@@ -114,6 +121,10 @@ void ia_sort(ia_t *ia)
     qsort(ia->entries, ia->end, sizeof(int), ia_compare);
 }
 
+bool ia_isEmpty(ia_t *ia) {
+    return (ia->end == 0);
+}
+
 void ia_push(ia_t *ia, int i)
 {
     if (ia->end == ia->max) {
@@ -158,6 +169,7 @@ void freeCycleRange(void *ent)
 
 /*
  * generic arrays
+ * TODO: this should probably go into a seperate module
  */
 typedef struct {
     int end;
@@ -195,6 +207,7 @@ bool va_isEmpty(va_t *va)
 void va_free(va_t *va)
 {
     int n;
+    if (!va) return;
     for (n=0; n < va->end; n++) {
         va->free_entry(va->entries[n]);
     }
@@ -202,8 +215,38 @@ void va_free(va_t *va)
     free(va);
 }
 
+/*
+ * BCL Read and File arrays
+ */
+typedef struct {
+    char *readname;
+    va_t *bclFileArray;
+    va_t *sclFileArray;
+} bclReadArrayEntry_t;
+
+typedef struct {
+    bclfile_t *bcl;
+} bclFileArrayEntry_t;
+
+void freeBCLFileArray(void *ent)
+{
+    bclfile_t *bcl = (bclfile_t *)ent;
+    bclfile_close(bcl);
+}
+
+void freeBCLReadArray(void *ent)
+{
+    bclReadArrayEntry_t *ra = (bclReadArrayEntry_t *)ent;
+    free(ra->readname);
+    va_free(ra->bclFileArray);
+    va_free(ra->sclFileArray);
+    free(ra);
+}
 
 
+/*
+ * Release all the options
+ */
 
 static void free_opts(opts_t* opts)
 {
@@ -237,6 +280,9 @@ static void free_opts(opts_t* opts)
     free(opts);
 }
 
+/*
+ * do something clever with an XML document
+ */
 xmlXPathObjectPtr getnodeset(xmlDocPtr doc, char *xpath)
 {
     xmlXPathContextPtr context;
@@ -244,30 +290,32 @@ xmlXPathObjectPtr getnodeset(xmlDocPtr doc, char *xpath)
 
     context = xmlXPathNewContext(doc);
     if (context == NULL) {
-        printf("Error in xmlXPathNewContext\n");
+        fprintf(stderr,"Error in xmlXPathNewContext\n");
         return NULL;
     }
     result = xmlXPathEvalExpression((xmlChar *)xpath, context);
     xmlXPathFreeContext(context);
     if (result == NULL) {
-        printf("Error in xmlXPathEvalExpression\n");
+        fprintf(stderr,"Error in xmlXPathEvalExpression\n");
         return NULL;
     }
     if(xmlXPathNodeSetIsEmpty(result->nodesetval)){
         xmlXPathFreeObject(result);
-                printf("No result\n");
+                fprintf(stderr,"No result for xpath %s\n", xpath);
         return NULL;
     }
     return result;
 }
-
+/*
+ * Read an attribute for an xpath from an XML doc
+ */
 static char *getXMLAttr(xmlDocPtr doc, char *node, char *attr)
 {
     char *v = NULL;
     xmlNodeSetPtr nodeset;
     xmlXPathObjectPtr result;
 
-    if (!doc) return "";
+    if (!doc) return v;
     result = getnodeset(doc, node);
     if (result) {
         nodeset = result->nodesetval;
@@ -277,6 +325,26 @@ static char *getXMLAttr(xmlDocPtr doc, char *node, char *attr)
     return v;
 }
 
+/*
+ * Read the value for an xpath for a given XML doc
+ */
+static char *getXMLVal(xmlDocPtr doc, char *xpath)
+{
+    char *val = NULL;
+
+    if (!doc) return val;
+    xmlXPathObjectPtr ptr = getnodeset(doc, xpath);
+
+    if (ptr && ptr->nodesetval) {
+        val = strdup((char *)ptr->nodesetval->nodeTab[0]->children->content);
+    }
+    xmlXPathFreeObject(ptr);
+    return val;
+}
+
+/*
+ * Load an XML file into a xmlDoc pointer
+ */
 xmlDocPtr loadXML(char *dir, char *fname, int verbose)
 {
     xmlDocPtr doc;
@@ -288,47 +356,6 @@ xmlDocPtr loadXML(char *dir, char *fname, int verbose)
     }
     free(tmp);
     return doc;
-}
-
-void dumpOpts(opts_t *o)
-{
-    printf("OptionsL\n");
-    printf("verbose:         %d\n", o->verbose);
-    printf("argv_list:       %s\n", o->argv_list);
-    printf("run_folder:      %s\n", o->run_folder);
-    printf("intensity_dir:   %s\n", o->intensity_dir);
-    printf("basecalls_dir:   %s\n", o->basecalls_dir);
-    printf("Lane:            %d\n", o->lane);
-    printf("output_file:     %s\n", o->output_file);
-    printf("\n");
-
-/*
-    char *output_fmt;
-    char compression_level;
-    bool generate_secondary_basecalls;
-    bool no_filter;
-    char *read_group_id;
-    char *sample_alias;
-    char *library_name;
-    char *study_name;
-    char *platform_unit;
-    char *run_start_date;
-    char *sequencing_centre;
-    char *platform;
-    int first_tile;
-    int tile_limit;
-    char *barcode_tag;
-    char *quality_tag;
-    char *barcode_tag2;
-    char *quality_tag2;
-    int bc_read;
-    int sec_bc_read;
-    ia_t *first_cycle;
-    ia_t *final_cycle;
-    ia_t *first_index_cycle;
-    ia_t *final_index_cycle;
-    bool add_cluster_index_tag;
-*/
 }
 
 /*
@@ -483,12 +510,12 @@ opts_t* i2b_parse_args(int argc, char *argv[])
                     else if (strcmp(arg, "final-index-cycle") == 0)            ia_push(opts->final_index_cycle,atoi(optarg));
                     else if (strcmp(arg, "add-cluster-index-tag") == 0)        opts->add_cluster_index_tag = true;
                     else {
-                        printf("\nUnknown option: %s\n\n", arg); 
+                        fprintf(stderr,"\nUnknown option: %s\n\n", arg); 
                         usage(stdout); free_opts(opts);
                         return NULL;
                     }
                     break;
-        default:    printf("Unknown option: '%c'\n", opt);
+        default:    fprintf(stderr,"Unknown option: '%c'\n", opt);
             /* else fall-through */
         case '?':   usage(stdout); free_opts(opts); return NULL;
         }
@@ -552,7 +579,11 @@ opts_t* i2b_parse_args(int argc, char *argv[])
     char *tmp;
     tmp = opts->intensity_dir; 
     opts->intensity_dir = realpath(tmp, NULL); 
-    if (!opts->intensity_dir) { perror("intensity-dir"); return NULL; }
+    if (!opts->intensity_dir) { 
+        fprintf(stderr,"Can't open directory: %s\n", tmp);
+        perror("intensity-dir"); 
+        return NULL; 
+    }
     free(tmp);
 
     tmp = opts->basecalls_dir; 
@@ -578,12 +609,35 @@ opts_t* i2b_parse_args(int argc, char *argv[])
     opts->parametersConfig = loadXML(opts->run_folder, "runParameters.xml", opts->verbose);
     opts->runinfoConfig = loadXML(opts->run_folder, "RunInfo.xml", opts->verbose);
 
+    if (!opts->run_start_date) {
+        opts->run_start_date = getXMLVal(opts->intensityConfig, "//RunParameters/RunFolderDate");
+    }
+    if (!opts->run_start_date) {
+        opts->run_start_date = getXMLVal(opts->parametersConfig, "//Setup/RunStartDate");
+    }
 
-    //dumpOpts(opts);
+    if (!opts->run_start_date) {
+        fprintf(stderr, "No run-start-date given, and none found in config files\n");
+        return NULL;
+    }
+
+    // reformat date from yymmdd to YYYY-mm-dd
+    if (strlen(opts->run_start_date) == 6) {
+        char *tmp = calloc(1,64);
+        struct tm tm;
+        memset(&tm, 0, sizeof(struct tm));
+        strptime(opts->run_start_date, "%y%m%d", &tm);
+        strftime(tmp, 63, "%Y-%m-%dT00:00:00+0000", &tm);
+        free(opts->run_start_date);
+        opts->run_start_date = tmp;
+    }
 
     return opts;
 }
 
+/*
+ * convert SAM_hdr to bam_hdr
+ */
 void sam_hdr_unparse(SAM_hdr *sh, bam_hdr_t *h)
 {
     free(h->text);
@@ -593,9 +647,14 @@ void sam_hdr_unparse(SAM_hdr *sh, bam_hdr_t *h)
     sam_hdr_free(sh);
 }
 
+/*
+ * Add the header lines to the BAM file
+ */
 int addHeader(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
 {
     SAM_hdr *sh = sam_hdr_parse_(output_header->text,output_header->l_text);
+    char *version = NULL;
+    char *pname = NULL;
 
     // Add header line
     sam_hdr_add(sh, "HD", "VN", "1.5", "SO", "unsorted", NULL, NULL);
@@ -609,24 +668,32 @@ int addHeader(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
                     "SM", opts->sample_alias,
                     "CN", opts->sequencing_centre,
                     "PL", opts->platform,
-                    opts->study_name ? "DS": NULL, opts->study_name ? opts->study_name: NULL,
+                    (opts->study_name ? "DS": NULL), (opts->study_name ? opts->study_name: NULL),
                     NULL, NULL);
 
     // Add PG lines
+    version = getXMLAttr(opts->parametersConfig, "/ImageAnalysis/Run/Software", "Version");
+    if (!version) version = getXMLAttr(opts->intensityConfig, "/ImageAnalysis/Run/Software", "Version");
+    pname = getXMLAttr(opts->parametersConfig, "/ImageAnalysis/Run/Software", "Name");
+    if (!pname) pname = getXMLAttr(opts->intensityConfig, "/ImageAnalysis/Run/Software", "Name");
     sam_hdr_add(sh, "PG",
                     "ID", "SCS",
-                    "VN", getXMLAttr(opts->intensityConfig, "/ImageAnalysis/Run/Software", "Version"), // TODO we should look first in the parameterConfig file. Ditto below
-                    "PN", getXMLAttr(opts->intensityConfig, "/ImageAnalysis/Run/Software", "Name"),
+                    "VN", version,
+                    "PN", pname,
                     "DS", "Controlling software on instrument",
                     NULL, NULL);
+    free(pname); free(version);
 
+    version = getXMLAttr(opts->basecallsConfig, "/BaseCallAnalysis/Run/Software", "Version");
+    pname = getXMLAttr(opts->basecallsConfig, "/BaseCallAnalysis/Run/Software", "Name");
     sam_hdr_add(sh, "PG",
                     "ID", "basecalling",
                     "PP", "SCS",
-                    "VN", getXMLAttr(opts->basecallsConfig, "/BaseCallAnalysis/Run/Software", "Version"),
-                    "PN", getXMLAttr(opts->basecallsConfig, "/BaseCallAnalysis/Run/Software", "Name"),
+                    "VN", version,
+                    "PN", pname,
                     "DS", "Basecalling Package",
                     NULL, NULL);
+    free(pname); free(version);
 
     sam_hdr_add(sh, "PG",
                     "ID", "bambi",
@@ -643,6 +710,43 @@ int addHeader(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
         return 1;
     }
     return 0;
+}
+
+/*
+ * Get an ID - depending on what config files we have and what is in them
+ *             this is either instrument_runid or computer_experiment
+ */
+char *getId(opts_t *opts)
+{
+    xmlDocPtr doc;
+    char *runid = NULL;
+    char *instrument = NULL;
+    char *experiment = NULL;
+    char *computer = NULL;
+    char *id = NULL;
+
+    doc = opts->basecallsConfig ? opts->basecallsConfig : opts->intensityConfig;
+
+    runid = getXMLVal(doc, "//RunParameters/RunFolderId");
+    instrument = getXMLVal(doc, "//RunParameters/Instrument");
+
+    if (instrument && runid) {
+        id = calloc(1, strlen(instrument) + strlen(runid) + 2);
+        sprintf(id, "%s_%s", instrument, runid);
+    }
+
+    if (!id) {
+        experiment = getXMLVal(opts->parametersConfig, "//Setup/ExperimentName");
+        computer = getXMLVal(opts->parametersConfig, "//Setup/ComputerName");
+        if (experiment && computer) {
+            id = calloc(1, strlen(experiment) + strlen(computer) + 2);
+            sprintf(id, "%s_%s", computer, experiment);
+        }
+    }
+
+    free(instrument); free(runid); free(experiment); free(computer);
+
+    return id;
 }
 
 /*
@@ -674,20 +778,107 @@ ia_t *getTileList(opts_t *opts)
 
     // TODO if (!tiles) calcTileList();
 
-    // TODO filter tile list by command line options
-
     ia_sort(tiles);
+
+    // Filter tile list by command line options (mainly used for testing)
+    if (opts->first_tile != 0) {
+        int n;
+        ia_t *new_tiles = ia_init(100);
+        for (n=0; n < tiles->end; n++) {
+            if (tiles->entries[n] == opts->first_tile) {
+                int i, tl;
+                tl = opts->tile_limit ? opts->tile_limit : tiles->end;
+                for (i=n; i < n+tl; i++) {
+                    if (i < tiles->end) {
+                        ia_push(new_tiles,tiles->entries[n]);
+                    }
+                }
+            }
+        }
+        ia_free(tiles);
+        tiles = new_tiles;
+        if (ia_isEmpty(tiles)) {
+            fprintf(stderr,"No tiles to process\n");
+            exit(1);
+        }
+    }
 
     return tiles;
 }
 
+char *getCycleName(int readCount, bool isIndex)
+{
+    // implements naming convention used by earlier versions of Lane.java
+    char *cycleName = calloc(1,16);
+;
+    if (isIndex) {
+        if (readCount==1) { strcpy(cycleName,"readIndex"); }
+        else { sprintf(cycleName,"readIndex%d",readCount); }
+    } else {
+        sprintf(cycleName,"read%d",readCount);
+    }
+    return cycleName;
+}
+
+void getCycleRangeFromFile(va_t *cycleRange, xmlDocPtr doc)
+{
+    xmlXPathObjectPtr ptr;
+    int readCount = 1;
+    int cycleCount = 1;
+    int indexCount = 1;
+    int n;
+
+    if (!doc) return;
+    ptr = getnodeset(doc,"/RunInfo/Run/Reads/Read");
+    if (!ptr || !ptr->nodesetval) ptr = getnodeset(doc, "/RunParameters/Setup/Reads/Read");
+    if (!ptr || !ptr->nodesetval) ptr = getnodeset(doc, "/RunParameters/Reads/RunInfoRead");
+    if (!ptr || !ptr->nodesetval) return;   // still can't find them. Give up.
+
+    for (n=0; n < ptr->nodesetval->nodeNr; n++) {
+        xmlNodePtr np = ptr->nodesetval->nodeTab[n];
+        cycleRangeEntry_t *cr = calloc(1,sizeof(cycleRangeEntry_t));
+        int numCycles = atoi((char *)xmlGetProp(np,(xmlChar *)"NumCycles"));
+        bool isIndexedRead = ('Y' == toupper(*(char *)xmlGetProp(np,(xmlChar *)"IsIndexedRead")));
+        cr->readname = getCycleName(isIndexedRead ? indexCount++ : readCount++, isIndexedRead);
+        cr->first = cycleCount;
+        cr->last = cycleCount + numCycles - 1;
+        va_push(cycleRange,cr);
+        cycleCount += numCycles;
+    }
+}
+
+/*
+ * Try to find a cycle range from somewhere
+ */
 va_t *getCycleRange(opts_t *opts)
 {
     va_t *cycleRange = va_init(100, freeCycleRange);
     xmlDocPtr doc;
     xmlXPathObjectPtr ptr;
+    int n;
 
-    // TODO try reading from runInfo, then paramater config
+    //
+    // read from command line options
+    //
+    if (!ia_isEmpty(opts->first_cycle)) {
+        for (n=0; n < opts->first_cycle->end; n++) {
+            cycleRangeEntry_t *cr = calloc(1,sizeof(cycleRangeEntry_t));
+            cr->readname = getCycleName(n+1,false);
+            cr->first = opts->first_cycle->entries[n];
+            cr->last = opts->final_cycle->entries[n];
+            va_push(cycleRange,cr);
+        }
+        for (n=0; n < opts->first_index_cycle->end; n++) {
+            cycleRangeEntry_t *cr = calloc(1,sizeof(cycleRangeEntry_t));
+            cr->readname = getCycleName(n+1,true);
+            cr->first = opts->first_index_cycle->entries[n];
+            cr->last = opts->final_index_cycle->entries[n];
+            va_push(cycleRange,cr);
+        }
+    }
+
+    if (va_isEmpty(cycleRange)) getCycleRangeFromFile(cycleRange, opts->runinfoConfig);
+    if (va_isEmpty(cycleRange)) getCycleRangeFromFile(cycleRange, opts->parametersConfig);
 
     // TODO what if there is a barCodeCycleList ?
 
@@ -728,54 +919,308 @@ va_t *getCycleRange(opts_t *opts)
  * Open and return the first one found, or NULL if not found.
  */
 
-FILE *openPositionFile(int tile, opts_t *opts)
+posfile_t *openPositionFile(int tile, opts_t *opts)
 {
-    FILE *posFile = NULL;
+    posfile_t *posfile = NULL;
 
     char *fname = calloc(1, strlen(opts->intensity_dir)+64);
 
     sprintf(fname, "%s/s_%d_%04d_pos.txt", opts->intensity_dir, opts->lane, tile);
-    posFile = fopen(fname,"rb");
-    if (opts->verbose && posFile) printf("Opened %s\n", fname);
+    posfile = posfile_open(fname);
+    if (opts->verbose && !posfile->errmsg) fprintf(stderr,"Opened %s\n", fname);
 
-    if (!posFile) {
+    if (posfile->errmsg) {
         sprintf(fname, "%s/L%03d/s_%d_%04d.clocs", opts->intensity_dir, opts->lane, opts->lane, tile);
-        posFile = fopen(fname,"rb");
-        if (opts->verbose && posFile) printf("Opened %s\n", fname);
+        posfile = posfile_open(fname);
+        if (opts->verbose && !posfile->errmsg) fprintf(stderr,"Opened %s\n", fname);
     }
 
-    if (!posFile) {
+    if (posfile->errmsg) {
         sprintf(fname, "%s/L%03d/s_%d_%04d.locs", opts->intensity_dir, opts->lane, opts->lane, tile);
-        posFile = fopen(fname,"rb");
-        if (opts->verbose && posFile) printf("Opened %s\n", fname);
+        posfile = posfile_open(fname);
+        if (opts->verbose && !posfile->errmsg) fprintf(stderr,"Opened %s\n", fname);
     }
 
     free(fname);
-    return posFile;
+    return posfile;
 
 }
 
+/*
+ * find and open the filter file
+ */
+filter_t *openFilterFile(int tile, opts_t *opts)
+{
+    filter_t *filter = NULL;
+    char *fname = calloc(1,strlen(opts->basecalls_dir)+128); // a bit arbitrary :-(
+
+    sprintf(fname, "%s/L%03d/s_%d_%04d.filter", opts->basecalls_dir, opts->lane, opts->lane, tile);
+    filter = filter_open(fname);
+    if (filter->errmsg) {
+        sprintf(fname, "%s/s_%d_%04d.filter", opts->basecalls_dir, opts->lane, tile);
+        filter = filter_open(fname);
+    }
+
+    if (opts->verbose && !filter->errmsg) fprintf(stderr,"Opened filter file %s\n", fname);
+
+    free(fname);
+    return filter;
+}
+
+/*
+ * Open a single bcl (or scl) file
+ */
+bclfile_t *openBclFile(char *basecalls, int lane, int tile, int cycle, char *ext)
+{
+    char *fname = calloc(1, strlen(basecalls)+128);
+    sprintf(fname, "%s/L%03d/C%d.1/s_%d_%04d.%s", basecalls, lane, cycle, lane, tile, ext);
+    bclfile_t *bcl = bclfile_open(fname);
+    if (bcl->errmsg) {
+        fprintf(stderr,"Can't open %s\n%s\n", fname, bcl->errmsg);
+        return NULL;
+    }
+    else { fprintf(stderr,"Opened %s\n", fname); }
+    free(fname);
+    return bcl;
+}
+
+/*
+ * Find and open all the relevant bcl and scl files
+ */
+va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile)
+{
+    int n, cycle, nCycles;
+
+    va_t *bclReadArray = va_init(5,freeBCLReadArray);
+
+    for (n=0; n < cycleRange->end; n++) {
+        cycleRangeEntry_t *cr = cycleRange->entries[n];
+        bclReadArrayEntry_t *ra = calloc(1, sizeof(bclReadArrayEntry_t));
+        ra->readname = strdup(cr->readname);
+        nCycles = cr->last - cr->first + 1;
+        ra->bclFileArray = va_init(nCycles, freeBCLFileArray);
+        ra->sclFileArray = va_init(nCycles, freeBCLFileArray);
+
+        for (cycle = cr->first; cycle <= cr->last; cycle++) {
+            bclfile_t *bcl = openBclFile(opts->basecalls_dir, opts->lane, tile, cycle, "bcl");
+            va_push(ra->bclFileArray, bcl);
+
+            if (opts->generate_secondary_basecalls) {
+                bclfile_t *bcl = openBclFile(opts->basecalls_dir, opts->lane, tile, cycle, "scl");
+                va_push(ra->sclFileArray, bcl);
+            }
+        }
+        va_push(bclReadArray,ra);
+    }
+
+    return bclReadArray;
+}
+
+/*
+ * calculate and return the readname
+ */
+char *getReadName(char *id, int lane, int tile, int x, int y)
+{
+    char *readName = calloc(1, 128);
+
+    if (id && *id) {
+        sprintf(readName, "%s:%d:%d:%d:%d", id, lane, tile, x, y);
+    } else {
+        sprintf(readName, "%d:%d:%d:%d", lane, tile, x, y);
+    }
+    if (strlen(readName) > 127) {
+        fprintf(stderr,"readName too long: %s\n", readName);
+        exit(1);
+    }
+    return readName;
+}
+
+bool readArrayContains(va_t *bclReadArray, char *readname)
+{
+    int n;
+    for (n=0; n < bclReadArray->end; n++) {
+        bclReadArrayEntry_t *ra = bclReadArray->entries[n];
+        if (strcmp(readname, ra->readname) == 0) return true;
+    }
+    return false;
+}
+
+/*
+ * read all the bases and qualities for a given read name ("read1" or "read2")
+ */
+void getBases(va_t *bclReadArray, char *readname, char **bases, char **qualities, bool convert_qual)
+{
+    int n;
+    *bases = NULL; *qualities = NULL;
+    for (n=0; n < bclReadArray->end; n++) {
+        bclReadArrayEntry_t *ra = bclReadArray->entries[n];
+        if (strcmp(ra->readname, readname) == 0) {
+            *bases = calloc(1, ra->bclFileArray->end+1);
+            *qualities = calloc(1, ra->bclFileArray->end+1);
+            int i;
+            for (i=0; i < ra->bclFileArray->end; i++) {
+                bclfile_t *b = ra->bclFileArray->entries[i];
+                if (bclfile_next(b) < 0) {
+                    fprintf(stderr,"Failed to read bcl file\n");
+                    exit(1);
+                }
+                (*bases)[i] = b->base;
+                (*qualities)[i] = b->quality + (convert_qual ? 33 : 0);
+            }
+            break;
+        }
+    }
+}
+
+/*
+ * set the BAM flag
+ */
+int setFlag(bool second, bool filtered, bool ispaired)
+{
+    int flags = 0;
+
+    flags |= BAM_FUNMAP;
+    if (filtered) flags |= BAM_FQCFAIL;
+    if (ispaired) {
+        flags |= BAM_FPAIRED;
+        flags |= BAM_FMUNMAP;
+        if (second) flags |= BAM_FREAD2;
+        else        flags |= BAM_FREAD1;
+    }
+    return flags;
+}
+
+/*
+ * Write a BAM record
+ */
+void writeRecord(int flags, opts_t *opts, char *readName, 
+                 char *bases, char *qualities, char *ib, char *iq, char *ib2, char *iq2,
+                 samFile *output_file, bam_hdr_t *output_header)
+{
+    bam1_t *bam = bam_init1();
+
+    int r = bam_construct_seq(&bam, 0, readName, strlen(readName),
+                                flags, -1, 0, 0, 0, 0, (uint32_t*)"", -1, 0, 0, strlen(bases), bases, qualities);
+    if (r) {
+        fprintf(stderr,"bam_construct_seq() failed\n");
+        exit(1);
+    }
+
+    if (ib) {
+        bam_aux_append(bam, opts->barcode_tag, 'Z', strlen(ib)+1, (uint8_t *)ib);
+    }
+
+    bam_aux_append(bam, "RG", 'Z', strlen(opts->read_group_id)+1, (uint8_t *)opts->read_group_id);
+
+    if (ib) {
+        bam_aux_append(bam, opts->quality_tag, 'Z', strlen(iq)+1, (uint8_t *)iq);
+    }
+
+    if (ib2) {
+        bam_aux_append(bam, opts->barcode_tag2, 'Z', strlen(ib2)+1, (uint8_t *)ib2);
+        bam_aux_append(bam, opts->quality_tag2, 'Z', strlen(iq2)+1, (uint8_t *)iq2);
+    }
+
+    r = sam_write1(output_file, output_header, bam);
+    if (r <= 0) {
+        fprintf(stderr, "Problem writing record %s  : r=%d\n", readName,r);
+        exit(1);
+    }
+    bam_destroy1(bam);
+}
+
+/*
+ * Write all the BAM records for a given tile
+ */
 int processTile(int tile, samFile *output_file, bam_hdr_t *output_header, va_t *cycleRange, opts_t *opts)
 {
-    if (opts->verbose) printf("Processing Tile %d\n", tile);
-    FILE *posFile = openPositionFile(tile, opts);
-    if (!posFile) {
-        fprintf(stderr,"Can't find position file for Tile %d\n", tile);
+    va_t *bclReadArray;
+    int filtered;
+
+    if (opts->verbose) fprintf(stderr,"Processing Tile %d\n", tile);
+    posfile_t *posfile = openPositionFile(tile, opts);
+    if (posfile->errmsg) {
+        fprintf(stderr,"Can't find position file for Tile %d\n%s\n", tile, posfile->errmsg);
         return 1;
     }
+
+    filter_t *filter = openFilterFile(tile,opts);
+    if (filter->errmsg) {
+        fprintf(stderr,"Can't find filter file for tile %d\n%s\n", tile, filter->errmsg);
+        return 1;
+    }
+
+    bclReadArray = openBclFiles(cycleRange, opts, tile);
+    char *id = getId(opts);
+
+    bool ispaired = readArrayContains(bclReadArray, "read2");
+    bool isindexed = readArrayContains(bclReadArray, "readIndex");
+    bool isdual = readArrayContains(bclReadArray, "readIndex2");
+
+    // TODO: is this right? Should we abort, or give a warning here?
+    if (!opts->barcode_tag2 || !opts->quality_tag2) isdual = false;
+
+    //
+    // write all the records
+    //
+    while ( (filtered = filter_next(filter)) >= 0) {
+        filtered = !filtered;   // don't ask
+        posfile_next(posfile);
+        char *readName = getReadName(id, opts->lane, tile, posfile->x, posfile->y);
+        char *bases=NULL, *qualities=NULL, *bases2=NULL, *qualities2=NULL;
+        char *bases_index=NULL, *qualities_index=NULL, *bases_index2=NULL, *qualities_index2=NULL;
+
+        getBases(bclReadArray, "read1", &bases, &qualities, false);
+        if (ispaired) getBases(bclReadArray, "read2", &bases2, &qualities2, false);
+        if (isindexed) getBases(bclReadArray, "readIndex", &bases_index, &qualities_index, true);
+        if (isdual) getBases(bclReadArray, "readIndex2", &bases_index2, &qualities_index2, true);
+
+        // Which reads do we attach the indexes to?
+        char *r1_bi=NULL, *r1_qi=NULL, *r1_bi2=NULL, *r1_qi2 = NULL;
+        char *r2_bi=NULL, *r2_qi=NULL, *r2_bi2=NULL, *r2_qi2 = NULL;
+        if (opts->bc_read == 1) { r1_bi = bases_index; r1_qi = qualities_index; }
+        else                    { r2_bi = bases_index; r2_qi = qualities_index; }
+
+        if (opts->sec_bc_read == 1) { r1_bi2 = bases_index2; r1_qi2 = qualities_index2; }
+        else                        { r2_bi2 = bases_index2; r2_qi2 = qualities_index2; }
+
+        if (opts->no_filter || !filtered) {
+            int flags;
+            flags = setFlag(false,filtered,ispaired);
+            writeRecord(flags, opts, readName, bases, qualities, r1_bi, r1_qi, r1_bi2, r1_qi2, output_file, output_header);
+            if (ispaired) {
+                flags = setFlag(true,filtered,ispaired);
+                writeRecord(flags, opts, readName, bases2, qualities2, r2_bi, r2_qi, r2_bi2, r2_qi2, output_file, output_header);
+            }
+        }
+
+        free(bases); free(qualities);
+        free(bases2); free(qualities2);
+        free(bases_index); free(qualities_index);
+        free(bases_index2); free(qualities_index2);
+        free(readName);
+    }
+
+    free(id);
+    va_free(bclReadArray);
+    filter_close(filter);
+    posfile_close(posfile);
 
     return 0;
 }
 
+/*
+ * process all the tiles and write all the BAM records
+ */
 void createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
 {
     ia_t *tiles = getTileList(opts);
-    va_t *cycleRange = getCycleRange(opts);
+    va_t *cycleRange = getCycleRange(opts);;
     int n;
 
     for (n=0; n < cycleRange->end; n++) {
         cycleRangeEntry_t *cr = (cycleRangeEntry_t *)cycleRange->entries[n];
-        printf("CycleRange: %s\t%d\t%d\n", cr->readname, cr->first, cr->last);
+        if (opts->verbose) fprintf(stderr,"CycleRange: %s\t%d\t%d\n", cr->readname, cr->first, cr->last);
     }
 
     for (n=0; n < tiles->end; n++) {
@@ -785,6 +1230,7 @@ void createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
         }
     }
 
+    va_free(cycleRange);
     ia_free(tiles);
 }
 
@@ -852,9 +1298,7 @@ int main_i2b(int argc, char *argv[])
 {
     int ret = 1;
     opts_t* opts = i2b_parse_args(argc, argv);
-    if (opts) {
-        ret = i2b(opts);
-    }
+    if (opts) ret = i2b(opts);
     free_opts(opts);
     return ret;
 }

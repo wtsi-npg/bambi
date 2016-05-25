@@ -36,7 +36,7 @@ const char * bambi_version(void)
 int success = 0;
 int failure = 0;
 
-void setup_test_1(int* argc, char*** argv)
+void setup_param_test(int* argc, char*** argv)
 {
     *argc = 0;
     *argv = (char**)calloc(sizeof(char*), 100);
@@ -97,6 +97,36 @@ void setup_test_1(int* argc, char*** argv)
     assert(*argc<100);
 }
 
+void setup_test_1(int* argc, char*** argv)
+{
+    *argc = 0;
+    *argv = (char**)calloc(sizeof(char*), 100);
+    (*argv)[(*argc)++] = strdup("bambi");
+    (*argv)[(*argc)++] = strdup("i2b");
+    (*argv)[(*argc)++] = strdup("-i");
+    (*argv)[(*argc)++] = strdup("test/i2b/110323_HS13_06000_B_B039WABXX/Data/Intensities");
+    (*argv)[(*argc)++] = strdup("-o");
+    (*argv)[(*argc)++] = strdup("test/i2b/out/xxx.bam");
+    (*argv)[(*argc)++] = strdup("--lane");
+    (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("--first-tile");
+    (*argv)[(*argc)++] = strdup("1101");
+    (*argv)[(*argc)++] = strdup("--tile-limit");
+    (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("--library-name");
+    (*argv)[(*argc)++] = strdup("Test library");
+    (*argv)[(*argc)++] = strdup("--sample-alias");
+    (*argv)[(*argc)++] = strdup("Test Sample");
+    (*argv)[(*argc)++] = strdup("--study-name");
+    (*argv)[(*argc)++] = strdup("Study testStudy");
+    (*argv)[(*argc)++] = strdup("--run-start-date");
+    (*argv)[(*argc)++] = strdup("2011-03-23T00:00:00+0000");
+//    (*argv)[(*argc)++] = strdup("--generate-secondary-basecalls");
+    (*argv)[(*argc)++] = strdup("--verbose");
+
+    assert(*argc<100);
+}
+
 void setup_test_2(int* argc, char*** argv)
 {
     *argc = 0;
@@ -118,10 +148,127 @@ void setup_test_2(int* argc, char*** argv)
     (*argv)[(*argc)++] = strdup("--sample-alias");
     (*argv)[(*argc)++] = strdup("Test Sample");
     (*argv)[(*argc)++] = strdup("--study-name");
-    (*argv)[(*argc)++] = strdup("testStudy");
+    (*argv)[(*argc)++] = strdup("Study testStudy");
+    (*argv)[(*argc)++] = strdup("--run-start-date");
+    (*argv)[(*argc)++] = strdup("2011-03-23T00:00:00+0000");
+    (*argv)[(*argc)++] = strdup("--generate-secondary-basecalls");
+    (*argv)[(*argc)++] = strdup("--verbose");
+    (*argv)[(*argc)++] = strdup("--read-group-id");
+    (*argv)[(*argc)++] = strdup("6000_1");
+
+    assert(*argc<100);
+}
+
+void setup_test_4(int* argc, char*** argv)
+{
+    *argc = 0;
+    *argv = (char**)calloc(sizeof(char*), 100);
+    (*argv)[(*argc)++] = strdup("bambi");
+    (*argv)[(*argc)++] = strdup("i2b");
+    (*argv)[(*argc)++] = strdup("-i");
+    (*argv)[(*argc)++] = strdup("test/i2b/110323_HS13_06000_B_B039WABXX/Data/Intensities");
+    (*argv)[(*argc)++] = strdup("-o");
+    (*argv)[(*argc)++] = strdup("test/i2b/out/xxx.bam");
+    (*argv)[(*argc)++] = strdup("--lane");
+    (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("--first-tile");
+    (*argv)[(*argc)++] = strdup("1101");
+    (*argv)[(*argc)++] = strdup("--tile-limit");
+    (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("--library-name");
+    (*argv)[(*argc)++] = strdup("TestLibrary");
+    (*argv)[(*argc)++] = strdup("--sample-alias");
+    (*argv)[(*argc)++] = strdup("TestSample");
+    (*argv)[(*argc)++] = strdup("--study-name");
+    (*argv)[(*argc)++] = strdup("Study TestStudy");
     (*argv)[(*argc)++] = strdup("--run-start-date");
     (*argv)[(*argc)++] = strdup("2011-03-23T00:00:00+0000");
     (*argv)[(*argc)++] = strdup("--verbose");
+    (*argv)[(*argc)++] = strdup("--first-cycle");
+    (*argv)[(*argc)++] = strdup("50");
+    (*argv)[(*argc)++] = strdup("--final-cycle");
+    (*argv)[(*argc)++] = strdup("51");
+
+    assert(*argc<100);
+}
+
+void setup_test_5(int* argc, char*** argv)
+{
+    *argc = 0;
+    *argv = (char**)calloc(sizeof(char*), 100);
+    (*argv)[(*argc)++] = strdup("bambi");
+    (*argv)[(*argc)++] = strdup("i2b");
+    (*argv)[(*argc)++] = strdup("-i");
+    (*argv)[(*argc)++] = strdup("test/i2b/110323_HS13_06000_B_B039WABXX/Data/Intensities");
+    (*argv)[(*argc)++] = strdup("-o");
+    (*argv)[(*argc)++] = strdup("test/i2b/out/xxx.bam");
+    (*argv)[(*argc)++] = strdup("--lane");
+    (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("--first-tile");
+    (*argv)[(*argc)++] = strdup("1101");
+    (*argv)[(*argc)++] = strdup("--tile-limit");
+    (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("--library-name");
+    (*argv)[(*argc)++] = strdup("TestLibrary");
+    (*argv)[(*argc)++] = strdup("--sample-alias");
+    (*argv)[(*argc)++] = strdup("TestSample");
+    (*argv)[(*argc)++] = strdup("--study-name");
+    (*argv)[(*argc)++] = strdup("Study TestStudy");
+    (*argv)[(*argc)++] = strdup("--run-start-date");
+    (*argv)[(*argc)++] = strdup("2011-03-23T00:00:00+0000");
+    (*argv)[(*argc)++] = strdup("--verbose");
+    (*argv)[(*argc)++] = strdup("--first-cycle");
+    (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("--final-cycle");
+    (*argv)[(*argc)++] = strdup("2");
+    (*argv)[(*argc)++] = strdup("--first-cycle");
+    (*argv)[(*argc)++] = strdup("52");
+    (*argv)[(*argc)++] = strdup("--final-cycle");
+    (*argv)[(*argc)++] = strdup("53");
+    (*argv)[(*argc)++] = strdup("--first-index-cycle");
+    (*argv)[(*argc)++] = strdup("50");
+    (*argv)[(*argc)++] = strdup("--final-index-cycle");
+    (*argv)[(*argc)++] = strdup("51");
+    (*argv)[(*argc)++] = strdup("--bc-read");
+    (*argv)[(*argc)++] = strdup("2");
+
+    assert(*argc<100);
+}
+
+void setup_test_6(int* argc, char*** argv)
+{
+    *argc = 0;
+    *argv = (char**)calloc(sizeof(char*), 100);
+    (*argv)[(*argc)++] = strdup("bambi");
+    (*argv)[(*argc)++] = strdup("i2b");
+    (*argv)[(*argc)++] = strdup("-i");
+    (*argv)[(*argc)++] = strdup("test/i2b/140624_MS6_13349_A_MS2639979-300V2/Data/Intensities");
+    (*argv)[(*argc)++] = strdup("-o");
+    (*argv)[(*argc)++] = strdup("test/i2b/out/xxx.bam");
+    (*argv)[(*argc)++] = strdup("--lane");
+    (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("--first-tile");
+    (*argv)[(*argc)++] = strdup("1101");
+    (*argv)[(*argc)++] = strdup("--tile-limit");
+    (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("--library-name");
+    (*argv)[(*argc)++] = strdup("TestLibrary");
+    (*argv)[(*argc)++] = strdup("--sample-alias");
+    (*argv)[(*argc)++] = strdup("TestSample");
+    (*argv)[(*argc)++] = strdup("--study-name");
+    (*argv)[(*argc)++] = strdup("Study TestStudy");
+    (*argv)[(*argc)++] = strdup("--run-start-date");
+    (*argv)[(*argc)++] = strdup("2011-03-23T00:00:00+0000");
+    (*argv)[(*argc)++] = strdup("--verbose");
+    (*argv)[(*argc)++] = strdup("--no-filter");
+    (*argv)[(*argc)++] = strdup("--barcode-tag");
+    (*argv)[(*argc)++] = strdup("tr");
+    (*argv)[(*argc)++] = strdup("--quality-tag");
+    (*argv)[(*argc)++] = strdup("tq");
+    (*argv)[(*argc)++] = strdup("--sec-barcode-tag");
+    (*argv)[(*argc)++] = strdup("BC");
+    (*argv)[(*argc)++] = strdup("--sec-quality-tag");
+    (*argv)[(*argc)++] = strdup("QT");
 
     assert(*argc<100);
 }
@@ -157,7 +304,7 @@ void test_paramaters(void)
     // minimal options
     int argc_1;
     char** argv_1;
-    setup_test_1(&argc_1, &argv_1);
+    setup_param_test(&argc_1, &argv_1);
     opts_t *opts = i2b_parse_args(argc_1-1, argv_1+1);
 
     if (verbose) printf("Testing paramaters\n");
@@ -197,10 +344,49 @@ void test_paramaters(void)
     icheckEqual("options: add-cluster-index-tag", 1, opts->add_cluster_index_tag);
 }
 
+void checkFiles(char *name, char *fname)
+{
+    char command[256];
+
+    sprintf(command,"samtools view -H test/i2b/out/xxx.bam | grep @RG > /tmp/got.txt");
+    system(command);
+    sprintf(command, "samtools view -H %s | grep @RG > /tmp/expected.txt", fname);
+    system(command);
+    int result = system("diff /tmp/got.txt /tmp/expected.txt");
+    if (result) {
+        fprintf(stderr, "%s: test 1 failed\n", name);
+        failure++;
+    } else {
+        success++;
+    }
+
+    sprintf(command,"samtools view test/i2b/out/xxx.bam | head > /tmp/got.txt");
+    system(command);
+    sprintf(command,"samtools view %s | head > /tmp/expected.txt", fname);
+    system(command);
+    result = system("diff /tmp/got.txt /tmp/expected.txt");
+    if (result) {
+        fprintf(stderr, "%s: test 2 failed\n", name);
+        failure++;
+    } else {
+        success++;
+    }
+
+    sprintf(command,"samtools view test/i2b/out/xxx.bam | tail > /tmp/got.txt");
+    system(command);
+    sprintf(command,"samtools view %s | tail > /tmp/expected.txt",fname);
+    system(command);
+    result = system("diff /tmp/got.txt /tmp/expected.txt");
+    if (result) {
+        fprintf(stderr, "%s: test 3 failed\n", name);
+        failure++;
+    } else {
+        success++;
+    }
+}
+
 int main(int argc, char**argv)
 {
-    int result;
-
     int getopt_char;
     while ((getopt_char = getopt(argc, argv, "v")) != -1) {
         switch (getopt_char) {
@@ -216,21 +402,53 @@ int main(int argc, char**argv)
     // Cleanup getopt
     optind = 1;
 
+    int argc_1;
+    char** argv_1;
+
+    //
+    // test that we can read the command line paramaters
+    //
     test_paramaters();
 
 
-    int argc_2;
-    char** argv_2;
-    setup_test_2(&argc_2, &argv_2);
-    main_i2b(argc_2-1, argv_2+1);
+    //
+    // simple test
+    //
 
-    result = system("diff test/i2b/out/xxx.bam test/i2b/out/test1.bam");
-    if (result) {
-        fprintf(stderr, "test 2 failed\n");
-        failure++;
-    } else {
-        success++;
-    }
+    setup_test_1(&argc_1, &argv_1);
+    main_i2b(argc_1-1, argv_1+1);
+    checkFiles("Simple test", "test/i2b/out/test1.bam");
+
+
+    //
+    // Test with non-standard read group ID
+    //
+
+    setup_test_2(&argc_1, &argv_1);
+    main_i2b(argc_1-1,argv_1+1);
+    checkFiles("Read Group ID test", "test/i2b/out/test2.bam");
+
+    //
+    // cycle range test
+    //
+    setup_test_4(&argc_1, &argv_1);
+    main_i2b(argc_1-1,argv_1+1);
+    checkFiles("Cycle Range test", "test/i2b/out/test4.bam");
+
+    //
+    // bc-read test
+    //
+    setup_test_5(&argc_1, &argv_1);
+    main_i2b(argc_1-1,argv_1+1);
+    checkFiles("BC_READ test", "test/i2b/out/test5.bam");
+
+    //
+    // dual index run
+    //
+    setup_test_6(&argc_1, &argv_1);
+    main_i2b(argc_1-1,argv_1+1);
+    checkFiles("Dual Index test", "test/i2b/out/test6.bam");
+
 
     printf("i2b tests: %s\n", failure ? "FAILED" : "Passed");
     return failure ? EXIT_FAILURE : EXIT_SUCCESS;

@@ -28,14 +28,19 @@ DEALINGS IN THE SOFTWARE.  */
 #include <stdint.h>
 #include <zlib.h>
 
+typedef enum { BCL, SCL } BCL_FILE_TYPE;
+
 typedef struct {
+    BCL_FILE_TYPE file_type;
     int fhandle;
     gzFile gzhandle;
     char *errmsg;
     uint32_t total_clusters;
     int current_cluster;
+    int current_base;
     char base;
     int quality;
+char *filename;
 } bclfile_t;
 
 bclfile_t *bclfile_open(char *fname);

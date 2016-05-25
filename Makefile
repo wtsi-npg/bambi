@@ -26,7 +26,7 @@ CFLAGS   = -g -Wall -O0
 LDFLAGS  =
 LIBS     =
 
-OBJS=		bambi.o hts_addendum.o decode.o i2b.o posfile.o filterfile.o
+OBJS=		decode.o i2b.o posfile.o filterfile.o bclfile.o hts_addendum.o
 
 prefix      = /usr/local
 exec_prefix = $(prefix)
@@ -45,6 +45,7 @@ INSTALL_DIR     = $(MKDIR_P) -m 755
 PROGRAMS = bambi
 
 BUILT_TEST_PROGRAMS = \
+    test/bclfile/bclfile \
     test/posfile/posfile \
     test/filterfile/filterfile \
 	test/decode/decode \
@@ -97,8 +98,8 @@ print-version:
 	$(CC) $(CFLAGS) $(ALL_CPPFLAGS) -c -o $@ $<
 
 
-bambi: $(OBJS) $(HTSLIB)
-	$(CC) -pthread $(ALL_LDFLAGS) -o $@ $(OBJS) $(HTSLIB_LIB) $(CURSES_LIB) -lm $(ALL_LIBS)
+bambi: $(OBJS) $(HTSLIB) bambi.o
+	$(CC) -pthread $(ALL_LDFLAGS) -o $@ bambi.o $(OBJS) $(HTSLIB_LIB) $(CURSES_LIB) -lm $(ALL_LIBS)
 
 i2b.o: i2b.c $(htslib_sam_h) $(htslib_khash_h) $(htslib_kstring_h) $(sam_opts_h)
 decode.o: decode.c $(htslib_sam_h) $(htslib_khash_h) $(htslib_kstring_h) $(sam_opts_h)
@@ -108,6 +109,7 @@ hts_addendum.o: hts_addendum.h
 # test programs
 
 check test: bambi $(BUILT_TEST_PROGRAMS)
+	test/bclfile/bclfile
 	test/filterfile/filterfile
 	test/posfile/posfile
 	test/decode/decode
@@ -119,12 +121,15 @@ test/decode/decode: test/decode/decode.o $(HTSLIB)
 test/decode/decode.o: test/decode/decode.c decode.o hts_addendum.o
 
 test/i2b/i2b: test/i2b/i2b.o $(HTSLIB)
-	$(CC) -pthread $(ALL_LDFLAGS) -o $@ test/i2b/i2b.o hts_addendum.o $(HTSLIB_LIB) $(ALL_LIBS)
+	$(CC) -pthread $(ALL_LDFLAGS) -o $@ test/i2b/i2b.o posfile.o filterfile.o bclfile.o hts_addendum.o $(HTSLIB_LIB) $(ALL_LIBS)
 
 test/i2b/i2b.o: test/i2b/i2b.c i2b.o hts_addendum.o
 
 test/posfile/posfile: test/posfile/posfile.o posfile.o
 	$(CC) $(ALL_LDFLAGS) -o $@ test/posfile/posfile.o posfile.o $(ALL_LIBS)
+
+test/bclfile/bclfile: test/bclfile/bclfile.o bclfile.o
+	$(CC) $(ALL_LDFLAGS) -o $@ test/bclfile/bclfile.o bclfile.o $(ALL_LIBS)
 
 test/filterfile/filterfile: test/filterfile/filterfile.o filterfile.o
 	$(CC) $(ALL_LDFLAGS) -o $@ test/filterfile/filterfile.o filterfile.o $(ALL_LIBS)

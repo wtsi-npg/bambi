@@ -58,7 +58,7 @@ void icheckEqual(char *name, int expected, int actual)
 
 int main(int argc, char**argv)
 {
-    int result, n, f;
+    int n, f;
 
     filter_t *filter;
 

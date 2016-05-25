@@ -31,10 +31,10 @@ DEALINGS IN THE SOFTWARE.  */
 #define CLOCS_IMAGE_WIDTH 2048
 #define CLOCS_BLOCKS_PER_LINE ((CLOCS_IMAGE_WIDTH + CLOCS_BLOCK_SIZE - 1) / CLOCS_BLOCK_SIZE)
 
-typedef enum { POS, LOCS, CLOCS } FILE_TYPE;
+typedef enum { UNKNOWN_POS, POS, LOCS, CLOCS } POS_FILE_TYPE;
 
 typedef struct {
-    FILE_TYPE file_type;
+    POS_FILE_TYPE file_type;
     int fhandle;
     char *errmsg;
     uint8_t version;

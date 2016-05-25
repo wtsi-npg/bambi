@@ -70,6 +70,8 @@ int main(int argc, char**argv)
 
     bclfile_t *bclfile;
 
+    // BCL tests
+
     bclfile = bclfile_open("test/i2b/110323_HS13_06000_B_B039WABXX/Data/Intensities/BaseCalls/L001/C1.1/s_1_1101.bcl");
     if (bclfile->errmsg) {
         fprintf(stderr,"Error opening file: %s\n", bclfile->errmsg);
@@ -98,6 +100,28 @@ int main(int argc, char**argv)
     icheckEqual("last Total clusters", 2609912, bclfile->total_clusters);
 
     bclfile_close(bclfile);
+
+    // SCL tests
+
+    bclfile = bclfile_open("test/i2b/110323_HS13_06000_B_B039WABXX/Data/Intensities/BaseCalls/L001/C1.1/s_1_1101.scl");
+    if (bclfile->errmsg) {
+        fprintf(stderr,"Error opening file: %s\n", bclfile->errmsg);
+        failure++;
+    }
+    icheckEqual("SCL File Type", SCL, bclfile->file_type);
+    icheckEqual("SCL Total clusters", 2609912, bclfile->total_clusters);
+    icheckEqual("SCL Current cluster", 0, bclfile->current_cluster);
+
+    bclfile_next(bclfile);
+    ccheckEqual("SCL First Base", 'A', bclfile->base);
+
+    for (n=0; n<306; n++) {
+        bclfile_next(bclfile);
+    }
+    ccheckEqual("SCL 307 Base", 'T', bclfile->base);
+
+    while (bclfile_next(bclfile) == 0);
+    ccheckEqual("SCL Last Base", 'C', bclfile->base);
 
     printf("bclfile tests: %s\n", failure ? "FAILED" : "Passed");
     return failure ? EXIT_FAILURE : EXIT_SUCCESS;

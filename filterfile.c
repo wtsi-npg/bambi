@@ -58,6 +58,7 @@ filter_t *filter_open(char *fname)
 void filter_close(filter_t *filter)
 {
     close(filter->fhandle);
+    free(filter);
 }
 
 int filter_next(filter_t *filter)

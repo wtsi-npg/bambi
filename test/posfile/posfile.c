@@ -58,10 +58,13 @@ void icheckEqual(char *name, int expected, int actual)
 
 int main(int argc, char**argv)
 {
-    int result, n;
+    int n;
 
     posfile_t *posfile;
 
+    /*
+     * clocs file
+     */
     posfile = posfile_open("test/i2b/110323_HS13_06000_B_B039WABXX/Data/Intensities/L001/s_1_1101.clocs");
     if (posfile->errmsg) {
         fprintf(stderr,"Error opening file: %s\n", posfile->errmsg);
@@ -83,7 +86,31 @@ int main(int argc, char**argv)
     icheckEqual("307  block", 330, posfile->current_block);
 
     while (posfile_next(posfile) == 0);
-    icheckEqual("last  block", 65600, posfile->current_block);
+    posfile_close(posfile);
+
+    /*
+     * locs file
+     */
+    posfile = posfile_open("test/i2b/111014_M00119_0028_AMS0001310-00300/Data/Intensities/L001/s_1_1.locs");
+    if (posfile->errmsg) {
+        fprintf(stderr,"Error opening file: %s\n", posfile->errmsg);
+        failure++;
+    }
+
+    icheckEqual("LOCS: Total blocks", 235085, posfile->total_blocks);
+    icheckEqual("LOCS: current block", 0, posfile->current_block);
+
+    posfile_next(posfile);
+    icheckEqual("LOCS: first X", 16440, posfile_get_x(posfile));
+    icheckEqual("LOCS: first Y", 1321, posfile_get_y(posfile));
+    icheckEqual("LOCS: current block (2)", 1, posfile->current_block);
+
+    while (posfile_next(posfile)==0);
+
+    icheckEqual("LOCS: last x", 15605, posfile_get_x(posfile));
+    icheckEqual("LOCS: last y", 29408, posfile_get_y(posfile));
+
+    posfile_close(posfile);
 
     printf("posfile tests: %s\n", failure ? "FAILED" : "Passed");
     return failure ? EXIT_FAILURE : EXIT_SUCCESS;
