@@ -757,7 +757,7 @@ int processRecord(samFile *input_file, bam_hdr_t *input_header, samFile *output_
         name = findBarcodeName(newseq,barcodeArray,opts,!(file_read->core.flag & BAM_FQCFAIL));
         if (!name) name = "0";
         char * newtag = makeNewTag(file_read,"RG",name);
-        bam_aux_update_str(file_read,"RG",strlen(newtag)+1,(uint8_t*)newtag);
+        bam_aux_update_str(file_read,"RG",strlen(newtag)+1, newtag);
         free(newtag);
         if (opts->change_read_name) add_suffix(file_read, name);
         free(newseq);
@@ -772,7 +772,7 @@ int processRecord(samFile *input_file, bam_hdr_t *input_header, samFile *output_
         r = sam_read1(input_file, input_header, paired_read);
         if (p) {
             char *newtag = makeNewTag(paired_read,"RG",name);
-            bam_aux_update_str(paired_read,"RG",strlen(newtag)+1,(uint8_t*)newtag);
+            bam_aux_update_str(paired_read,"RG",strlen(newtag)+1,newtag);
             free(newtag);
         }
         if (opts->change_read_name) add_suffix(paired_read, name);

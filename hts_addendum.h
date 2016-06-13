@@ -27,7 +27,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "cram/sam_header.h"
 #include "cram/cram_samtools.h"
 
-int bam_aux_update_str(bam1_t *b, const char tag[2], int len, uint8_t *data);
+int bam_aux_update_str(bam1_t *b, const char tag[2], int len, const char *data);
 SAM_hdr * sam_hdr_del(SAM_hdr *hdr, char *type, char *ID_key, char *ID_value);
 
 #endif
