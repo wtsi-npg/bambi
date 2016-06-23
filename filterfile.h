@@ -39,6 +39,7 @@ typedef struct {
 filter_t *filter_open(char *fname);
 int filter_next(filter_t *filter);
 void filter_close(filter_t *filter);
+void filter_seek(filter_t *filter, int cluster);
 
 #endif
 

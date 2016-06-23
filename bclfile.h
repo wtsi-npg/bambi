@@ -46,6 +46,7 @@ char *filename;
 bclfile_t *bclfile_open(char *fname);
 int bclfile_next(bclfile_t *bclfile);
 void bclfile_close(bclfile_t *bclfile);
+void bclfile_seek(bclfile_t *bclfile, int cluster);
 
 #endif
 
