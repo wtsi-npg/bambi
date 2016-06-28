@@ -301,7 +301,7 @@ xmlXPathObjectPtr getnodeset(xmlDocPtr doc, char *xpath)
     }
     if(xmlXPathNodeSetIsEmpty(result->nodesetval)){
         xmlXPathFreeObject(result);
-                fprintf(stderr,"No result for xpath %s\n", xpath);
+        //fprintf(stderr,"No result for xpath %s\n", xpath);
         return NULL;
     }
     return result;
@@ -324,6 +324,18 @@ static char *getXMLAttr(xmlDocPtr doc, char *node, char *attr)
     }
     return v;
 }
+
+static int getXMLAttr_int(xmlDocPtr doc, char *node, char *attr)
+{
+    int n = 0;
+    char *v = getXMLAttr(doc,node,attr);
+    if (v) {
+        n = atoi(v);
+        free(v);
+    }
+    return n;
+}
+    
 
 /*
  * Read the value for an xpath for a given XML doc
@@ -353,6 +365,8 @@ xmlDocPtr loadXML(char *dir, char *fname, int verbose)
     doc = xmlReadFile(tmp, NULL, XML_PARSE_NOWARNING);
     if (!doc) {
         if (verbose) fprintf(stderr, "WARNING: Failed to parse %s/%s\n", dir, fname);
+    } else {
+        if (verbose) fprintf(stderr, "Loaded config file %s/%s\n", dir, fname);
     }
     free(tmp);
     return doc;
@@ -674,8 +688,12 @@ int addHeader(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
     // Add PG lines
     version = getXMLAttr(opts->parametersConfig, "/ImageAnalysis/Run/Software", "Version");
     if (!version) version = getXMLAttr(opts->intensityConfig, "/ImageAnalysis/Run/Software", "Version");
+    if (!version) version = getXMLVal(opts->parametersConfig, "//Setup/ApplicationVersion");
+    if (!version) { fprintf(stderr, "Can't find program version\n"); exit(1); }
     pname = getXMLAttr(opts->parametersConfig, "/ImageAnalysis/Run/Software", "Name");
     if (!pname) pname = getXMLAttr(opts->intensityConfig, "/ImageAnalysis/Run/Software", "Name");
+    if (!pname) pname = getXMLVal(opts->parametersConfig, "//Setup/ApplicationName");
+    if (!pname) { fprintf(stderr, "Can't find program name\n"); exit(1); }
     sam_hdr_add(sh, "PG",
                     "ID", "SCS",
                     "VN", version,
@@ -689,8 +707,8 @@ int addHeader(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
     sam_hdr_add(sh, "PG",
                     "ID", "basecalling",
                     "PP", "SCS",
-                    "VN", version,
-                    "PN", pname,
+                    "VN", version ? version : "Unknown",
+                    "PN", pname ? pname : "Unknown",
                     "DS", "Basecalling Package",
                     NULL, NULL);
     free(pname); free(version);
@@ -774,13 +792,29 @@ ia_t *getTileList(opts_t *opts)
         xmlXPathFreeObject(ptr);
     }
 
-    // TODO add tile range to tile array
+    if (ia_isEmpty(tiles)) {
+        int numSurfaces = getXMLAttr_int(opts->runinfoConfig, "//FlowcellLayout", "SurfaceCount");
+        int numSwaths = getXMLAttr_int(opts->runinfoConfig, "//FlowcellLayout", "SwathCount");
+        int numTilesPerSwath = getXMLAttr_int(opts->runinfoConfig, "//FlowcellLayout", "TileCount");
+        if (numSurfaces && numSwaths && numTilesPerSwath) {
+            int isur, isw, itile;
+            for (isur = 1; isur <= numSurfaces; isur++) {
+                for (isw = 1; isw <= numSwaths; isw++) {
+                    for (itile = 1; itile <= numTilesPerSwath; itile++) {
+                        ia_push(tiles, 1000 * isur + 100 * isw + itile);
+                    }
+                }
+            }
+        }
+    }
 
-    // TODO if (!tiles) calcTileList();
+    if (ia_isEmpty(tiles)) return tiles;
 
     ia_sort(tiles);
 
     // Filter tile list by command line options (mainly used for testing)
+    if (opts->tile_limit && opts->first_tile==0) opts->first_tile = tiles->entries[0];
+
     if (opts->first_tile != 0) {
         int n;
         ia_t *new_tiles = ia_init(100);
@@ -790,7 +824,7 @@ ia_t *getTileList(opts_t *opts)
                 tl = opts->tile_limit ? opts->tile_limit : tiles->end;
                 for (i=n; i < n+tl; i++) {
                     if (i < tiles->end) {
-                        ia_push(new_tiles,tiles->entries[n]);
+                        ia_push(new_tiles,tiles->entries[i]);
                     }
                 }
             }
@@ -937,6 +971,12 @@ posfile_t *openPositionFile(int tile, opts_t *opts)
 
     if (posfile->errmsg) {
         sprintf(fname, "%s/L%03d/s_%d_%04d.locs", opts->intensity_dir, opts->lane, opts->lane, tile);
+        posfile = posfile_open(fname);
+        if (opts->verbose && !posfile->errmsg) fprintf(stderr,"Opened %s\n", fname);
+    }
+
+    if (posfile->errmsg) {
+        sprintf(fname, "%s/s.locs", opts->intensity_dir);
         posfile = posfile_open(fname);
         if (opts->verbose && !posfile->errmsg) fprintf(stderr,"Opened %s\n", fname);
     }
@@ -1222,6 +1262,8 @@ void createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
         cycleRangeEntry_t *cr = (cycleRangeEntry_t *)cycleRange->entries[n];
         if (opts->verbose) fprintf(stderr,"CycleRange: %s\t%d\t%d\n", cr->readname, cr->first, cr->last);
     }
+
+    if (tiles->end == 0) fprintf(stderr, "There are no tiles to process\n");
 
     for (n=0; n < tiles->end; n++) {
         if (processTile(tiles->entries[n], output_file, output_header, cycleRange, opts)) {
