@@ -363,6 +363,8 @@ xmlDocPtr loadXML(char *dir, char *fname, int verbose)
     doc = xmlReadFile(tmp, NULL, XML_PARSE_NOWARNING);
     if (!doc) {
         if (verbose) fprintf(stderr, "WARNING: Failed to parse %s/%s\n", dir, fname);
+    } else {
+        if (verbose) fprintf(stderr, "Opened XML file: %s/%s\n", dir, fname);
     }
     free(tmp);
     return doc;
