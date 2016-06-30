@@ -4,23 +4,17 @@
 
     Author: Jennifer Liddle <js10@sanger.ac.uk>
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published
+by the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
 
 The above copyright notice and this permission notice shall be included in
 all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.  */
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
 
 #include "bambi.h"
 #include <assert.h>
@@ -333,6 +327,28 @@ static char *getXMLAttr(xmlDocPtr doc, char *node, char *attr)
         xmlXPathFreeObject (result);
     }
     return v;
+}
+
+static int getXMLAttr_int(xmlDocPtr doc, char *node, char *attr)
+{
+    int n = 0;
+    char *v = getXMLAttr(doc,node,attr);
+    if (v) {
+        n = atoi(v);
+        free(v);
+    }
+    return n;
+}
+
+static int xmlGetProp_int(xmlNodePtr node, char *tag)
+{
+    int n=0;
+    char *v = (char*)xmlGetProp(node,(xmlChar*)tag);
+    if (v) {
+        n = atoi(v);
+        free(v);
+    }
+    return n;
 }
 
 /*
@@ -698,6 +714,14 @@ int addHeader(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
                     NULL, NULL);
 
     // Add PG lines
+    version = getXMLAttr(opts->parametersConfig, "/ImageAnalysis/Run/Software", "Version");
+    if (!version) version = getXMLAttr(opts->intensityConfig, "/ImageAnalysis/Run/Software", "Version");
+    if (!version) version = getXMLVal(opts->parametersConfig, "//Setup/ApplicationVersion");
+    if (!version) { fprintf(stderr, "Can't find program version\n"); exit(1); }
+    pname = getXMLAttr(opts->parametersConfig, "/ImageAnalysis/Run/Software", "Name");
+    if (!pname) pname = getXMLAttr(opts->intensityConfig, "/ImageAnalysis/Run/Software", "Name");
+    if (!pname) pname = getXMLVal(opts->parametersConfig, "//Setup/ApplicationName");
+    if (!pname) { fprintf(stderr, "Can't find program name\n"); exit(1); }
     sam_hdr_add(sh, "PG",
                     "ID", "SCS",
                     "VN", version,
@@ -711,8 +735,8 @@ int addHeader(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
     sam_hdr_add(sh, "PG",
                     "ID", "basecalling",
                     "PP", "SCS",
-                    (version ? "VN": NULL), (version ? version : NULL),
-                    (pname ? "PN" : NULL), (pname ? pname : NULL),
+                    "VN", version ? version : "Unknown",
+                    "PN", pname ? pname : "Unknown",
                     "DS", "Basecalling Package",
                     NULL, NULL);
     free(pname); free(version);
@@ -814,6 +838,7 @@ ia_t *getTileList(opts_t *opts)
     sprintf(xpath, "//TileSelection/Lane[@Index=\"%d\"]/Tile", opts->lane);
     assert(strlen(xpath) < 64);
     ptr = getnodeset(doc, xpath);
+    free(xpath);
 
     if (ptr && ptr->nodesetval) {
         int n;
@@ -843,11 +868,13 @@ ia_t *getTileList(opts_t *opts)
 
     // TODO add tile range to tile array
 
-    // TODO if (!tiles) calcTileList();
+    if (ia_isEmpty(tiles)) return tiles;
 
     ia_sort(tiles);
 
     // Filter tile list by command line options (mainly used for testing)
+    if (opts->tile_limit && opts->first_tile==0) opts->first_tile = tiles->entries[0];
+
     if (opts->first_tile != 0) {
         int n;
         ia_t *new_tiles = ia_init(100);
@@ -904,8 +931,10 @@ void getCycleRangeFromFile(va_t *cycleRange, xmlDocPtr doc)
     for (n=0; n < ptr->nodesetval->nodeNr; n++) {
         xmlNodePtr np = ptr->nodesetval->nodeTab[n];
         cycleRangeEntry_t *cr = calloc(1,sizeof(cycleRangeEntry_t));
-        int numCycles = atoi((char *)xmlGetProp(np,(xmlChar *)"NumCycles"));
-        bool isIndexedRead = ('Y' == toupper(*(char *)xmlGetProp(np,(xmlChar *)"IsIndexedRead")));
+        int numCycles = xmlGetProp_int(np,"NumCycles");
+        char *p = (char *)xmlGetProp(np,(xmlChar *)"IsIndexedRead");
+        bool isIndexedRead = ('Y' == *p || 'y' == *p);
+        free(p);
         cr->readname = getCycleName(isIndexedRead ? indexCount++ : readCount++, isIndexedRead);
         cr->first = cycleCount;
         cr->last = cycleCount + numCycles - 1;
@@ -921,7 +950,7 @@ va_t *getCycleRange(opts_t *opts)
 {
     va_t *cycleRange = va_init(100, freeCycleRange);
     xmlDocPtr doc;
-    xmlXPathObjectPtr ptr;
+    xmlXPathObjectPtr ptr = NULL;
     int n;
 
     //
@@ -958,7 +987,7 @@ va_t *getCycleRange(opts_t *opts)
                 xmlNodePtr np = ptr->nodesetval->nodeTab[n];
                 char name[64];
                 cycleRangeEntry_t *cr = calloc(1,sizeof(cycleRangeEntry_t));
-                int readIndex = atoi((char *)xmlGetProp(np,(xmlChar *)"Index"));
+                int readIndex = xmlGetProp_int(np,"Index");
                 sprintf(name,"read%d",readIndex);
                 cr->readname = strdup(name);
                 np = np->children;
@@ -975,6 +1004,8 @@ va_t *getCycleRange(opts_t *opts)
             }
         }
     }
+
+    if (ptr) xmlXPathFreeObject(ptr);
     return cycleRange;
 }
 
@@ -1028,12 +1059,21 @@ posfile_t *openPositionFile(int tile, va_t *tileIndex, opts_t *opts)
 
     if (posfile->errmsg) {
         sprintf(fname, "%s/L%03d/s_%d_%04d.clocs", opts->intensity_dir, opts->lane, opts->lane, tile);
+        free(posfile->errmsg); free(posfile);
         posfile = posfile_open(fname);
         if (opts->verbose && !posfile->errmsg) fprintf(stderr,"Opened %s\n", fname);
     }
 
     if (posfile->errmsg) {
         sprintf(fname, "%s/L%03d/s_%d_%04d.locs", opts->intensity_dir, opts->lane, opts->lane, tile);
+        free(posfile->errmsg); free(posfile);
+        posfile = posfile_open(fname);
+        if (opts->verbose && !posfile->errmsg) fprintf(stderr,"Opened %s\n", fname);
+    }
+
+    if (posfile->errmsg) {
+        sprintf(fname, "%s/s.locs", opts->intensity_dir);
+        free(posfile->errmsg); free(posfile);
         posfile = posfile_open(fname);
         if (opts->verbose && !posfile->errmsg) fprintf(stderr,"Opened %s\n", fname);
     }
@@ -1114,6 +1154,7 @@ bclfile_t *openBclFile(char *basecalls, int lane, int tile, int cycle, char *ext
         fprintf(stderr,"Can't open %s\n%s\n", fname, bcl->errmsg);
         return NULL;
     }
+
     free(fname);
 
     if (tileIndex) bclfile_seek(bcl, findClusterNumber(tile,tileIndex));
@@ -1369,6 +1410,8 @@ void createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
         cycleRangeEntry_t *cr = (cycleRangeEntry_t *)cycleRange->entries[n];
         if (opts->verbose) fprintf(stderr,"CycleRange: %s\t%d\t%d\n", cr->readname, cr->first, cr->last);
     }
+
+    if (tiles->end == 0) fprintf(stderr, "There are no tiles to process\n");
 
     for (n=0; n < tiles->end; n++) {
         if (processTile(tiles->entries[n], output_file, output_header, cycleRange, tileIndex, opts)) {
