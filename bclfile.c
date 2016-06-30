@@ -68,6 +68,7 @@ bclfile_t *bclfile_open(char *fname)
         char *gzfname = calloc(1,strlen(fname)+4);
         strcpy(gzfname,fname); strcat(gzfname,".gz");
         bclfile->gzhandle = gzopen(gzfname,"r");
+        free(gzfname);
         if (bclfile->gzhandle == NULL) {
             bclfile->errmsg = strdup(strerror(errno));
         } else {
@@ -87,6 +88,7 @@ void bclfile_close(bclfile_t *bclfile)
     } else {
         close(bclfile->fhandle);
     }
+    free(bclfile->filename);
     free(bclfile);
 }
 

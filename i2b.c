@@ -335,7 +335,17 @@ static int getXMLAttr_int(xmlDocPtr doc, char *node, char *attr)
     }
     return n;
 }
-    
+
+static int xmlGetProp_int(xmlNodePtr node, char *tag)
+{
+    int n=0;
+    char *v = (char*)xmlGetProp(node,(xmlChar*)tag);
+    if (v) {
+        n = atoi(v);
+        free(v);
+    }
+    return n;
+}
 
 /*
  * Read the value for an xpath for a given XML doc
@@ -782,6 +792,7 @@ ia_t *getTileList(opts_t *opts)
     sprintf(xpath, "//TileSelection/Lane[@Index=\"%d\"]/Tile", opts->lane);
     assert(strlen(xpath) < 64);
     ptr = getnodeset(doc, xpath);
+    free(xpath);
 
     if (ptr && ptr->nodesetval) {
         int n;
@@ -871,8 +882,10 @@ void getCycleRangeFromFile(va_t *cycleRange, xmlDocPtr doc)
     for (n=0; n < ptr->nodesetval->nodeNr; n++) {
         xmlNodePtr np = ptr->nodesetval->nodeTab[n];
         cycleRangeEntry_t *cr = calloc(1,sizeof(cycleRangeEntry_t));
-        int numCycles = atoi((char *)xmlGetProp(np,(xmlChar *)"NumCycles"));
-        bool isIndexedRead = ('Y' == toupper(*(char *)xmlGetProp(np,(xmlChar *)"IsIndexedRead")));
+        int numCycles = xmlGetProp_int(np,"NumCycles");
+        char *p = (char *)xmlGetProp(np,(xmlChar *)"IsIndexedRead");
+        bool isIndexedRead = ('Y' == *p || 'y' == *p);
+        free(p);
         cr->readname = getCycleName(isIndexedRead ? indexCount++ : readCount++, isIndexedRead);
         cr->first = cycleCount;
         cr->last = cycleCount + numCycles - 1;
@@ -888,7 +901,7 @@ va_t *getCycleRange(opts_t *opts)
 {
     va_t *cycleRange = va_init(100, freeCycleRange);
     xmlDocPtr doc;
-    xmlXPathObjectPtr ptr;
+    xmlXPathObjectPtr ptr = NULL;
     int n;
 
     //
@@ -925,7 +938,7 @@ va_t *getCycleRange(opts_t *opts)
                 xmlNodePtr np = ptr->nodesetval->nodeTab[n];
                 char name[64];
                 cycleRangeEntry_t *cr = calloc(1,sizeof(cycleRangeEntry_t));
-                int readIndex = atoi((char *)xmlGetProp(np,(xmlChar *)"Index"));
+                int readIndex = xmlGetProp_int(np,"Index");
                 sprintf(name,"read%d",readIndex);
                 cr->readname = strdup(name);
                 np = np->children;
@@ -942,6 +955,8 @@ va_t *getCycleRange(opts_t *opts)
             }
         }
     }
+
+    if (ptr) xmlXPathFreeObject(ptr);
     return cycleRange;
 }
 
@@ -965,18 +980,21 @@ posfile_t *openPositionFile(int tile, opts_t *opts)
 
     if (posfile->errmsg) {
         sprintf(fname, "%s/L%03d/s_%d_%04d.clocs", opts->intensity_dir, opts->lane, opts->lane, tile);
+        free(posfile->errmsg); free(posfile);
         posfile = posfile_open(fname);
         if (opts->verbose && !posfile->errmsg) fprintf(stderr,"Opened %s\n", fname);
     }
 
     if (posfile->errmsg) {
         sprintf(fname, "%s/L%03d/s_%d_%04d.locs", opts->intensity_dir, opts->lane, opts->lane, tile);
+        free(posfile->errmsg); free(posfile);
         posfile = posfile_open(fname);
         if (opts->verbose && !posfile->errmsg) fprintf(stderr,"Opened %s\n", fname);
     }
 
     if (posfile->errmsg) {
         sprintf(fname, "%s/s.locs", opts->intensity_dir);
+        free(posfile->errmsg); free(posfile);
         posfile = posfile_open(fname);
         if (opts->verbose && !posfile->errmsg) fprintf(stderr,"Opened %s\n", fname);
     }
@@ -1019,7 +1037,6 @@ bclfile_t *openBclFile(char *basecalls, int lane, int tile, int cycle, char *ext
         fprintf(stderr,"Can't open %s\n%s\n", fname, bcl->errmsg);
         return NULL;
     }
-    else { fprintf(stderr,"Opened %s\n", fname); }
     free(fname);
     return bcl;
 }
