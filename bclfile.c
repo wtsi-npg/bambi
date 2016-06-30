@@ -61,20 +61,33 @@ bclfile_t *bclfile_open(char *fname)
 
     bclfile->fhandle = open(fname, O_RDONLY);
     if (bclfile->fhandle == -1) {
-        char *gzfname = calloc(1,strlen(fname)+4);
+        char *gzfname = calloc(1,strlen(fname)+8);
         strcpy(gzfname,fname); strcat(gzfname,".gz");
         bclfile->gzhandle = gzopen(gzfname,"r");
-        free(gzfname);
         if (bclfile->gzhandle == NULL) {
-            bclfile->errmsg = strdup(strerror(errno));
+            strcpy(gzfname,fname); strcat(gzfname,".bgzf");
+            bclfile->gzhandle = gzopen(gzfname,"r");
+            if (bclfile->gzhandle == NULL) {
+                bclfile->errmsg = strdup(strerror(errno));
+            }
         } else {
             gzread(bclfile->gzhandle,(void *)&bclfile->total_clusters,4);
         }
+        free(gzfname);
     } else {
         read(bclfile->fhandle, (void *)&bclfile->total_clusters, 4);
     }
 
     return bclfile;
+}
+
+void bclfile_seek(bclfile_t *bcl, int cluster)
+{
+    if (bcl->gzhandle) {
+        gzseek(bcl->gzhandle, (z_off_t)(4 + cluster), SEEK_SET);
+    } else {
+        lseek(bcl->fhandle, (off_t)(4 + cluster), SEEK_SET);
+    }
 }
 
 void bclfile_close(bclfile_t *bclfile)

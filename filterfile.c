@@ -56,6 +56,16 @@ void filter_close(filter_t *filter)
     free(filter);
 }
 
+void filter_seek(filter_t *filter, int cluster)
+{
+    off_t pos = 12 + cluster;
+    off_t n =lseek(filter->fhandle, pos, SEEK_SET);
+    if (n != pos) {
+        fprintf(stderr,"filter_seek(%d) failed: returned %d instead of %d\n", cluster, (int)n, (int)pos);
+        exit(1);
+    }
+}
+
 int filter_next(filter_t *filter)
 {
     unsigned char next;

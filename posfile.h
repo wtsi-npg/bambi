@@ -43,6 +43,7 @@ typedef struct {
 posfile_t *posfile_open(char *fname);
 int posfile_next(posfile_t *posfile);
 void posfile_close(posfile_t *posfile);
+void posfile_seek(posfile_t *posfile, int cluster);
 
 static inline int posfile_get_x(posfile_t *posfile) { return posfile->x; }
 static inline int posfile_get_y(posfile_t *posfile) { return posfile->y; }

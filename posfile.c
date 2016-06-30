@@ -76,6 +76,24 @@ posfile_t *posfile_open(char *fname)
     return posfile;
 }
 
+/*
+ * seek to a given cluster number
+ */
+void posfile_seek(posfile_t *posfile, int cluster)
+{
+    off_t pos = 12 + cluster * 8;
+    if (posfile->file_type != LOCS) {
+        fprintf(stderr,"Can only handle NextSeq pos files of type LOC\n");
+        exit(1);
+    }
+
+    off_t r = lseek(posfile->fhandle, pos, SEEK_SET);
+    if (r != pos) {
+        fprintf(stderr,"Trying to seek to %d (cluster %d) but returned %d\n", (int)pos, cluster, (int)r);
+        perror("posfile_seek() failed");
+    }
+}
+
 void posfile_close(posfile_t *posfile)
 {
     free(posfile->errmsg);

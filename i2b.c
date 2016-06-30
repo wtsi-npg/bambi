@@ -9,10 +9,8 @@ it under the terms of the GNU Affero General Public License as published
 by the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
 
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
@@ -34,6 +32,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <libxml/parser.h>
 #include <libxml/xpath.h>
 #include <time.h>
+#include <fcntl.h>
 
 #include <cram/sam_header.h>
 
@@ -239,6 +238,15 @@ void freeBCLReadArray(void *ent)
     free(ra);
 }
 
+typedef struct {
+    int tile;
+    int clusters;
+} tileIndexEntry_t;
+
+void freetileIndexArray(void *ent)
+{
+    free(ent);
+}
 
 /*
  * Release all the options
@@ -297,7 +305,6 @@ xmlXPathObjectPtr getnodeset(xmlDocPtr doc, char *xpath)
     }
     if(xmlXPathNodeSetIsEmpty(result->nodesetval)){
         xmlXPathFreeObject(result);
-        //fprintf(stderr,"No result for xpath %s\n", xpath);
         return NULL;
     }
     return result;
@@ -372,7 +379,7 @@ xmlDocPtr loadXML(char *dir, char *fname, int verbose)
     if (!doc) {
         if (verbose) fprintf(stderr, "WARNING: Failed to parse %s/%s\n", dir, fname);
     } else {
-        if (verbose) fprintf(stderr, "Loaded config file %s/%s\n", dir, fname);
+        if (verbose) fprintf(stderr, "Opened XML file: %s/%s\n", dir, fname);
     }
     free(tmp);
     return doc;
@@ -627,6 +634,7 @@ opts_t* i2b_parse_args(int argc, char *argv[])
     opts->intensityConfig = loadXML(opts->intensity_dir, "config.xml", opts->verbose);
     opts->basecallsConfig = loadXML(opts->basecalls_dir, "config.xml", opts->verbose);
     opts->parametersConfig = loadXML(opts->run_folder, "runParameters.xml", opts->verbose);
+    if (!opts->parametersConfig) opts->parametersConfig = loadXML(opts->run_folder, "RunParameters.xml", opts->verbose);
     opts->runinfoConfig = loadXML(opts->run_folder, "RunInfo.xml", opts->verbose);
 
     if (!opts->run_start_date) {
@@ -634,6 +642,9 @@ opts_t* i2b_parse_args(int argc, char *argv[])
     }
     if (!opts->run_start_date) {
         opts->run_start_date = getXMLVal(opts->parametersConfig, "//Setup/RunStartDate");
+    }
+    if (!opts->run_start_date) {
+        opts->run_start_date = getXMLVal(opts->parametersConfig, "//RunParameters/RunStartDate");
     }
 
     if (!opts->run_start_date) {
@@ -675,6 +686,16 @@ int addHeader(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
     SAM_hdr *sh = sam_hdr_parse_(output_header->text,output_header->l_text);
     char *version = NULL;
     char *pname = NULL;
+
+    pname = getXMLAttr(opts->parametersConfig, "/ImageAnalysis/Run/Software", "Name");
+    if (!pname) pname = getXMLAttr(opts->intensityConfig, "/ImageAnalysis/Run/Software", "Name");
+    if (!pname) pname = getXMLVal(opts->parametersConfig, "//ApplicationName");
+    if (!pname) { fprintf(stderr,"Can't find program name anywhere\n"); return 1; }
+
+    version = getXMLAttr(opts->parametersConfig, "/ImageAnalysis/Run/Software", "Version");
+    if (!version) version = getXMLAttr(opts->intensityConfig, "/ImageAnalysis/Run/Software", "Version");
+    if (!version) version = getXMLVal(opts->parametersConfig, "//ApplicationVersion");
+    if (!version) { fprintf(stderr,"Can't find program version anywhere\n"); return 1; }
 
     // Add header line
     sam_hdr_add(sh, "HD", "VN", "1.5", "SO", "unsorted", NULL, NULL);
@@ -774,6 +795,34 @@ char *getId(opts_t *opts)
 }
 
 /*
+ * Load the tile index array (the BCI file)
+ * This is only for NextSeq 
+ */
+va_t *getTileIndex(opts_t *opts)
+{
+    va_t *tileIndex = NULL;
+    char *fname = calloc(1,strlen(opts->basecalls_dir)+64);
+    sprintf(fname, "%s/L%03d/s_%d.bci", opts->basecalls_dir, opts->lane, opts->lane);
+    int fhandle = open(fname,O_RDONLY);
+    if (fhandle < 0) {
+        if (opts->verbose) fprintf(stderr,"Can't open BCI file %s\n", fname);
+    } else {
+        tileIndex = va_init(100,freetileIndexArray);
+        int n;
+        do {
+            tileIndexEntry_t *ti = calloc(1, sizeof(tileIndexEntry_t));
+            read(fhandle, &ti->tile, 4);
+            n = read(fhandle, &ti->clusters, 4);
+            if (n == 4) {
+                va_push(tileIndex,ti);
+            }
+        } while (n == 4);
+        close(fhandle);
+    }
+    return tileIndex;
+}
+
+/*
  * load tile list from basecallsConfig or intensityConfig
  */
 ia_t *getTileList(opts_t *opts)
@@ -793,10 +842,27 @@ ia_t *getTileList(opts_t *opts)
     if (ptr && ptr->nodesetval) {
         int n;
         for (n=0; n < ptr->nodesetval->nodeNr; n++) {
-            char * t = (char *)ptr->nodesetval->nodeTab[n]->children->content;
+            char *t = (char *)ptr->nodesetval->nodeTab[n]->children->content;
             if (t) ia_push(tiles,atoi(t));
         }
         xmlXPathFreeObject(ptr);
+    } else {
+        // Maybe this is a NewSeq run?
+        ptr = getnodeset(opts->parametersConfig, "//SelectedTiles/Tile");
+        if (ptr && ptr->nodesetval) {
+            int n;
+            for (n=0; n < ptr->nodesetval->nodeNr; n++) {
+                char *t = (char *)ptr->nodesetval->nodeTab[n]->children->content;
+                char *saveptr;
+                char *lane = strtok_r(t, "_", &saveptr);
+                char *tileno = strtok_r(NULL, "_", &saveptr);
+                if (lane && tileno) {
+                    if (atoi(lane) == opts->lane) {
+                        ia_push(tiles,atoi(tileno));
+                    }
+                }
+            }
+        }
     }
 
     if (ia_isEmpty(tiles)) {
@@ -814,6 +880,7 @@ ia_t *getTileList(opts_t *opts)
             }
         }
     }
+
 
     if (ia_isEmpty(tiles)) return tiles;
 
@@ -957,6 +1024,36 @@ va_t *getCycleRange(opts_t *opts)
 }
 
 /*
+ * Find cluster number for a given tile
+ * Abort if tile not found
+ */
+int findClusterNumber(int tile, va_t *tileIndex)
+{
+    int n;
+    int clusterNumber = 0;
+    for (n=0; n < tileIndex->end; n++) {
+        tileIndexEntry_t *ti = (tileIndexEntry_t *)tileIndex->entries[n];
+        if (ti->tile == tile)
+            return clusterNumber;
+        clusterNumber += ti->clusters;
+    }
+    fprintf(stderr,"findClusterNumber(%d) : no such tile\n", tile);
+    exit(1);
+}
+
+int findClusters(int tile, va_t *tileIndex)
+{
+    int n;
+    for (n=0; n < tileIndex->end; n++) {
+        tileIndexEntry_t *ti = (tileIndexEntry_t *)tileIndex->entries[n];
+        if (ti->tile == tile)
+            return ti->clusters;
+    }
+    fprintf(stderr,"findClusters(%d) : no such tile\n", tile);
+    exit(1);
+}
+
+/*
  * Open the position file
  *
  * Try looking for _pos.txt, .clocs, locs files in that order
@@ -964,7 +1061,7 @@ va_t *getCycleRange(opts_t *opts)
  * Open and return the first one found, or NULL if not found.
  */
 
-posfile_t *openPositionFile(int tile, opts_t *opts)
+posfile_t *openPositionFile(int tile, va_t *tileIndex, opts_t *opts)
 {
     posfile_t *posfile = NULL;
 
@@ -995,6 +1092,34 @@ posfile_t *openPositionFile(int tile, opts_t *opts)
         if (opts->verbose && !posfile->errmsg) fprintf(stderr,"Opened %s\n", fname);
     }
 
+    // if still not found, try NewSeq format files
+    if (posfile->errmsg) {
+        sprintf(fname, "%s/s_%d_pos.txt", opts->intensity_dir, opts->lane);
+        posfile = posfile_open(fname);
+        if (opts->verbose && !posfile->errmsg) fprintf(stderr,"Opened %s\n", fname);
+
+        if (posfile->errmsg) {
+            sprintf(fname, "%s/L%03d/s_%d.clocs", opts->intensity_dir, opts->lane, opts->lane);
+            posfile = posfile_open(fname);
+            if (opts->verbose && !posfile->errmsg) fprintf(stderr,"Opened %s\n", fname);
+        }
+
+        if (posfile->errmsg) {
+            sprintf(fname, "%s/L%03d/s_%d.locs", opts->intensity_dir, opts->lane, opts->lane);
+            posfile = posfile_open(fname);
+            if (opts->verbose && !posfile->errmsg) fprintf(stderr,"Opened %s\n", fname);
+        }
+
+        if (!posfile->errmsg) {
+            if (tileIndex) {
+                posfile_seek(posfile,findClusterNumber(tile,tileIndex));
+            } else {
+                fprintf(stderr,"Trying to open %s with no tile index\n", fname);
+                posfile->errmsg = strdup("Trying to open position file with no tile index");
+            }
+        }
+    }
+
     free(fname);
     return posfile;
 
@@ -1003,7 +1128,7 @@ posfile_t *openPositionFile(int tile, opts_t *opts)
 /*
  * find and open the filter file
  */
-filter_t *openFilterFile(int tile, opts_t *opts)
+filter_t *openFilterFile(int tile, va_t *tileIndex, opts_t *opts)
 {
     filter_t *filter = NULL;
     char *fname = calloc(1,strlen(opts->basecalls_dir)+128); // a bit arbitrary :-(
@@ -1014,8 +1139,14 @@ filter_t *openFilterFile(int tile, opts_t *opts)
         sprintf(fname, "%s/s_%d_%04d.filter", opts->basecalls_dir, opts->lane, tile);
         filter = filter_open(fname);
     }
+    if (filter->errmsg) {
+        sprintf(fname, "%s/L%03d/s_%d.filter", opts->basecalls_dir, opts->lane, opts->lane);
+        filter = filter_open(fname);
+    }
 
     if (opts->verbose && !filter->errmsg) fprintf(stderr,"Opened filter file %s\n", fname);
+
+    if (tileIndex) filter_seek(filter,findClusterNumber(tile,tileIndex));
 
     free(fname);
     return filter;
@@ -1024,23 +1155,31 @@ filter_t *openFilterFile(int tile, opts_t *opts)
 /*
  * Open a single bcl (or scl) file
  */
-bclfile_t *openBclFile(char *basecalls, int lane, int tile, int cycle, char *ext)
+bclfile_t *openBclFile(char *basecalls, int lane, int tile, int cycle, char *ext, va_t *tileIndex)
 {
     char *fname = calloc(1, strlen(basecalls)+128);
-    sprintf(fname, "%s/L%03d/C%d.1/s_%d_%04d.%s", basecalls, lane, cycle, lane, tile, ext);
+    if (tileIndex) {    // NextSeq format
+        sprintf(fname, "%s/L%03d/%04d.%s", basecalls, lane, cycle, ext);
+    } else {
+        sprintf(fname, "%s/L%03d/C%d.1/s_%d_%04d.%s", basecalls, lane, cycle, lane, tile, ext);
+    }
     bclfile_t *bcl = bclfile_open(fname);
     if (bcl->errmsg) {
         fprintf(stderr,"Can't open %s\n%s\n", fname, bcl->errmsg);
         return NULL;
     }
+
     free(fname);
+
+    if (tileIndex) bclfile_seek(bcl, findClusterNumber(tile,tileIndex));
+
     return bcl;
 }
 
 /*
  * Find and open all the relevant bcl and scl files
  */
-va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile)
+va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, va_t *tileIndex)
 {
     int n, cycle, nCycles;
 
@@ -1055,11 +1194,11 @@ va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile)
         ra->sclFileArray = va_init(nCycles, freeBCLFileArray);
 
         for (cycle = cr->first; cycle <= cr->last; cycle++) {
-            bclfile_t *bcl = openBclFile(opts->basecalls_dir, opts->lane, tile, cycle, "bcl");
+            bclfile_t *bcl = openBclFile(opts->basecalls_dir, opts->lane, tile, cycle, "bcl", tileIndex);
             va_push(ra->bclFileArray, bcl);
 
             if (opts->generate_secondary_basecalls) {
-                bclfile_t *bcl = openBclFile(opts->basecalls_dir, opts->lane, tile, cycle, "scl");
+                bclfile_t *bcl = openBclFile(opts->basecalls_dir, opts->lane, tile, cycle, "scl", tileIndex);
                 va_push(ra->sclFileArray, bcl);
             }
         }
@@ -1185,25 +1324,29 @@ void writeRecord(int flags, opts_t *opts, char *readName,
 /*
  * Write all the BAM records for a given tile
  */
-int processTile(int tile, samFile *output_file, bam_hdr_t *output_header, va_t *cycleRange, opts_t *opts)
+int processTile(int tile, samFile *output_file, bam_hdr_t *output_header, va_t *cycleRange, va_t *tileIndex, opts_t *opts)
 {
     va_t *bclReadArray;
     int filtered;
+    int max_cluster = 0;
+    int nRecords = 0;
 
     if (opts->verbose) fprintf(stderr,"Processing Tile %d\n", tile);
-    posfile_t *posfile = openPositionFile(tile, opts);
+    posfile_t *posfile = openPositionFile(tile, tileIndex, opts);
     if (posfile->errmsg) {
         fprintf(stderr,"Can't find position file for Tile %d\n%s\n", tile, posfile->errmsg);
         return 1;
     }
 
-    filter_t *filter = openFilterFile(tile,opts);
+    filter_t *filter = openFilterFile(tile,tileIndex,opts);
     if (filter->errmsg) {
         fprintf(stderr,"Can't find filter file for tile %d\n%s\n", tile, filter->errmsg);
         return 1;
     }
 
-    bclReadArray = openBclFiles(cycleRange, opts, tile);
+    if (tileIndex) max_cluster = findClusters(tile, tileIndex);
+
+    bclReadArray = openBclFiles(cycleRange, opts, tile, tileIndex);
     char *id = getId(opts);
 
     bool ispaired = readArrayContains(bclReadArray, "read2");
@@ -1217,6 +1360,7 @@ int processTile(int tile, samFile *output_file, bam_hdr_t *output_header, va_t *
     // write all the records
     //
     while ( (filtered = filter_next(filter)) >= 0) {
+        if (tileIndex && filter->current_cluster > max_cluster) break;
         filtered = !filtered;   // don't ask
         posfile_next(posfile);
         char *readName = getReadName(id, opts->lane, tile, posfile->x, posfile->y);
@@ -1245,6 +1389,7 @@ int processTile(int tile, samFile *output_file, bam_hdr_t *output_header, va_t *
                 flags = setFlag(true,filtered,ispaired);
                 writeRecord(flags, opts, readName, bases2, qualities2, r2_bi, r2_qi, r2_bi2, r2_qi2, output_file, output_header);
             }
+            nRecords++;
         }
 
         free(bases); free(qualities);
@@ -1259,6 +1404,8 @@ int processTile(int tile, samFile *output_file, bam_hdr_t *output_header, va_t *
     filter_close(filter);
     posfile_close(posfile);
 
+    if (opts->verbose) fprintf(stderr,"%d records written\n", nRecords);
+
     return 0;
 }
 
@@ -1269,6 +1416,8 @@ void createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
 {
     ia_t *tiles = getTileList(opts);
     va_t *cycleRange = getCycleRange(opts);;
+    va_t *tileIndex = getTileIndex(opts);
+
     int n;
 
     for (n=0; n < cycleRange->end; n++) {
@@ -1279,7 +1428,7 @@ void createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
     if (tiles->end == 0) fprintf(stderr, "There are no tiles to process\n");
 
     for (n=0; n < tiles->end; n++) {
-        if (processTile(tiles->entries[n], output_file, output_header, cycleRange, opts)) {
+        if (processTile(tiles->entries[n], output_file, output_header, cycleRange, tileIndex, opts)) {
             fprintf(stderr,"Error processing tile %d\n", tiles->entries[n]);
             break;
         }
