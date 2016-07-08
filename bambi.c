@@ -34,7 +34,7 @@ int main_afilter(int argc, char *argv[]);
 
 const char *bambi_version()
 {
-    return VINES_VERSION;
+    return BAMBI_VERSION;
 }
 
 static void vprint_error_core(const char *subcommand, const char *format, va_list args, const char *extra)

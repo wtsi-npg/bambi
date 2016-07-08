@@ -36,6 +36,8 @@ const char * bambi_version(void)
 int success = 0;
 int failure = 0;
 
+int samtools_found = 0;
+
 void setup_param_test(int* argc, char*** argv)
 {
     *argc = 0;
@@ -348,10 +350,12 @@ void checkFiles(char *name, char *fname)
 {
     char command[256];
 
+    if (!samtools_found) return;
+
     sprintf(command,"samtools view -H test/i2b/out/xxx.bam | grep @RG > /tmp/got.txt");
-    system(command);
+    if (system(command)) { fprintf(stderr,"samtools failed\n"); failure++; }
     sprintf(command, "samtools view -H %s | grep @RG > /tmp/expected.txt", fname);
-    system(command);
+    if (system(command)) { fprintf(stderr,"samtools failed\n"); failure++; }
     int result = system("diff /tmp/got.txt /tmp/expected.txt");
     if (result) {
         fprintf(stderr, "%s: test 1 failed\n", name);
@@ -361,9 +365,9 @@ void checkFiles(char *name, char *fname)
     }
 
     sprintf(command,"samtools view test/i2b/out/xxx.bam | head | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > /tmp/got.txt");
-    system(command);
+    if (system(command)) { fprintf(stderr,"samtools failed\n"); failure++; }
     sprintf(command,"samtools view %s | head | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > /tmp/expected.txt", fname);
-    system(command);
+    if (system(command)) { fprintf(stderr,"samtools failed\n"); failure++; }
     result = system("diff /tmp/got.txt /tmp/expected.txt");
     if (result) {
         fprintf(stderr, "%s: test 2 failed\n", name);
@@ -373,9 +377,9 @@ void checkFiles(char *name, char *fname)
     }
 
     sprintf(command,"samtools view test/i2b/out/xxx.bam | tail | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > /tmp/got.txt");
-    system(command);
+    if (system(command)) { fprintf(stderr,"samtools failed\n"); failure++; }
     sprintf(command,"samtools view %s | tail | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > /tmp/expected.txt", fname);
-    system(command);
+    if (system(command)) { fprintf(stderr,"samtools failed\n"); failure++; }
     result = system("diff /tmp/got.txt /tmp/expected.txt");
     if (result) {
         fprintf(stderr, "%s: test 3 failed\n", name);
@@ -404,6 +408,10 @@ int main(int argc, char**argv)
 
     int argc_1;
     char** argv_1;
+
+    // check if we have samtools
+    if (system("which samtools") != 0) samtools_found = 0;
+    else                               samtools_found = 1;
 
     //
     // test that we can read the command line paramaters

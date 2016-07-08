@@ -75,7 +75,10 @@ bclfile_t *bclfile_open(char *fname)
         }
         free(gzfname);
     } else {
-        read(bclfile->fhandle, (void *)&bclfile->total_clusters, 4);
+        if (read(bclfile->fhandle, (void *)&bclfile->total_clusters, 4) < 0) {
+            fprintf(stderr,"failed to read total_clusters from bcl_file\n");
+            exit(1);
+        }
     }
 
     return bclfile;
@@ -117,7 +120,7 @@ int bclfile_next(bclfile_t *bcl)
     }
 
     if (bcl->file_type == SCL) {
-        int baseIndex;
+        int baseIndex = 0;
         switch (bcl->current_base) {
             case 0: baseIndex = (c >> 6) & 0x03;    break;
             case 1: baseIndex = (c >> 4) & 0x03;    break;

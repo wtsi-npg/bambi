@@ -15,14 +15,14 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-# This is @configure_input@
-#
-# If you use configure, this file overrides variables and augments rules
-# in the Makefile to reflect your configuration choices.  If you don't run
-# configure, the main Makefile contains suitable conservative defaults.
+
+ifeq ($(DEBUG), 1)
+CFLAGS   = -g -Wall -O0 -DDEBUG
+else
+CFLAGS   = -Wall -O3 -DNDEBUG
+endif
 
 CC       = gcc
-CFLAGS   = -g -Wall -O0
 LDFLAGS  =
 LIBS     =
 
@@ -69,24 +69,8 @@ include config.mk
 
 PACKAGE_VERSION = 0.1
 
-# If building from a Git repository, replace $(PACKAGE_VERSION) with the Git
-# description of the working tree: either a release tag with the same value
-# as $(PACKAGE_VERSION) above, or an exact description likely based on a tag.
-# $(shell), :=, etc are GNU Make-specific.  If you don't have GNU Make,
-# comment out this conditional.
-ifneq "$(wildcard .git)" ""
-PACKAGE_VERSION := $(shell git describe --always --dirty)
-
-# Force version.h to be remade if $(PACKAGE_VERSION) has changed.
-version.h: $(if $(wildcard version.h),$(if $(findstring "$(PACKAGE_VERSION)",$(shell cat version.h)),,force))
-endif
-
-# If you don't have GNU Make but are building from a Git repository, you may
-# wish to replace this with a rule that always rebuilds version.h:
-# version.h: force
-#	echo '#define SAMTOOLS_VERSION "`git describe --always --dirty`"' > $@
 version.h:
-	echo '#define VINES_VERSION "$(PACKAGE_VERSION)"' > $@
+	echo '#define BAMBI_VERSION "$(PACKAGE_VERSION)"' > $@
 
 print-version:
 	@echo $(PACKAGE_VERSION)

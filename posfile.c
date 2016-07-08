@@ -60,17 +60,27 @@ posfile_t *posfile_open(char *fname)
     }
 
     if (posfile->file_type == CLOCS) {
-        read(posfile->fhandle,(void *)&posfile->version,1);
-        read(posfile->fhandle,(void *)&posfile->total_blocks,4);
-        read(posfile->fhandle,(void *)&posfile->unread_clusters,1);
+        int n;
+        n = read(posfile->fhandle,(void *)&posfile->version,1);
+        n = read(posfile->fhandle,(void *)&posfile->total_blocks,4);
+        n = read(posfile->fhandle,(void *)&posfile->unread_clusters,1);
+        if (n<0) {
+            fprintf(stderr,"failed to read header from %s\n", fname);
+            exit(1);
+        }
         posfile->current_block++;
     }
 
     if (posfile->file_type == LOCS) {
+        int n;
         // first 8 bytes are unused
-        read(posfile->fhandle,(void *)&posfile->total_blocks,4);
-        read(posfile->fhandle,(void *)&posfile->total_blocks,4);
-        read(posfile->fhandle,(void *)&posfile->total_blocks,4);
+        n = read(posfile->fhandle,(void *)&posfile->total_blocks,4);
+        n = read(posfile->fhandle,(void *)&posfile->total_blocks,4);
+        n = read(posfile->fhandle,(void *)&posfile->total_blocks,4);
+        if (n<0) {
+            fprintf(stderr,"failed to read header from %s\n", fname);
+            exit(1);
+        }
     }
 
     return posfile;
@@ -108,8 +118,13 @@ static int locs_next(posfile_t *posfile)
     if (posfile->current_block >= posfile->total_blocks) return -1;
     posfile->current_block++;
 
-    read(posfile->fhandle, (void *)&dx, 4);
-    read(posfile->fhandle, (void *)&dy, 4);
+    int n;
+    n = read(posfile->fhandle, (void *)&dx, 4);
+    n = read(posfile->fhandle, (void *)&dy, 4);
+    if (n<0) {
+        fprintf(stderr,"something has gone wrong in locs_next()\n");
+        exit(1);
+    }
 
     posfile->x = 10 * dx + 1000.5;
     posfile->y = 10 * dy + 1000.5;
@@ -129,8 +144,13 @@ static int clocs_next(posfile_t *posfile)
     if (posfile->unread_clusters == 0) return -1;
     posfile->unread_clusters--;
 
-    read(posfile->fhandle, (void *)&dx, 1);    
-    read(posfile->fhandle, (void *)&dy, 1);
+    int n;
+    n = read(posfile->fhandle, (void *)&dx, 1);    
+    n = read(posfile->fhandle, (void *)&dy, 1);
+    if (n<0) {
+        fprintf(stderr,"something has gone wrong in clocs_next()\n");
+        exit(1);
+    }
 
     posfile->x = 10 * CLOCS_BLOCK_SIZE * ((posfile->current_block - 1) % CLOCS_BLOCKS_PER_LINE) + dx + 1000;
     posfile->y = 10 * CLOCS_BLOCK_SIZE * ((posfile->current_block - 1) / CLOCS_BLOCKS_PER_LINE) + dy + 1000;

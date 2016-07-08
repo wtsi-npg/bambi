@@ -811,7 +811,7 @@ va_t *getTileIndex(opts_t *opts)
         int n;
         do {
             tileIndexEntry_t *ti = calloc(1, sizeof(tileIndexEntry_t));
-            read(fhandle, &ti->tile, 4);
+            n = read(fhandle, &ti->tile, 4);
             n = read(fhandle, &ti->clusters, 4);
             if (n == 4) {
                 va_push(tileIndex,ti);

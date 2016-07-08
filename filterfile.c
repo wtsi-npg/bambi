@@ -43,9 +43,14 @@ filter_t *filter_open(char *fname)
     if (filter->fhandle == -1) {
         filter->errmsg = strdup(strerror(errno));
     } else {
-        read(filter->fhandle,(void *)&empty,4);
-        read(filter->fhandle,(void *)&filter->version,4);
-        read(filter->fhandle,(void *)&filter->total_clusters,4);
+        int n;
+        n = read(filter->fhandle,(void *)&empty,4);
+        n = read(filter->fhandle,(void *)&filter->version,4);
+        n = read(filter->fhandle,(void *)&filter->total_clusters,4);
+        if (n<0) {
+            fprintf(stderr,"failed to read header from %s\n", fname);
+            exit(1);
+        }
     }
     return filter;
 }
