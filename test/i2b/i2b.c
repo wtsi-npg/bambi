@@ -36,8 +36,6 @@ const char * bambi_version(void)
 int success = 0;
 int failure = 0;
 
-int samtools_found = 0;
-
 void setup_param_test(int* argc, char*** argv)
 {
     *argc = 0;
@@ -350,8 +348,6 @@ void checkFiles(char *name, char *fname)
 {
     char command[256];
 
-    if (!samtools_found) return;
-
     sprintf(command,"samtools view -H test/i2b/out/xxx.bam | grep @RG > /tmp/got.txt");
     if (system(command)) { fprintf(stderr,"samtools failed\n"); failure++; }
     sprintf(command, "samtools view -H %s | grep @RG > /tmp/expected.txt", fname);
@@ -410,8 +406,10 @@ int main(int argc, char**argv)
     char** argv_1;
 
     // check if we have samtools
-    if (system("which samtools") != 0) samtools_found = 0;
-    else                               samtools_found = 1;
+    if (system("which samtools") != 0) {
+        fprintf(stderr,"samtools not found. Tests cannot be run\n");
+        return EXIT_FAILURE;
+    }
 
     //
     // test that we can read the command line paramaters
