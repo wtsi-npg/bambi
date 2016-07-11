@@ -105,7 +105,7 @@ void bc_push(bc_array_t *bc, bc_details_t *bcd)
     if (bc->end == bc->max) {
         // expand the array
         bc->max *= 2;
-        bc->entries = realloc(bc->entries, bc->max * sizeof(bc_details_t));
+        bc->entries = realloc(bc->entries, bc->max * sizeof(bc_details_t *));
     }
     bc->entries[bc->end] = bcd;
     bc->end++;
@@ -133,7 +133,7 @@ bc_array_t *bc_init(void)
     bc->end = 0;
     bc->max = 100;
     bc->tag_len = 0;
-    bc->entries = calloc(bc->max, sizeof(bc_details_t));
+    bc->entries = calloc(bc->max, sizeof(bc_details_t *));
 
     // initialise first entry for null metrics
     bc_details_t *bcd = calloc(1, sizeof(bc_details_t));
@@ -342,8 +342,8 @@ int writeMetrics(bc_array_t *barcodeArray, opts_t *opts)
     int total_reads = bcd->reads;
     int total_pf_reads = bcd->pf_reads;
     int total_pf_reads_assigned = 0;
-    int max_reads = bcd->reads;
-    int max_pf_reads = bcd->pf_reads;
+    int max_reads = 0;
+    int max_pf_reads = 0;
     int nReads = 0;
     int n;
 
@@ -757,7 +757,7 @@ int processRecord(samFile *input_file, bam_hdr_t *input_header, samFile *output_
         name = findBarcodeName(newseq,barcodeArray,opts,!(file_read->core.flag & BAM_FQCFAIL));
         if (!name) name = "0";
         char * newtag = makeNewTag(file_read,"RG",name);
-        bam_aux_update_str(file_read,"RG",strlen(newtag)+1,(uint8_t*)newtag);
+        bam_aux_update_str(file_read,"RG",strlen(newtag)+1, newtag);
         free(newtag);
         if (opts->change_read_name) add_suffix(file_read, name);
         free(newseq);
@@ -772,7 +772,7 @@ int processRecord(samFile *input_file, bam_hdr_t *input_header, samFile *output_
         r = sam_read1(input_file, input_header, paired_read);
         if (p) {
             char *newtag = makeNewTag(paired_read,"RG",name);
-            bam_aux_update_str(paired_read,"RG",strlen(newtag)+1,(uint8_t*)newtag);
+            bam_aux_update_str(paired_read,"RG",strlen(newtag)+1,newtag);
             free(newtag);
         }
         if (opts->change_read_name) add_suffix(paired_read, name);
