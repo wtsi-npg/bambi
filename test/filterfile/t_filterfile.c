@@ -19,11 +19,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 */
 
-#include "filterfile.h"
+#include "../../src/filterfile.c"
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+
+#define xMKNAME(d,f) #d f
+#define MKNAME(d,f) xMKNAME(d,f)
 
 int verbose = 0;
 
@@ -62,9 +65,9 @@ int main(int argc, char**argv)
 
     filter_t *filter;
 
-    filter = filter_open("test/i2b/110323_HS13_06000_B_B039WABXX/Data/Intensities/BaseCalls/L001/s_1_1101.filter");
+    filter = filter_open(MKNAME(DATA_DIR,"/../i2b/110323_HS13_06000_B_B039WABXX/Data/Intensities/BaseCalls/L001/s_1_1101.filter"));
     if (filter->errmsg) {
-        fprintf(stderr,"Error opening file: %s\n", filter->errmsg);
+        fprintf(stderr,"Error opening file '%s':  %s\n", MKNAME(DATA_DIR,"/../i2b/110323_HS13_06000_B_B039WABXX/Data/Intensities/BaseCalls/L001/s_1_1101.filter"), filter->errmsg);
         failure++;
     }
     icheckEqual("Version", 3, filter->version);

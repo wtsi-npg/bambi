@@ -18,13 +18,15 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 */
-#include <config.h>
+#include "../../src/hts_addendum.c"
+#include "../../src/decode.c"
 
-#include "bambi.h"
-#include "../../decode.c"
 #include <stdlib.h>
 #include <unistd.h>
-#include "version.h"
+#include <stdio.h>
+
+#define xMKNAME(d,f) #d f
+#define MKNAME(d,f) xMKNAME(d,f)
 
 const char * bambi_version(void)
 {
@@ -41,17 +43,17 @@ void setup_test_1(int* argc, char*** argv)
     (*argv)[0] = strdup("bambi");
     (*argv)[1] = strdup("decode");
     (*argv)[2] = strdup("-i");
-    (*argv)[3] = strdup("test/decode/6383_9.sam");
+    (*argv)[3] = strdup(MKNAME(DATA_DIR,"/6383_9.sam"));
     (*argv)[4] = strdup("-o");
-    (*argv)[5] = strdup("test/decode/out/xxx.sam");
+    (*argv)[5] = strdup(MKNAME(DATA_DIR,"/out/xxx.sam"));
     (*argv)[6] = strdup("--output-fmt");
     (*argv)[7] = strdup("sam");
     (*argv)[8] = strdup("--input-fmt");
     (*argv)[9] = strdup("sam");
     (*argv)[10] = strdup("--barcode-file");
-    (*argv)[11] = strdup("test/decode/6383_8.tag");
+    (*argv)[11] = strdup(MKNAME(DATA_DIR,"/6383_8.tag"));
     (*argv)[12] = strdup("--metrics-file");
-    (*argv)[13] = strdup("test/decode/out/6383_9.metrics");
+    (*argv)[13] = strdup(MKNAME(DATA_DIR,"/out/6383_9.metrics"));
     (*argv)[14] = strdup("--barcode-tag-name");
     (*argv)[15] = strdup("RT");
 }
@@ -63,19 +65,19 @@ void setup_test_2(int* argc, char*** argv)
     (*argv)[0] = strdup("bambi");
     (*argv)[1] = strdup("decode");
     (*argv)[2] = strdup("-i");
-    (*argv)[3] = strdup("test/decode/6383_8.sam");
+    (*argv)[3] = strdup(MKNAME(DATA_DIR,"/6383_8.sam"));
     (*argv)[4] = strdup("-o");
-    (*argv)[5] = strdup("test/decode/out/xxx.sam");
+    (*argv)[5] = strdup(MKNAME(DATA_DIR,"/out/xxx.sam"));
     (*argv)[6] = strdup("--output-fmt");
     (*argv)[7] = strdup("sam");
     (*argv)[8] = strdup("--input-fmt");
     (*argv)[9] = strdup("sam");
     (*argv)[10] = strdup("--barcode-file");
-    (*argv)[11] = strdup("test/decode/6383_8.tag");
+    (*argv)[11] = strdup(MKNAME(DATA_DIR,"/6383_8.tag"));
     (*argv)[12] = strdup("--convert-low-quality");
     (*argv)[13] = strdup("--change-read-name");
     (*argv)[14] = strdup("--metrics-file");
-    (*argv)[15] = strdup("test/decode/out/6383_8.metrics");
+    (*argv)[15] = strdup(MKNAME(DATA_DIR,"/out/6383_8.metrics"));
     (*argv)[16] = strdup("--barcode-tag-name");
     (*argv)[17] = strdup("RT");
 }
@@ -157,7 +159,7 @@ int main(int argc, char**argv)
     setup_test_1(&argc_1, &argv_1);
     main_decode(argc_1-1, argv_1+1);
 
-    int result = system("diff test/decode/out/xxx.sam test/decode/out/6383_9_nosplit_nochange.sam");
+    int result = system("diff -I ID:bambi " MKNAME(DATA_DIR,"/out/xxx.sam") " " MKNAME(DATA_DIR,"/out/6383_9_nosplit_nochange.sam"));
     if (result) {
         fprintf(stderr, "test 1 failed\n");
         failure++;
@@ -171,7 +173,7 @@ int main(int argc, char**argv)
     setup_test_2(&argc_2, &argv_2);
     main_decode(argc_2-1, argv_2+1);
 
-    result = system("diff test/decode/out/xxx.sam test/decode/out/6383_8_nosplitN.sam");
+    result = system("diff -I ID:bambi " MKNAME(DATA_DIR,"/out/xxx.sam") " " MKNAME(DATA_DIR,"/out/6383_8_nosplitN.sam"));
     if (result) {
         fprintf(stderr, "test 2 failed\n");
         failure++;

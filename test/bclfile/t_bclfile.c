@@ -19,11 +19,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 */
 
-#include "bclfile.h"
+#include "../../src/bclfile.c"
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+
+#define xMKNAME(d,f) #d f
+#define MKNAME(d,f) xMKNAME(d,f)
 
 int verbose = 0;
 
@@ -72,7 +75,7 @@ int main(int argc, char**argv)
 
     // BCL tests
 
-    bclfile = bclfile_open("test/i2b/110323_HS13_06000_B_B039WABXX/Data/Intensities/BaseCalls/L001/C1.1/s_1_1101.bcl");
+    bclfile = bclfile_open(MKNAME(DATA_DIR,"/../i2b/110323_HS13_06000_B_B039WABXX/Data/Intensities/BaseCalls/L001/C1.1/s_1_1101.bcl"));
     if (bclfile->errmsg) {
         fprintf(stderr,"Error opening file: %s\n", bclfile->errmsg);
         failure++;
@@ -103,7 +106,7 @@ int main(int argc, char**argv)
 
     // SCL tests
 
-    bclfile = bclfile_open("test/i2b/110323_HS13_06000_B_B039WABXX/Data/Intensities/BaseCalls/L001/C1.1/s_1_1101.scl");
+    bclfile = bclfile_open(MKNAME(DATA_DIR,"/../i2b/110323_HS13_06000_B_B039WABXX/Data/Intensities/BaseCalls/L001/C1.1/s_1_1101.scl"));
     if (bclfile->errmsg) {
         fprintf(stderr,"Error opening file: %s\n", bclfile->errmsg);
         failure++;
