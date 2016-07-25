@@ -25,8 +25,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string.h>
 #include <ctype.h>
 
+#include "bambi.h"
 #include "hts_addendum.h"
 
+#ifndef HAVE_BAM_AUX_UPDATE_STR
 int bam_aux_update_str(bam1_t *b, const char tag[2], int len, const char *data)
 {
     uint8_t *s = bam_aux_get(b,tag);
@@ -53,6 +55,7 @@ int bam_aux_update_str(bam1_t *b, const char tag[2], int len, const char *data)
     memmove(s+3,data,len);
     return 0;
 }
+#endif
 
 SAM_hdr *sam_hdr_del(SAM_hdr *hdr, char *type, char *ID_key, char *ID_value) {
     int i,n;
