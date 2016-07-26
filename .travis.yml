@@ -2,6 +2,11 @@
 
 language: c
 
+addons:
+  apt:
+    packages:
+    - liblzma-dev
+
 matrix:
   include:
     - os: linux
@@ -17,15 +22,17 @@ matrix:
 
 env:
   global:
-    - HTSDIR=./htslib
-    - SAMTOOLSDIR=./samtools
+    - HTSLIB=`pwd`/htslib
+    - HTSDIR=$HTSLIB/b
+    - SAMTOOLSDIR=samtools
     - PATH=$SAMTOOLSDIR:$PATH
 
 install:
-  - .travis/clone ${HTSREPO:-git://github.com/samtools/htslib.git} $HTSDIR $TRAVIS_BRANCH
+  - .travis/clone ${HTSREPO:-git://github.com/samtools/htslib.git} $HTSLIB $TRAVIS_BRANCH
   - .travis/clone ${HTSREPO:-git://github.com/samtools/samtools.git} $SAMTOOLSDIR $TRAVIS_BRANCH
 
 before_script:
+  - (cd $HTSLIB && autoreconf && mkdir b && ./configure --prefix=$HTSDIR && make && make install)
   - (cd $SAMTOOLSDIR && autoconf && make)
 
-script: make -e && make -e test
+script: autoreconf -i && ./configure --with-htslib=$HTSDIR && make -e && make -e check

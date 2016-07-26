@@ -1,6 +1,6 @@
 AC_INIT([bambi], [1.0], [js10@sanger.ac.uk])
 AC_ARG_VAR(HTSDIR,Directory to look for hts)
-AM_INIT_AUTOMAKE([-Wall -Werror foreign])
+AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
 AC_PROG_CC
 
 LT_INIT
