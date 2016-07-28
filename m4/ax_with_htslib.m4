@@ -71,6 +71,30 @@ AC_DEFUN([AX_WITH_HTSLIB], [
                    LDFLAGS="-L$HTSLIB_HOME/lib $LDFLAGS"
                ])
 
+               LIBS="$HTSLIB_HOME/lib/libhts.a -lz -ldl -lbz2 -llzma -lpthread"
+
+               AC_MSG_CHECKING([checking htslib version])
+               AC_RUN_IFELSE([AC_LANG_PROGRAM([
+                #include "htslib/hts.h"
+                #include <stdlib.h>
+                #include <string.h>
+#include <stdio.h>
+               ], [
+                char *v=strdup(hts_version());
+                char *s = strtok(v,".-");
+                int n = atoi(s) * 100000;
+                s = strtok(NULL,".-");
+                if (s) n += atoi(s) * 1000;
+                s = strtok(NULL,".-");
+                if (s) n += atoi(s) * 10;
+printf("  n=%d   ",n);
+                if(n>=103010) return 0;
+                else exit(-1);
+               ])
+               ], [AC_MSG_RESULT([Ok])],
+                  [AC_MSG_ERROR([htslib version must be 1.3.1 or greater])]
+               )
+
                HTSLIB_CPPFLAGS="$CPPFLAGS"
                HTSLIB_LDFLAGS="$LDFLAGS"
                HTSLIB_LIBS="$LIBS"
@@ -87,6 +111,7 @@ AC_DEFUN([AX_WITH_HTSLIB], [
                AC_SUBST([HTSLIB_CPPFLAGS])
                AC_SUBST([HTSLIB_LDFLAGS])
                AC_SUBST([HTSLIB_LIBS])
+
            ])
    ])
 ])

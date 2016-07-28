@@ -28,11 +28,11 @@ env:
     - PATH=$SAMTOOLSDIR:$PATH
 
 install:
-  - .travis/clone ${HTSREPO:-git://github.com/samtools/htslib.git} $HTSLIB $TRAVIS_BRANCH
-  - .travis/clone ${HTSREPO:-git://github.com/samtools/samtools.git} $SAMTOOLSDIR $TRAVIS_BRANCH
+  - .travis/clone ${HTSREPO:-git://github.com/samtools/htslib.git} $HTSLIB master
+  - .travis/clone ${HTSREPO:-git://github.com/samtools/samtools.git} $SAMTOOLSDIR master
 
 before_script:
   - (cd $HTSLIB && autoreconf && mkdir b && ./configure --prefix=$HTSDIR && make && make install)
   - (cd $SAMTOOLSDIR && autoconf && make)
 
-script: autoreconf -i && ./configure --with-htslib=$HTSDIR && make -e && make -e check
+script: autoreconf -i && ./configure -V && ./configure --with-htslib=$HTSDIR && make -e && make -e check
