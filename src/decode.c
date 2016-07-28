@@ -754,6 +754,9 @@ int processRecord(samFile *input_file, bam_hdr_t *input_header, samFile *output_
                 newseq = checkBarcodeQuality(seq,qual,opts->max_low_quality_to_convert);
             }
         }
+        if (strlen(seq) > barcodeArray->tag_len) {
+            newseq[barcodeArray->tag_len] = 0;  // truncate seq to barcode length
+        }
         name = findBarcodeName(newseq,barcodeArray,opts,!(file_read->core.flag & BAM_FQCFAIL));
         if (!name) name = "0";
         char * newtag = makeNewTag(file_read,"RG",name);
