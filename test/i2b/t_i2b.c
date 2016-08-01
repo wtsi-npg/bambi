@@ -21,10 +21,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <config.h>
 
 #include "bambi.h"
-#include "../../i2b.c"
+#include "../../src/i2b.c"
 #include <stdlib.h>
 #include <unistd.h>
-#include "version.h"
+
+#define xMKNAME(d,f) #d f
+#define MKNAME(d,f) xMKNAME(d,f)
 
 int verbose = 0;
 
@@ -43,7 +45,7 @@ void setup_param_test(int* argc, char*** argv)
     (*argv)[(*argc)++] = strdup("bambi");
     (*argv)[(*argc)++] = strdup("i2b");
     (*argv)[(*argc)++] = strdup("-i");
-    (*argv)[(*argc)++] = strdup("test/i2b/110323_HS13_06000_B_B039WABXX/Data/Intensities");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/110323_HS13_06000_B_B039WABXX/Data/Intensities"));
     (*argv)[(*argc)++] = strdup("-o");
     (*argv)[(*argc)++] = strdup("test/i2b/out/xxx.sam");
     (*argv)[(*argc)++] = strdup("--output-fmt");
@@ -57,11 +59,11 @@ void setup_param_test(int* argc, char*** argv)
     (*argv)[(*argc)++] = strdup("--library-name");
     (*argv)[(*argc)++] = strdup("testlibrary");
     (*argv)[(*argc)++] = strdup("--run-folder");
-    (*argv)[(*argc)++] = strdup("test/i2b/110323_HS13_06000_B_B039WABXX/");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/110323_HS13_06000_B_B039WABXX/"));
     (*argv)[(*argc)++] = strdup("--study-name");
     (*argv)[(*argc)++] = strdup("teststudy");
     (*argv)[(*argc)++] = strdup("--basecalls-dir");
-    (*argv)[(*argc)++] = strdup("test/i2b/110323_HS13_06000_B_B039WABXX/Data/Intensities/BaseCalls/");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/110323_HS13_06000_B_B039WABXX/Data/Intensities/BaseCalls/"));
     (*argv)[(*argc)++] = strdup("--generate-secondary-basecalls");
     (*argv)[(*argc)++] = strdup("--no-filter");
     (*argv)[(*argc)++] = strdup("--sequencing-centre");
@@ -104,9 +106,9 @@ void setup_test_1(int* argc, char*** argv)
     (*argv)[(*argc)++] = strdup("bambi");
     (*argv)[(*argc)++] = strdup("i2b");
     (*argv)[(*argc)++] = strdup("-i");
-    (*argv)[(*argc)++] = strdup("test/i2b/110323_HS13_06000_B_B039WABXX/Data/Intensities");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/110323_HS13_06000_B_B039WABXX/Data/Intensities"));
     (*argv)[(*argc)++] = strdup("-o");
-    (*argv)[(*argc)++] = strdup("test/i2b/out/xxx.bam");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/out/xxx.bam"));
     (*argv)[(*argc)++] = strdup("--lane");
     (*argv)[(*argc)++] = strdup("1");
     (*argv)[(*argc)++] = strdup("--first-tile");
@@ -134,9 +136,9 @@ void setup_test_2(int* argc, char*** argv)
     (*argv)[(*argc)++] = strdup("bambi");
     (*argv)[(*argc)++] = strdup("i2b");
     (*argv)[(*argc)++] = strdup("-i");
-    (*argv)[(*argc)++] = strdup("test/i2b/110323_HS13_06000_B_B039WABXX/Data/Intensities");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/110323_HS13_06000_B_B039WABXX/Data/Intensities"));
     (*argv)[(*argc)++] = strdup("-o");
-    (*argv)[(*argc)++] = strdup("test/i2b/out/xxx.bam");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/out/xxx.bam"));
     (*argv)[(*argc)++] = strdup("--lane");
     (*argv)[(*argc)++] = strdup("1");
     (*argv)[(*argc)++] = strdup("--first-tile");
@@ -166,9 +168,9 @@ void setup_test_4(int* argc, char*** argv)
     (*argv)[(*argc)++] = strdup("bambi");
     (*argv)[(*argc)++] = strdup("i2b");
     (*argv)[(*argc)++] = strdup("-i");
-    (*argv)[(*argc)++] = strdup("test/i2b/110323_HS13_06000_B_B039WABXX/Data/Intensities");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/110323_HS13_06000_B_B039WABXX/Data/Intensities"));
     (*argv)[(*argc)++] = strdup("-o");
-    (*argv)[(*argc)++] = strdup("test/i2b/out/xxx.bam");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/out/xxx.bam"));
     (*argv)[(*argc)++] = strdup("--lane");
     (*argv)[(*argc)++] = strdup("1");
     (*argv)[(*argc)++] = strdup("--first-tile");
@@ -199,9 +201,9 @@ void setup_test_5(int* argc, char*** argv)
     (*argv)[(*argc)++] = strdup("bambi");
     (*argv)[(*argc)++] = strdup("i2b");
     (*argv)[(*argc)++] = strdup("-i");
-    (*argv)[(*argc)++] = strdup("test/i2b/110323_HS13_06000_B_B039WABXX/Data/Intensities");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/110323_HS13_06000_B_B039WABXX/Data/Intensities"));
     (*argv)[(*argc)++] = strdup("-o");
-    (*argv)[(*argc)++] = strdup("test/i2b/out/xxx.bam");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/out/xxx.bam"));
     (*argv)[(*argc)++] = strdup("--lane");
     (*argv)[(*argc)++] = strdup("1");
     (*argv)[(*argc)++] = strdup("--first-tile");
@@ -242,9 +244,9 @@ void setup_test_6(int* argc, char*** argv)
     (*argv)[(*argc)++] = strdup("bambi");
     (*argv)[(*argc)++] = strdup("i2b");
     (*argv)[(*argc)++] = strdup("-i");
-    (*argv)[(*argc)++] = strdup("test/i2b/140624_MS6_13349_A_MS2639979-300V2/Data/Intensities");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/140624_MS6_13349_A_MS2639979-300V2/Data/Intensities"));
     (*argv)[(*argc)++] = strdup("-o");
-    (*argv)[(*argc)++] = strdup("test/i2b/out/xxx.bam");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/out/xxx.bam"));
     (*argv)[(*argc)++] = strdup("--lane");
     (*argv)[(*argc)++] = strdup("1");
     (*argv)[(*argc)++] = strdup("--first-tile");
@@ -348,7 +350,7 @@ void checkFiles(char *name, char *fname)
 {
     char command[256];
 
-    sprintf(command,"samtools view -H test/i2b/out/xxx.bam | grep @RG > /tmp/got.txt");
+    sprintf(command,"samtools view -H %s | grep @RG > /tmp/got.txt", MKNAME(DATA_DIR,"/out/xxx.bam"));
     if (system(command)) { fprintf(stderr,"samtools failed\n"); failure++; }
     sprintf(command, "samtools view -H %s | grep @RG > /tmp/expected.txt", fname);
     if (system(command)) { fprintf(stderr,"samtools failed\n"); failure++; }
@@ -360,7 +362,7 @@ void checkFiles(char *name, char *fname)
         success++;
     }
 
-    sprintf(command,"samtools view test/i2b/out/xxx.bam | head | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > /tmp/got.txt");
+    sprintf(command,"samtools view %s | head | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > /tmp/got.txt",MKNAME(DATA_DIR,"/out/xxx.bam"));
     if (system(command)) { fprintf(stderr,"samtools failed\n"); failure++; }
     sprintf(command,"samtools view %s | head | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > /tmp/expected.txt", fname);
     if (system(command)) { fprintf(stderr,"samtools failed\n"); failure++; }
@@ -372,7 +374,7 @@ void checkFiles(char *name, char *fname)
         success++;
     }
 
-    sprintf(command,"samtools view test/i2b/out/xxx.bam | tail | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > /tmp/got.txt");
+    sprintf(command,"samtools view %s | tail | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > /tmp/got.txt", MKNAME(DATA_DIR,"/out/xxx.bam"));
     if (system(command)) { fprintf(stderr,"samtools failed\n"); failure++; }
     sprintf(command,"samtools view %s | tail | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > /tmp/expected.txt", fname);
     if (system(command)) { fprintf(stderr,"samtools failed\n"); failure++; }
@@ -423,7 +425,7 @@ int main(int argc, char**argv)
 
     setup_test_1(&argc_1, &argv_1);
     main_i2b(argc_1-1, argv_1+1);
-    checkFiles("Simple test", "test/i2b/out/test1.bam");
+    checkFiles("Simple test", MKNAME(DATA_DIR,"/out/test1.bam"));
 
 
     //
@@ -432,28 +434,28 @@ int main(int argc, char**argv)
 
     setup_test_2(&argc_1, &argv_1);
     main_i2b(argc_1-1,argv_1+1);
-    checkFiles("Read Group ID test", "test/i2b/out/test2.bam");
+    checkFiles("Read Group ID test", MKNAME(DATA_DIR,"/out/test2.bam"));
 
     //
     // cycle range test
     //
     setup_test_4(&argc_1, &argv_1);
     main_i2b(argc_1-1,argv_1+1);
-    checkFiles("Cycle Range test", "test/i2b/out/test4.bam");
+    checkFiles("Cycle Range test", MKNAME(DATA_DIR,"/out/test4.bam"));
 
     //
     // bc-read test
     //
     setup_test_5(&argc_1, &argv_1);
     main_i2b(argc_1-1,argv_1+1);
-    checkFiles("BC_READ test", "test/i2b/out/test5.bam");
+    checkFiles("BC_READ test", MKNAME(DATA_DIR,"/out/test5.bam"));
 
     //
     // dual index run
     //
     setup_test_6(&argc_1, &argv_1);
     main_i2b(argc_1-1,argv_1+1);
-    checkFiles("Dual Index test", "test/i2b/out/test6.bam");
+    checkFiles("Dual Index test", MKNAME(DATA_DIR,"/out/test6.bam"));
 
 
     printf("i2b tests: %s\n", failure ? "FAILED" : "Passed");

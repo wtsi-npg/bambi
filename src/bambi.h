@@ -22,6 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define __BAMBI_H__
 
 #include "hts_addendum.h"
+#include "config.h"
 const char *bambi_version(void);
 
 #endif

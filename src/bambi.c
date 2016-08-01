@@ -25,8 +25,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdarg.h>
 #include <string.h>
 #include <errno.h>
+
 #include "htslib/hts.h"
-#include "version.h"
+#include "bambi.h"
 
 int main_decode(int argc, char *argv[]);
 int main_i2b(int argc, char *argv[]);
@@ -34,7 +35,7 @@ int main_afilter(int argc, char *argv[]);
 
 const char *bambi_version()
 {
-    return BAMBI_VERSION;
+    return VERSION;
 }
 
 static void vprint_error_core(const char *subcommand, const char *format, va_list args, const char *extra)
