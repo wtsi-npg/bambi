@@ -867,7 +867,7 @@ static int decode(opts_t* opts)
         /*
          * Process each BAM record, collecting metrics as we go
          */
-        while (0 == processRecord(input_file, input_header, output_file, output_header, barcodeArray, opts))
+        while (0 == processRecord(input_file, input_header, output_file, output_header, barcodeArray, opts));
 
         /*
          * And finally.....the metrics
