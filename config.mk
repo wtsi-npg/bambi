@@ -24,8 +24,8 @@
 # configure, the main Makefile contains suitable conservative defaults.
 
 
-HTSDIR = /software/solexa/pkg/htslib/htslib-1.3
-### include $(HTSDIR)/src/htslib.mk
+HTSDIR = ../htslib
+include $(HTSDIR)/htslib.mk
 HTSLIB = $(HTSDIR)/libhts.a
 HTSLIB_LIB = $(HTSLIB)
 BGZIP = $(HTSDIR)/bin/bgzip

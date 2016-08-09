@@ -1,0 +1,38 @@
+# Control file for continuous integration testing at http://travis-ci.org/
+
+language: c
+
+addons:
+  apt:
+    packages:
+    - liblzma-dev
+
+matrix:
+  include:
+    - os: linux
+      compiler: clang
+    - os: linux
+      compiler: gcc
+    # An unoptimised C99 build, for detecting non-static inline functions
+    - os: linux
+      compiler: gcc
+      env: CFLAGS="-std=gnu99 -O0"
+    - os: osx
+      compiler: gcc
+
+env:
+  global:
+    - HTSLIB=`pwd`/htslib
+    - HTSDIR=$HTSLIB/b
+    - SAMTOOLSDIR=samtools
+    - PATH=$SAMTOOLSDIR:$PATH
+
+install:
+  - .travis/clone ${HTSREPO:-git://github.com/samtools/htslib.git} $HTSLIB master
+  - .travis/clone ${HTSREPO:-git://github.com/samtools/samtools.git} $SAMTOOLSDIR master
+
+before_script:
+  - (cd $HTSLIB && autoreconf && mkdir b && ./configure --prefix=$HTSDIR && make && make install)
+  - (cd $SAMTOOLSDIR && autoconf && make)
+
+script: autoreconf -i && ./configure -V && ./configure --with-htslib=$HTSDIR && make -e && make -e check
