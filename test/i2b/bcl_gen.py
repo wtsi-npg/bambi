@@ -54,6 +54,22 @@ machinenames = {
         "hiseq2500": "HSTESTMACHINE",
         }
 
+application_names = {
+        "nextseq": "NextSeq Control Software",
+        "hiseqx": "HiSeq Control Software",
+        "hiseq4000": "HiSeq Control Software",
+        "hiseq2500": "HiSeq Control Software",
+        "miseq": "MiSeq Control Software"
+        }
+
+application_versions = {
+        "nextseq": "2.0.0.24",
+        "hiseqx": "3.3.39",
+        "hiseq4000": "3.3.39",
+        "hiseq2500": "2.0.12.0",
+        "miseq": "2.5.0.5"
+        }
+
 max_params = {
         "nextseq": {
             "lanes": 4,
@@ -220,6 +236,33 @@ class Run(object):
                     alignlane.text = "{:d}".format(lane.idx + 1)
 
         f = open(os.path.join(self.infopath, 'RunInfo.xml'), 'w')
+        f.write(pp(root))
+        f.close()
+
+    def make_runparams(self, machinetype):
+        root = ElementTree.Element("RunParameters", {
+            "xmlns:xsd": "http://www.w3.org/2001/XMLSchema",
+            "xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance"
+            })
+
+        setup = ElementTree.SubElement(root, "Setup")
+
+        name = ElementTree.SubElement(setup, "ApplicationName")
+        name.text = application_names[machinetype]
+
+        version = ElementTree.SubElement(setup, "ApplicationVersion")
+        version.text = application_versions[machinetype]
+
+        exp_name = ElementTree.SubElement(setup, "ExperimentName")
+        exp_name.text = "TestDataExperiment"
+
+        comp_name = ElementTree.SubElement(setup, "ComputerName")
+        comp_name.text = "TC1" # test computer 1
+
+        run_date = ElementTree.SubElement(setup, "RunStartDate")
+        run_date.text = PARAMS["date"]
+
+        f = open(os.path.join(self.infopath, 'runParameters.xml'), 'w')
         f.write(pp(root))
         f.close()
 
@@ -653,6 +696,7 @@ def main(argv):
                 run = Run(arg)
                 build_directory_structure(run)
                 run.make_runinfo(run.machinetype)
+                run.make_runparams(run.machinetype)
                 run.make_bcls(run.machinetype)
                 run.make_bcis(run.machinetype)
                 run.make_filters(run.machinetype)
