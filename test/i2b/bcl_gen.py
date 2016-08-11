@@ -276,8 +276,14 @@ class Run(object):
                     f = open(os.path.join(lane.bcpath, fn), mode='wb')
                     f.write(lane.nextseq_bcl())
                     f.close()
-                    subprocess.call(["bgzip",
+                    try:
+                        subprocess.call(["bgzip",
                                      os.path.join(lane.bcpath, fn)])
+                    except OSError:
+                        print("ERROR:",
+                            "Couldn't compress bcl file as a blocked gzf.",
+                            "Do you have the `bgzip` binary on your PATH?")
+                        sys.exit(2)
                     subprocess.call(["mv",
                                      os.path.join(lane.bcpath, fn + '.gz'),
                                      os.path.join(lane.bcpath, fn + '.bgzf')])
