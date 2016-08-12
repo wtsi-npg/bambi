@@ -865,20 +865,44 @@ ia_t *getTileList(opts_t *opts)
         }
     }
 
+    //
+    // If we can't find a list of tiles anywhere, try calculating them from the FlowcellLayout
+    //
     if (ia_isEmpty(tiles)) {
         int numSurfaces = getXMLAttr_int(opts->runinfoConfig, "//FlowcellLayout", "SurfaceCount");
         int numSwaths = getXMLAttr_int(opts->runinfoConfig, "//FlowcellLayout", "SwathCount");
         int numTilesPerSwath = getXMLAttr_int(opts->runinfoConfig, "//FlowcellLayout", "TileCount");
-        if (numSurfaces && numSwaths && numTilesPerSwath) {
-            int isur, isw, itile;
-            for (isur = 1; isur <= numSurfaces; isur++) {
-                for (isw = 1; isw <= numSwaths; isw++) {
-                    for (itile = 1; itile <= numTilesPerSwath; itile++) {
-                        ia_push(tiles, 1000 * isur + 100 * isw + itile);
+        int numSectionsPerLane = getXMLAttr_int(opts->runinfoConfig, "//FlowcellLayout", "SectionPerLane");
+
+        char *TileNamingConvention = getXMLAttr(opts->runinfoConfig, "//FlowcellLayout/TileSet", "TileNamingConvention");
+        if (strcmp(TileNamingConvention,"FiveDigit") == 0) {
+            // probably a nextSeq with 5 digit tile numbers...
+            if (numSurfaces && numSwaths && numTilesPerSwath && numSectionsPerLane) {
+                int ispl, isur, isw, itile;
+                for (ispl = 1; ispl <= numSectionsPerLane; ispl++) {
+                    for (isur = 1; isur <= numSurfaces; isur++) {
+                        for (isw = 1; isw <= numSwaths; isw++) {
+                            for (itile = 1; itile <= numTilesPerSwath; itile++) {
+                                ia_push(tiles, 10000 * isur + 1000 * ispl + 100 * isw + itile);
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // 'normal' four digit tile numbers
+            if (numSurfaces && numSwaths && numTilesPerSwath) {
+                int isur, isw, itile;
+                for (isur = 1; isur <= numSurfaces; isur++) {
+                    for (isw = 1; isw <= numSwaths; isw++) {
+                        for (itile = 1; itile <= numTilesPerSwath; itile++) {
+                            ia_push(tiles, 1000 * isur + 100 * isw + itile);
+                        }
                     }
                 }
             }
         }
+        free(TileNamingConvention);
     }
 
 
