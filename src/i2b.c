@@ -1412,8 +1412,9 @@ int processTile(int tile, samFile *output_file, bam_hdr_t *output_header, va_t *
 /*
  * process all the tiles and write all the BAM records
  */
-void createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
+int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
 {
+    int retcode = 0;
     ia_t *tiles = getTileList(opts);
     va_t *cycleRange = getCycleRange(opts);;
     va_t *tileIndex = getTileIndex(opts);
@@ -1430,12 +1431,14 @@ void createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
     for (n=0; n < tiles->end; n++) {
         if (processTile(tiles->entries[n], output_file, output_header, cycleRange, tileIndex, opts)) {
             fprintf(stderr,"Error processing tile %d\n", tiles->entries[n]);
+            retcode = 1;
             break;
         }
     }
 
     va_free(cycleRange);
     ia_free(tiles);
+    return retcode;
 }
 
 /*
@@ -1477,10 +1480,12 @@ static int i2b(opts_t* opts)
             break;
         }
 
-        addHeader(output_file, output_header, opts);
-        createBAM(output_file, output_header, opts);
+        if (addHeader(output_file, output_header, opts) != 0) {
+            fprintf(stderr,"Failed to write header\n");
+            break;
+        }
 
-        retcode = 0;
+        retcode = createBAM(output_file, output_header, opts);
         break;
     }
 
