@@ -1,6 +1,6 @@
 AC_INIT([bambi], m4_esyscmd_s([git describe --dirty --always --tags]), [js10@sanger.ac.uk])
 AC_ARG_VAR(HTSDIR,Directory to look for hts)
-AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
+AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects tar-pax no-dependencies])
 AC_PROG_CC
 
 LT_INIT
@@ -17,6 +17,7 @@ CPPFLAGS="$HTSLIB_CPPFLAGS"
 LDFLAGS="$HTSLIB_LDFLAGS"
 AC_CHECK_HEADERS([cram/sam_header.h])
 AC_CHECK_LIB([hts], [bam_aux_update_str], [AC_DEFINE([HAVE_BAM_AUX_UPDATE_STR],[1],[Does htslib contain bam_aux_update_str()?])])
+AC_CHECK_LIB([hts], [sam_hdr_del], [AC_DEFINE([HAVE_SAM_HDR_DEL],[1],[Does htslib contain sam_hdr_del()?])])
 CPPFLAGS="$saved_CPPFLAGS"
 LDFLAGS="$saved_LDFLAGS"
 
