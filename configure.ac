@@ -1,6 +1,6 @@
 AC_INIT([bambi], m4_esyscmd_s([git describe --dirty --always --tags]), [js10@sanger.ac.uk])
 AC_ARG_VAR(HTSDIR,Directory to look for hts)
-AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
+AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects tar-pax no-dependencies])
 AC_PROG_CC
 
 LT_INIT
