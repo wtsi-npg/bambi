@@ -39,112 +39,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "posfile.h"
 #include "filterfile.h"
 #include "bclfile.h"
+#include "array.h"
 
 #define DEFAULT_BARCODE_TAG "BC"
 #define DEFAULT_QUALITY_TAG "QT"
 
 char *strptime(const char *s, const char *format, struct tm *tm);
 
-/*
- * index array type
- */
-typedef struct {
-    int end;
-    int max;
-    int *entries;
-} ia_t;
-
-/*
- * structure to hold options
- */
-typedef struct {
-    int verbose;
-    char *argv_list;
-    char *run_folder;
-    char *intensity_dir;
-    char *basecalls_dir;
-    int lane;
-    char *output_file;
-    char *output_fmt;
-    char compression_level;
-    bool generate_secondary_basecalls;
-    bool no_filter;
-    char *read_group_id;
-    char *sample_alias;
-    char *library_name;
-    char *study_name;
-    char *platform_unit;
-    char *run_start_date;
-    char *sequencing_centre;
-    char *platform;
-    int first_tile;
-    int tile_limit;
-    char *barcode_tag;
-    char *quality_tag;
-    char *barcode_tag2;
-    char *quality_tag2;
-    int bc_read;
-    int sec_bc_read;
-    ia_t *first_cycle;
-    ia_t *final_cycle;
-    ia_t *first_index_cycle;
-    ia_t *final_index_cycle;
-    bool add_cluster_index_tag;
-    xmlDocPtr intensityConfig;
-    xmlDocPtr basecallsConfig;
-    xmlDocPtr parametersConfig;
-    xmlDocPtr runinfoConfig;
-} opts_t;
-
-
-//
-// TODO
-// These array handling functions really need to go into a separate module, with seperate tests
-//
-
-/*
- * integer array functions
- */
-
-int ia_compare(const void *ia1, const void *ia2)
-{
-    return *(int *)ia1 - *(int *)ia2;
-}
-
-void ia_sort(ia_t *ia)
-{
-    qsort(ia->entries, ia->end, sizeof(int), ia_compare);
-}
-
-bool ia_isEmpty(ia_t *ia) {
-    return (ia->end == 0);
-}
-
-void ia_push(ia_t *ia, int i)
-{
-    if (ia->end == ia->max) {
-        // expand the array
-        ia->max *= 2;
-        ia->entries = realloc(ia->entries, ia->max * sizeof(int));
-    }
-    ia->entries[ia->end] = i;
-    ia->end++;
-}
-
-void ia_free(ia_t *ia)
-{
-    free(ia->entries);
-    free(ia);
-}
-
-ia_t *ia_init(int max)
-{
-    ia_t *ia = calloc(1, sizeof(ia_t));
-    ia->end = 0;
-    ia->max = max;
-    ia->entries = calloc(ia->max, sizeof(int));
-    return ia;
-}
 
 /*
  * Cycle range array
@@ -160,54 +61,6 @@ void freeCycleRange(void *ent)
     cycleRangeEntry_t *cr = (cycleRangeEntry_t *)ent;
     free(cr->readname);
     free(cr);
-}
-
-/*
- * generic arrays
- * TODO: this should probably go into a seperate module
- */
-typedef struct {
-    int end;
-    int max;
-    void (*free_entry)(void *);
-    void **entries;
-} va_t;
-
-va_t *va_init(int max, void(*free_entry)(void*))
-{
-    va_t *va = calloc(1,sizeof(va_t));
-    va->end = 0;
-    va->max = max;
-    va->free_entry = free_entry;
-    va->entries = calloc(va->max, sizeof(void *));
-    return va;
-}
-
-void va_push(va_t *va, void *ent)
-{
-    if (va->end == va->max) {
-        // expand the array
-        va->max *= 2;
-        va->entries = realloc(va->entries, va->max * sizeof(void *));
-    }
-    va->entries[va->end] = ent;
-    va->end++;
-}
-
-bool va_isEmpty(va_t *va)
-{
-    return va->end == 0;
-}
-
-void va_free(va_t *va)
-{
-    int n;
-    if (!va) return;
-    for (n=0; n < va->end; n++) {
-        va->free_entry(va->entries[n]);
-    }
-    free(va->entries);
-    free(va);
 }
 
 /*
@@ -248,6 +101,50 @@ void freetileIndexArray(void *ent)
     free(ent);
 }
 
+void freeTagArray(void *ent)
+{
+    free(ent);
+}
+
+/*
+ * structure to hold options
+ */
+typedef struct {
+    int verbose;
+    char *argv_list;
+    char *run_folder;
+    char *intensity_dir;
+    char *basecalls_dir;
+    int lane;
+    char *output_file;
+    char *output_fmt;
+    char compression_level;
+    bool generate_secondary_basecalls;
+    bool no_filter;
+    char *read_group_id;
+    char *sample_alias;
+    char *library_name;
+    char *study_name;
+    char *platform_unit;
+    char *run_start_date;
+    char *sequencing_centre;
+    char *platform;
+    int first_tile;
+    int tile_limit;
+    va_t *barcode_tag;
+    va_t *quality_tag;
+    ia_t *bc_read;
+    ia_t *first_cycle;
+    ia_t *final_cycle;
+    ia_t *first_index_cycle;
+    ia_t *final_index_cycle;
+    xmlDocPtr intensityConfig;
+    xmlDocPtr basecallsConfig;
+    xmlDocPtr parametersConfig;
+    xmlDocPtr runinfoConfig;
+} opts_t;
+
+
 /*
  * Release all the options
  */
@@ -269,10 +166,9 @@ static void free_opts(opts_t* opts)
     free(opts->run_start_date);
     free(opts->sequencing_centre);
     free(opts->platform);
-    free(opts->barcode_tag);
-    free(opts->quality_tag);
-    free(opts->barcode_tag2);
-    free(opts->quality_tag2);
+    va_free(opts->barcode_tag);
+    va_free(opts->quality_tag);
+    ia_free(opts->bc_read);
     ia_free(opts->first_cycle);
     ia_free(opts->final_cycle);
     ia_free(opts->first_index_cycle);
@@ -417,23 +313,44 @@ static void usage(FILE *write_to)
 "                                       debugging. [default: null]\n"
 "       --tile-limit                    Number of tiles to process. Normally only used for testing and\n"
 "                                       debugging. [default: all tiles]\n"
-"       --barcode-tag                   Tag name for barcode sequence. [default: " DEFAULT_BARCODE_TAG "]\n"
-"       --quality-tag                   Tag name for barcode quality. [default: " DEFAULT_QUALITY_TAG "]\n"
-"       --sec-barcode-tag               Tag name for second barcode sequence. [default: null]\n"
-"       --sec-quality-tag               Tag name for second barcode quality. [default: null]\n"
-"       --bc-read                       Which read (1 or 2) should the barcode sequence and quality be added to?\n"
+"       --barcode-tag                   comma separated list of tag names for barcode sequences. [default: " DEFAULT_BARCODE_TAG "]\n"
+"       --quality-tag                   comma separated list of tag name for barcode qualities. [default: " DEFAULT_QUALITY_TAG "]\n"
+"       --sec-barcode-tag               DEPRECATED: Tag name for second barcode sequence. [default: null]\n"
+"       --sec-quality-tag               DEPRACATED: Tag name for second barcode quality. [default: null]\n"
+"       --bc-read                       comma separated list of Which reads (1 or 2) should the barcode sequences and qualities be added to?\n"
 "                                       [default: 1]\n"
-"       --sec-bc-read                   Which read (1 or 2) should the second barcode sequence and quality be added to?\n"
+"       --sec-bc-read                   DEPRACATED: Which read (1 or 2) should the second barcode sequence and quality be added to?\n"
 "                                       [default: bc-read]\n"
-"       --first-cycle                   First cycle for each standard (non-index) read. Can be specified 0 or more times.\n"
-"       --final-cycle                   Last cycle for each standard (non-index) read. Can be specified 0 or more times.\n"
-"       --first-index-cycle             First cycle for each index read. Can be specified 0 or more times.\n"
-"       --final-index-cycle             Last cycle for each index read. Can be specified 0 or more times.\n"
-"       --add-cluster-index-tag         Add cluster index tag [default: false]\n"
+"       --first-cycle                   First cycle for each standard (non-index) read. Comma separated list.\n"
+"       --final-cycle                   Last cycle for each standard (non-index) read. Comma separated list.\n"
+"       --first-index-cycle             First cycle for each index read. Comma separated list.\n"
+"       --final-index-cycle             Last cycle for each index read. Comma separated list.\n"
 "  -v   --verbose                       verbose output\n"
 "       --output-fmt                    [sam/bam/cram] [default: bam]\n"
 "       --compression-level             [0..9]\n"
 );
+}
+
+void parse_tags(va_t *tags, char *arg)
+{
+    char *argstr = strdup(arg);
+    char *s = strtok(argstr,",");
+    while (s) {
+        va_push(tags,strdup(s));
+        s = strtok(NULL,",");
+    }
+    free(argstr);
+}
+
+void parse_int(ia_t *ia, char *arg)
+{
+    char *argstr = strdup(arg);
+    char *s = strtok(argstr,",");
+    while (s) {
+        ia_push(ia,atoi(s));
+        s = strtok(NULL,",");
+    }
+    free(argstr);
 }
 
 /*
@@ -477,7 +394,6 @@ opts_t* i2b_parse_args(int argc, char *argv[])
         { "final-cycle",                1, 0, 0 },
         { "first-index-cycle",          1, 0, 0 },
         { "final-index-cycle",          1, 0, 0 },
-        { "add-cluster-index-tag",      0, 0, 0 },
         { NULL, 0, NULL, 0 }
     };
 
@@ -487,10 +403,13 @@ opts_t* i2b_parse_args(int argc, char *argv[])
     opts->argv_list = stringify_argv(argc+1, argv-1);
     if (opts->argv_list[strlen(opts->argv_list)-1] == ' ') opts->argv_list[strlen(opts->argv_list)-1] = 0;
 
+    opts->bc_read = ia_init(5);
     opts->first_cycle = ia_init(5);
     opts->final_cycle = ia_init(5);
     opts->first_index_cycle = ia_init(5);
     opts->final_index_cycle = ia_init(5);
+    opts->barcode_tag = va_init(5, freeTagArray);
+    opts->quality_tag = va_init(5, freeTagArray);
 
     int opt;
     int option_index = 0;
@@ -525,17 +444,16 @@ opts_t* i2b_parse_args(int argc, char *argv[])
                     else if (strcmp(arg, "platform") == 0)                     opts->platform = strdup(optarg);
                     else if (strcmp(arg, "first-tile") == 0)                   opts->first_tile = atoi(optarg);
                     else if (strcmp(arg, "tile-limit") == 0)                   opts->tile_limit = atoi(optarg);
-                    else if (strcmp(arg, "barcode-tag") == 0)                  opts->barcode_tag = strdup(optarg);
-                    else if (strcmp(arg, "quality-tag") == 0)                  opts->quality_tag = strdup(optarg);
-                    else if (strcmp(arg, "sec-barcode-tag") == 0)              opts->barcode_tag2 = strdup(optarg);
-                    else if (strcmp(arg, "sec-quality-tag") == 0)              opts->quality_tag2 = strdup(optarg);
-                    else if (strcmp(arg, "bc-read") == 0)                      opts->bc_read = atoi(optarg);
-                    else if (strcmp(arg, "sec-bc-read") == 0)                  opts->sec_bc_read = atoi(optarg);
-                    else if (strcmp(arg, "first-cycle") == 0)                  ia_push(opts->first_cycle,atoi(optarg));
-                    else if (strcmp(arg, "final-cycle") == 0)                  ia_push(opts->final_cycle,atoi(optarg));
-                    else if (strcmp(arg, "first-index-cycle") == 0)            ia_push(opts->first_index_cycle,atoi(optarg));
-                    else if (strcmp(arg, "final-index-cycle") == 0)            ia_push(opts->final_index_cycle,atoi(optarg));
-                    else if (strcmp(arg, "add-cluster-index-tag") == 0)        opts->add_cluster_index_tag = true;
+                    else if (strcmp(arg, "barcode-tag") == 0)                  parse_tags(opts->barcode_tag,optarg);
+                    else if (strcmp(arg, "quality-tag") == 0)                  parse_tags(opts->quality_tag,optarg);
+                    else if (strcmp(arg, "sec-barcode-tag") == 0)              parse_tags(opts->barcode_tag,optarg);
+                    else if (strcmp(arg, "sec-quality-tag") == 0)              parse_tags(opts->quality_tag,optarg);
+                    else if (strcmp(arg, "bc-read") == 0)                      parse_int(opts->bc_read,optarg);
+                    else if (strcmp(arg, "sec-bc-read") == 0)                  parse_int(opts->bc_read,optarg);
+                    else if (strcmp(arg, "first-cycle") == 0)                  parse_int(opts->first_cycle,optarg);
+                    else if (strcmp(arg, "final-cycle") == 0)                  parse_int(opts->final_cycle,optarg);
+                    else if (strcmp(arg, "first-index-cycle") == 0)            parse_int(opts->first_index_cycle,optarg);
+                    else if (strcmp(arg, "final-index-cycle") == 0)            parse_int(opts->final_index_cycle,optarg);
                     else {
                         fprintf(stderr,"\nUnknown option: %s\n\n", arg); 
                         usage(stdout); free_opts(opts);
@@ -585,10 +503,8 @@ opts_t* i2b_parse_args(int argc, char *argv[])
     if (!opts->library_name) opts->library_name = strdup("unknown");
     if (!opts->sample_alias) opts->sample_alias = strdup(opts->library_name);
     if (!opts->sequencing_centre) opts->sequencing_centre = strdup("SC");
-    if (!opts->barcode_tag) opts->barcode_tag = strdup(DEFAULT_BARCODE_TAG);
-    if (!opts->quality_tag) opts->quality_tag = strdup(DEFAULT_QUALITY_TAG);
-    if (!opts->bc_read) opts->bc_read = 1;
-    if (!opts->sec_bc_read) opts->sec_bc_read = opts->bc_read;
+    if (va_isEmpty(opts->barcode_tag)) va_push(opts->barcode_tag,strdup(DEFAULT_BARCODE_TAG));
+    if (va_isEmpty(opts->quality_tag)) va_push(opts->quality_tag,strdup(DEFAULT_QUALITY_TAG));
     if (!opts->platform) opts->platform = strdup("ILLUMINA");
 
     if (!opts->run_folder) {
@@ -1264,25 +1180,26 @@ bool readArrayContains(va_t *bclReadArray, char *readname)
 /*
  * read all the bases and qualities for a given read name ("read1" or "read2")
  */
-void getBases(va_t *bclReadArray, char *readname, char **bases, char **qualities, bool convert_qual)
+void getBases(va_t *bclReadArray, char *readname, va_t *bases, va_t *qualities, bool convert_qual)
 {
     int n;
-    *bases = NULL; *qualities = NULL;
     for (n=0; n < bclReadArray->end; n++) {
         bclReadArrayEntry_t *ra = bclReadArray->entries[n];
         if (strcmp(ra->readname, readname) == 0) {
-            *bases = calloc(1, ra->bclFileArray->end+1);
-            *qualities = calloc(1, ra->bclFileArray->end+1);
+            char *b = calloc(1, ra->bclFileArray->end+1);
+            char *q = calloc(1, ra->bclFileArray->end+1);
             int i;
             for (i=0; i < ra->bclFileArray->end; i++) {
-                bclfile_t *b = ra->bclFileArray->entries[i];
-                if (bclfile_next(b) < 0) {
+                bclfile_t *bcl = ra->bclFileArray->entries[i];
+                if (bclfile_next(bcl) < 0) {
                     fprintf(stderr,"Failed to read bcl file\n");
                     exit(1);
                 }
-                (*bases)[i] = b->base;
-                (*qualities)[i] = b->quality + (convert_qual ? 33 : 0);
+                b[i] = bcl->base;
+                q[i] = bcl->quality + (convert_qual ? 33 : 0);
             }
+            va_push(bases,b);
+            va_push(qualities,q);
             break;
         }
     }
@@ -1310,10 +1227,11 @@ int setFlag(bool second, bool filtered, bool ispaired)
  * Write a BAM record
  */
 void writeRecord(int flags, opts_t *opts, char *readName, 
-                 char *bases, char *qualities, char *ib, char *iq, char *ib2, char *iq2,
+                 char *bases, char *qualities, va_t *ib, va_t *iq,
                  samFile *output_file, bam_hdr_t *output_header)
 {
     bam1_t *bam = bam_init1();
+    int n;
 
     int r = bam_construct_seq(&bam, 0, readName, strlen(readName),
                                 flags, -1, 0, 0, 0, 0, (uint32_t*)"", -1, 0, 0, strlen(bases), bases, qualities);
@@ -1322,19 +1240,15 @@ void writeRecord(int flags, opts_t *opts, char *readName,
         exit(1);
     }
 
-    if (ib) {
-        bam_aux_append(bam, opts->barcode_tag, 'Z', strlen(ib)+1, (uint8_t *)ib);
-    }
-
+    // add read group
     bam_aux_append(bam, "RG", 'Z', strlen(opts->read_group_id)+1, (uint8_t *)opts->read_group_id);
 
-    if (ib) {
-        bam_aux_append(bam, opts->quality_tag, 'Z', strlen(iq)+1, (uint8_t *)iq);
-    }
-
-    if (ib2) {
-        bam_aux_append(bam, opts->barcode_tag2, 'Z', strlen(ib2)+1, (uint8_t *)ib2);
-        bam_aux_append(bam, opts->quality_tag2, 'Z', strlen(iq2)+1, (uint8_t *)iq2);
+    // add index tags
+    for (n=0; n < ib->end; n++) {
+        char *tag = ib->entries[n];
+        bam_aux_append(bam, opts->barcode_tag->entries[n], 'Z', strlen(tag)+1, (uint8_t *)tag);
+        tag = iq->entries[n];
+        bam_aux_append(bam, opts->quality_tag->entries[n], 'Z', strlen(tag)+1, (uint8_t *)tag);
     }
 
     r = sam_write1(output_file, output_header, bam);
@@ -1354,6 +1268,7 @@ int processTile(int tile, samFile *output_file, bam_hdr_t *output_header, va_t *
     int filtered;
     int max_cluster = 0;
     int nRecords = 0;
+    int c;
 
     if (opts->verbose) fprintf(stderr,"Processing Tile %d\n", tile);
     posfile_t *posfile = openPositionFile(tile, tileIndex, opts);
@@ -1374,11 +1289,6 @@ int processTile(int tile, samFile *output_file, bam_hdr_t *output_header, va_t *
     char *id = getId(opts);
 
     bool ispaired = readArrayContains(bclReadArray, "read2");
-    bool isindexed = readArrayContains(bclReadArray, "readIndex");
-    bool isdual = readArrayContains(bclReadArray, "readIndex2");
-
-    // TODO: is this right? Should we abort, or give a warning here?
-    if (!opts->barcode_tag2 || !opts->quality_tag2) isdual = false;
 
     //
     // write all the records
@@ -1388,38 +1298,38 @@ int processTile(int tile, samFile *output_file, bam_hdr_t *output_header, va_t *
         filtered = !filtered;   // don't ask
         posfile_next(posfile);
         char *readName = getReadName(id, opts->lane, tile, posfile->x, posfile->y);
-        char *bases=NULL, *qualities=NULL, *bases2=NULL, *qualities2=NULL;
-        char *bases_index=NULL, *qualities_index=NULL, *bases_index2=NULL, *qualities_index2=NULL;
+        va_t *bases, *qualities, *bases_index, *qualities_index, *bases_index2, *qualities_index2;
+        bases = va_init(2,free); qualities = va_init(2,free);
+        bases_index = va_init(5,free); qualities_index = va_init(5,free); bases_index2 = va_init(5,free); qualities_index2 = va_init(5,free);
 
-        getBases(bclReadArray, "read1", &bases, &qualities, false);
-        if (ispaired) getBases(bclReadArray, "read2", &bases2, &qualities2, false);
-        if (isindexed) getBases(bclReadArray, "readIndex", &bases_index, &qualities_index, true);
-        if (isdual) getBases(bclReadArray, "readIndex2", &bases_index2, &qualities_index2, true);
+        getBases(bclReadArray, "read1", bases, qualities, false);
+        if (ispaired) getBases(bclReadArray, "read2", bases, qualities, false);
 
-        // Which reads do we attach the indexes to?
-        char *r1_bi=NULL, *r1_qi=NULL, *r1_bi2=NULL, *r1_qi2 = NULL;
-        char *r2_bi=NULL, *r2_qi=NULL, *r2_bi2=NULL, *r2_qi2 = NULL;
-        if (opts->bc_read == 1) { r1_bi = bases_index; r1_qi = qualities_index; }
-        else                    { r2_bi = bases_index; r2_qi = qualities_index; }
-
-        if (opts->sec_bc_read == 1) { r1_bi2 = bases_index2; r1_qi2 = qualities_index2; }
-        else                        { r2_bi2 = bases_index2; r2_qi2 = qualities_index2; }
+        // read each index and put into first or second read
+        for (c=0; c < cycleRange->end; c++) {
+            char *cname = getCycleName(c+1,true);
+            if (readArrayContains(bclReadArray,cname)) {
+                if (c >= opts->bc_read->end) ia_push(opts->bc_read,1);   // supply a default
+                if (opts->bc_read->entries[c] == 2) getBases(bclReadArray, cname, bases_index2, qualities_index2, true);
+                else                                getBases(bclReadArray, cname, bases_index, qualities_index, true);
+            }
+            free(cname);
+        }
 
         if (opts->no_filter || !filtered) {
             int flags;
             flags = setFlag(false,filtered,ispaired);
-            writeRecord(flags, opts, readName, bases, qualities, r1_bi, r1_qi, r1_bi2, r1_qi2, output_file, output_header);
+            writeRecord(flags, opts, readName, bases->entries[0], qualities->entries[0], bases_index, qualities_index, output_file, output_header);
             if (ispaired) {
                 flags = setFlag(true,filtered,ispaired);
-                writeRecord(flags, opts, readName, bases2, qualities2, r2_bi, r2_qi, r2_bi2, r2_qi2, output_file, output_header);
+                writeRecord(flags, opts, readName, bases->entries[1], qualities->entries[1], bases_index2, qualities_index2, output_file, output_header);
             }
             nRecords++;
         }
 
-        free(bases); free(qualities);
-        free(bases2); free(qualities2);
-        free(bases_index); free(qualities_index);
-        free(bases_index2); free(qualities_index2);
+        va_free(bases); va_free(qualities);
+        va_free(bases_index); va_free(qualities_index);
+        va_free(bases_index2); va_free(qualities_index2);
         free(readName);
     }
 
