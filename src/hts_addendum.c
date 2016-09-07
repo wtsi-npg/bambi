@@ -57,6 +57,7 @@ int bam_aux_update_str(bam1_t *b, const char tag[2], int len, const char *data)
 }
 #endif
 
+#ifndef HAVE_SAM_HDR_DEL
 SAM_hdr *sam_hdr_del(SAM_hdr *hdr, char *type, char *ID_key, char *ID_value) {
     int i,n;
     int *lines;
@@ -81,4 +82,5 @@ SAM_hdr *sam_hdr_del(SAM_hdr *hdr, char *type, char *ID_key, char *ID_value) {
     free(newtext);
     return hdr;
 }
+#endif
 

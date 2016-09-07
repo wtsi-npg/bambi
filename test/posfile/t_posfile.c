@@ -68,7 +68,7 @@ int main(int argc, char**argv)
     /*
      * clocs file
      */
-    posfile = posfile_open(MKNAME(DATA_DIR,"/../i2b/110323_HS13_06000_B_B039WABXX/Data/Intensities/L001/s_1_1101.clocs"));
+    posfile = posfile_open(MKNAME(DATA_DIR,"/s_1_1101.clocs"));
     if (posfile->errmsg) {
         fprintf(stderr,"Error opening file: %s\n", posfile->errmsg);
         failure++;
@@ -94,7 +94,7 @@ int main(int argc, char**argv)
     /*
      * locs file
      */
-    posfile = posfile_open(MKNAME(DATA_DIR,"/../i2b/111014_M00119_0028_AMS0001310-00300/Data/Intensities/L001/s_1_1.locs"));
+    posfile = posfile_open(MKNAME(DATA_DIR,"/s_1_1.locs"));
     if (posfile->errmsg) {
         fprintf(stderr,"Error opening file: %s\n", posfile->errmsg);
         failure++;

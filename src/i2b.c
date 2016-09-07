@@ -865,20 +865,44 @@ ia_t *getTileList(opts_t *opts)
         }
     }
 
+    //
+    // If we can't find a list of tiles anywhere, try calculating them from the FlowcellLayout
+    //
     if (ia_isEmpty(tiles)) {
         int numSurfaces = getXMLAttr_int(opts->runinfoConfig, "//FlowcellLayout", "SurfaceCount");
         int numSwaths = getXMLAttr_int(opts->runinfoConfig, "//FlowcellLayout", "SwathCount");
         int numTilesPerSwath = getXMLAttr_int(opts->runinfoConfig, "//FlowcellLayout", "TileCount");
-        if (numSurfaces && numSwaths && numTilesPerSwath) {
-            int isur, isw, itile;
-            for (isur = 1; isur <= numSurfaces; isur++) {
-                for (isw = 1; isw <= numSwaths; isw++) {
-                    for (itile = 1; itile <= numTilesPerSwath; itile++) {
-                        ia_push(tiles, 1000 * isur + 100 * isw + itile);
+        int numSectionsPerLane = getXMLAttr_int(opts->runinfoConfig, "//FlowcellLayout", "SectionPerLane");
+
+        char *TileNamingConvention = getXMLAttr(opts->runinfoConfig, "//FlowcellLayout/TileSet", "TileNamingConvention");
+        if (strcmp(TileNamingConvention,"FiveDigit") == 0) {
+            // probably a nextSeq with 5 digit tile numbers...
+            if (numSurfaces && numSwaths && numTilesPerSwath && numSectionsPerLane) {
+                int ispl, isur, isw, itile;
+                for (ispl = 1; ispl <= numSectionsPerLane; ispl++) {
+                    for (isur = 1; isur <= numSurfaces; isur++) {
+                        for (isw = 1; isw <= numSwaths; isw++) {
+                            for (itile = 1; itile <= numTilesPerSwath; itile++) {
+                                ia_push(tiles, 10000 * isur + 1000 * ispl + 100 * isw + itile);
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // 'normal' four digit tile numbers
+            if (numSurfaces && numSwaths && numTilesPerSwath) {
+                int isur, isw, itile;
+                for (isur = 1; isur <= numSurfaces; isur++) {
+                    for (isw = 1; isw <= numSwaths; isw++) {
+                        for (itile = 1; itile <= numTilesPerSwath; itile++) {
+                            ia_push(tiles, 1000 * isur + 100 * isw + itile);
+                        }
                     }
                 }
             }
         }
+        free(TileNamingConvention);
     }
 
 
@@ -1412,8 +1436,9 @@ int processTile(int tile, samFile *output_file, bam_hdr_t *output_header, va_t *
 /*
  * process all the tiles and write all the BAM records
  */
-void createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
+int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
 {
+    int retcode = 0;
     ia_t *tiles = getTileList(opts);
     va_t *cycleRange = getCycleRange(opts);;
     va_t *tileIndex = getTileIndex(opts);
@@ -1430,12 +1455,14 @@ void createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
     for (n=0; n < tiles->end; n++) {
         if (processTile(tiles->entries[n], output_file, output_header, cycleRange, tileIndex, opts)) {
             fprintf(stderr,"Error processing tile %d\n", tiles->entries[n]);
+            retcode = 1;
             break;
         }
     }
 
     va_free(cycleRange);
     ia_free(tiles);
+    return retcode;
 }
 
 /*
@@ -1477,10 +1504,12 @@ static int i2b(opts_t* opts)
             break;
         }
 
-        addHeader(output_file, output_header, opts);
-        createBAM(output_file, output_header, opts);
+        if (addHeader(output_file, output_header, opts) != 0) {
+            fprintf(stderr,"Failed to write header\n");
+            break;
+        }
 
-        retcode = 0;
+        retcode = createBAM(output_file, output_header, opts);
         break;
     }
 
