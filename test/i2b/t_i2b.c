@@ -28,7 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define xMKNAME(d,f) #d f
 #define MKNAME(d,f) xMKNAME(d,f)
 
-int verbose = 0;
+int verbose = 1;
 
 const char * bambi_version(void)
 {
@@ -94,7 +94,6 @@ void setup_param_test(int* argc, char*** argv)
     (*argv)[(*argc)++] = strdup("9");
     (*argv)[(*argc)++] = strdup("--final-index-cycle");
     (*argv)[(*argc)++] = strdup("9");
-    (*argv)[(*argc)++] = strdup("--add-cluster-index-tag");
 
     assert(*argc<100);
 }
@@ -274,6 +273,47 @@ void setup_test_6(int* argc, char*** argv, char *outputfile)
     assert(*argc<100);
 }
 
+void setup_test_7(int* argc, char*** argv, char *outputfile)
+{
+    *argc = 0;
+    *argv = (char**)calloc(sizeof(char*), 100);
+    (*argv)[(*argc)++] = strdup("bambi");
+    (*argv)[(*argc)++] = strdup("i2b");
+    (*argv)[(*argc)++] = strdup("-i");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/140624_MS6_13349_A_MS2639979-300V2/Data/Intensities"));
+    (*argv)[(*argc)++] = strdup("-o");
+    (*argv)[(*argc)++] = strdup(outputfile);
+    (*argv)[(*argc)++] = strdup("--lane");
+    (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("--first-tile");
+    (*argv)[(*argc)++] = strdup("1101");
+    (*argv)[(*argc)++] = strdup("--tile-limit");
+    (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("--library-name");
+    (*argv)[(*argc)++] = strdup("TestLibrary");
+    (*argv)[(*argc)++] = strdup("--sample-alias");
+    (*argv)[(*argc)++] = strdup("TestSample");
+    (*argv)[(*argc)++] = strdup("--study-name");
+    (*argv)[(*argc)++] = strdup("Study TestStudy");
+    (*argv)[(*argc)++] = strdup("--run-start-date");
+    (*argv)[(*argc)++] = strdup("2011-03-23T00:00:00+0000");
+    (*argv)[(*argc)++] = strdup("--verbose");
+    (*argv)[(*argc)++] = strdup("--first-cycle");
+    (*argv)[(*argc)++] = strdup("1,30");
+    (*argv)[(*argc)++] = strdup("--final-cycle");
+    (*argv)[(*argc)++] = strdup("2,32");
+    (*argv)[(*argc)++] = strdup("--first-index-cycle");
+    (*argv)[(*argc)++] = strdup("3,6,11");
+    (*argv)[(*argc)++] = strdup("--final-index-cycle");
+    (*argv)[(*argc)++] = strdup("5,10,12");
+    (*argv)[(*argc)++] = strdup("--barcode-tag");
+    (*argv)[(*argc)++] = strdup("b1,b2,b3");
+    (*argv)[(*argc)++] = strdup("--quality-tag");
+    (*argv)[(*argc)++] = strdup("q1,q2,q3");
+
+    assert(*argc<100);
+}
+
 void checkLike(char *name, char *expected, char *actual)
 {
     if (actual == NULL) actual = "<null>";
@@ -330,11 +370,10 @@ void test_paramaters(void)
     checkEqual("options: platform", "Illumina", opts->platform);
     icheckEqual("options: first-tile", 1103, opts->first_tile);
     icheckEqual("options: tile-limit", 5, opts->tile_limit);
-    checkEqual("options: barcode-tag", "AB", opts->barcode_tag);
-    checkEqual("options: quality-tag", "CD", opts->quality_tag);
-    checkEqual("options: sec-barcode-tag", "WX", opts->barcode_tag2);
-    checkEqual("options: sec-quality-tag", "YZ", opts->quality_tag2);
-    icheckEqual("options: sec-bc-read", 2, opts->sec_bc_read);
+    checkEqual("options: barcode-tag", "AB", opts->barcode_tag->entries[0]);
+    checkEqual("options: quality-tag", "CD", opts->quality_tag->entries[0]);
+    checkEqual("options: sec-barcode-tag", "WX", opts->barcode_tag->entries[1]);
+    checkEqual("options: sec-quality-tag", "YZ", opts->quality_tag->entries[1]);
     icheckEqual("options: first-cycle", 3, opts->first_cycle->end);
     icheckEqual("options: first-cycle[0]", 7, opts->first_cycle->entries[0]);
     icheckEqual("options: first-cycle[1]", 17, opts->first_cycle->entries[1]);
@@ -342,7 +381,6 @@ void test_paramaters(void)
     icheckEqual("options: final-cycle", 1, opts->final_cycle->end);
     icheckEqual("options: final-index-cycle", 1, opts->final_index_cycle->end);
     icheckEqual("options: final-cycle[0]", 9, opts->final_cycle->entries[0]);
-    icheckEqual("options: add-cluster-index-tag", 1, opts->add_cluster_index_tag);
 }
 
 void checkFiles(char *name, char *outputfile, char *fname)
@@ -435,6 +473,7 @@ int main(int argc, char**argv)
     // simple test
     //
 
+    if (verbose) fprintf(stderr,"\n===> Simple test\n");
     sprintf(outputfile,"%s/i2b_1.bam",TMPDIR);
     setup_test_1(&argc_1, &argv_1, outputfile);
     main_i2b(argc_1-1, argv_1+1);
@@ -445,6 +484,7 @@ int main(int argc, char**argv)
     // Test with non-standard read group ID
     //
 
+    if (verbose) fprintf(stderr,"\n===> Read Group ID test\n");
     sprintf(outputfile,"%s/i2b_2.bam",TMPDIR);
     setup_test_2(&argc_1, &argv_1, outputfile);
     main_i2b(argc_1-1,argv_1+1);
@@ -453,6 +493,7 @@ int main(int argc, char**argv)
     //
     // cycle range test
     //
+    if (verbose) fprintf(stderr,"\n===> Cycle Range test\n");
     sprintf(outputfile,"%s/i2b_4.bam",TMPDIR);
     setup_test_4(&argc_1, &argv_1, outputfile);
     main_i2b(argc_1-1,argv_1+1);
@@ -461,6 +502,7 @@ int main(int argc, char**argv)
     //
     // bc-read test
     //
+    if (verbose) fprintf(stderr,"\n===> bc-read test\n");
     sprintf(outputfile,"%s/i2b_5.bam",TMPDIR);
     setup_test_5(&argc_1, &argv_1, outputfile);
     main_i2b(argc_1-1,argv_1+1);
@@ -469,11 +511,20 @@ int main(int argc, char**argv)
     //
     // dual index run
     //
+    if (verbose) fprintf(stderr,"\n===> Dual Index test\n");
     sprintf(outputfile,"%s/i2b_6.bam",TMPDIR);
     setup_test_6(&argc_1, &argv_1, outputfile);
     main_i2b(argc_1-1,argv_1+1);
     checkFiles("Dual Index test", outputfile, MKNAME(DATA_DIR,"/out/test6.bam"));
 
+    //
+    // multiple barcode tags run
+    //
+    if (verbose) fprintf(stderr,"\n===> Multiple Tags test\n");
+    sprintf(outputfile,"%s/i2b_7.bam",TMPDIR);
+    setup_test_7(&argc_1, &argv_1, outputfile);
+    main_i2b(argc_1-1,argv_1+1);
+    checkFiles("Multiple barcode tags test", outputfile, MKNAME(DATA_DIR,"/out/test7.bam"));
 
     printf("i2b tests: %s\n", failure ? "FAILED" : "Passed");
     return failure ? EXIT_FAILURE : EXIT_SUCCESS;
