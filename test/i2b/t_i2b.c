@@ -28,7 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define xMKNAME(d,f) #d f
 #define MKNAME(d,f) xMKNAME(d,f)
 
-int verbose = 0;
+int verbose = 1;
 
 const char * bambi_version(void)
 {
@@ -47,7 +47,7 @@ void setup_param_test(int* argc, char*** argv)
     (*argv)[(*argc)++] = strdup("-i");
     (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/110323_HS13_06000_B_B039WABXX/Data/Intensities"));
     (*argv)[(*argc)++] = strdup("-o");
-    (*argv)[(*argc)++] = strdup("test/i2b/out/xxx.sam");
+    (*argv)[(*argc)++] = strdup("test/i2b/data/out/xxx.sam");
     (*argv)[(*argc)++] = strdup("--output-fmt");
     (*argv)[(*argc)++] = strdup("sam");
     (*argv)[(*argc)++] = strdup("--lane");
@@ -94,12 +94,11 @@ void setup_param_test(int* argc, char*** argv)
     (*argv)[(*argc)++] = strdup("9");
     (*argv)[(*argc)++] = strdup("--final-index-cycle");
     (*argv)[(*argc)++] = strdup("9");
-    (*argv)[(*argc)++] = strdup("--add-cluster-index-tag");
 
     assert(*argc<100);
 }
 
-void setup_test_1(int* argc, char*** argv)
+void setup_test_1(int* argc, char*** argv, char *outputfile)
 {
     *argc = 0;
     *argv = (char**)calloc(sizeof(char*), 100);
@@ -108,7 +107,7 @@ void setup_test_1(int* argc, char*** argv)
     (*argv)[(*argc)++] = strdup("-i");
     (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/110323_HS13_06000_B_B039WABXX/Data/Intensities"));
     (*argv)[(*argc)++] = strdup("-o");
-    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/out/xxx.bam"));
+    (*argv)[(*argc)++] = strdup(outputfile);
     (*argv)[(*argc)++] = strdup("--lane");
     (*argv)[(*argc)++] = strdup("1");
     (*argv)[(*argc)++] = strdup("--first-tile");
@@ -123,13 +122,12 @@ void setup_test_1(int* argc, char*** argv)
     (*argv)[(*argc)++] = strdup("Study testStudy");
     (*argv)[(*argc)++] = strdup("--run-start-date");
     (*argv)[(*argc)++] = strdup("2011-03-23T00:00:00+0000");
-//    (*argv)[(*argc)++] = strdup("--generate-secondary-basecalls");
     (*argv)[(*argc)++] = strdup("--verbose");
 
     assert(*argc<100);
 }
 
-void setup_test_2(int* argc, char*** argv)
+void setup_test_2(int* argc, char*** argv, char *outputfile)
 {
     *argc = 0;
     *argv = (char**)calloc(sizeof(char*), 100);
@@ -138,7 +136,7 @@ void setup_test_2(int* argc, char*** argv)
     (*argv)[(*argc)++] = strdup("-i");
     (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/110323_HS13_06000_B_B039WABXX/Data/Intensities"));
     (*argv)[(*argc)++] = strdup("-o");
-    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/out/xxx.bam"));
+    (*argv)[(*argc)++] = strdup(outputfile);
     (*argv)[(*argc)++] = strdup("--lane");
     (*argv)[(*argc)++] = strdup("1");
     (*argv)[(*argc)++] = strdup("--first-tile");
@@ -161,7 +159,7 @@ void setup_test_2(int* argc, char*** argv)
     assert(*argc<100);
 }
 
-void setup_test_4(int* argc, char*** argv)
+void setup_test_4(int* argc, char*** argv, char *outputfile)
 {
     *argc = 0;
     *argv = (char**)calloc(sizeof(char*), 100);
@@ -170,7 +168,7 @@ void setup_test_4(int* argc, char*** argv)
     (*argv)[(*argc)++] = strdup("-i");
     (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/110323_HS13_06000_B_B039WABXX/Data/Intensities"));
     (*argv)[(*argc)++] = strdup("-o");
-    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/out/xxx.bam"));
+    (*argv)[(*argc)++] = strdup(outputfile);
     (*argv)[(*argc)++] = strdup("--lane");
     (*argv)[(*argc)++] = strdup("1");
     (*argv)[(*argc)++] = strdup("--first-tile");
@@ -194,7 +192,7 @@ void setup_test_4(int* argc, char*** argv)
     assert(*argc<100);
 }
 
-void setup_test_5(int* argc, char*** argv)
+void setup_test_5(int* argc, char*** argv, char *outputfile)
 {
     *argc = 0;
     *argv = (char**)calloc(sizeof(char*), 100);
@@ -203,7 +201,7 @@ void setup_test_5(int* argc, char*** argv)
     (*argv)[(*argc)++] = strdup("-i");
     (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/110323_HS13_06000_B_B039WABXX/Data/Intensities"));
     (*argv)[(*argc)++] = strdup("-o");
-    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/out/xxx.bam"));
+    (*argv)[(*argc)++] = strdup(outputfile);
     (*argv)[(*argc)++] = strdup("--lane");
     (*argv)[(*argc)++] = strdup("1");
     (*argv)[(*argc)++] = strdup("--first-tile");
@@ -237,7 +235,7 @@ void setup_test_5(int* argc, char*** argv)
     assert(*argc<100);
 }
 
-void setup_test_6(int* argc, char*** argv)
+void setup_test_6(int* argc, char*** argv, char *outputfile)
 {
     *argc = 0;
     *argv = (char**)calloc(sizeof(char*), 100);
@@ -246,7 +244,7 @@ void setup_test_6(int* argc, char*** argv)
     (*argv)[(*argc)++] = strdup("-i");
     (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/140624_MS6_13349_A_MS2639979-300V2/Data/Intensities"));
     (*argv)[(*argc)++] = strdup("-o");
-    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/out/xxx.bam"));
+    (*argv)[(*argc)++] = strdup(outputfile);
     (*argv)[(*argc)++] = strdup("--lane");
     (*argv)[(*argc)++] = strdup("1");
     (*argv)[(*argc)++] = strdup("--first-tile");
@@ -271,6 +269,47 @@ void setup_test_6(int* argc, char*** argv)
     (*argv)[(*argc)++] = strdup("BC");
     (*argv)[(*argc)++] = strdup("--sec-quality-tag");
     (*argv)[(*argc)++] = strdup("QT");
+
+    assert(*argc<100);
+}
+
+void setup_test_7(int* argc, char*** argv, char *outputfile)
+{
+    *argc = 0;
+    *argv = (char**)calloc(sizeof(char*), 100);
+    (*argv)[(*argc)++] = strdup("bambi");
+    (*argv)[(*argc)++] = strdup("i2b");
+    (*argv)[(*argc)++] = strdup("-i");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/140624_MS6_13349_A_MS2639979-300V2/Data/Intensities"));
+    (*argv)[(*argc)++] = strdup("-o");
+    (*argv)[(*argc)++] = strdup(outputfile);
+    (*argv)[(*argc)++] = strdup("--lane");
+    (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("--first-tile");
+    (*argv)[(*argc)++] = strdup("1101");
+    (*argv)[(*argc)++] = strdup("--tile-limit");
+    (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("--library-name");
+    (*argv)[(*argc)++] = strdup("TestLibrary");
+    (*argv)[(*argc)++] = strdup("--sample-alias");
+    (*argv)[(*argc)++] = strdup("TestSample");
+    (*argv)[(*argc)++] = strdup("--study-name");
+    (*argv)[(*argc)++] = strdup("Study TestStudy");
+    (*argv)[(*argc)++] = strdup("--run-start-date");
+    (*argv)[(*argc)++] = strdup("2011-03-23T00:00:00+0000");
+    (*argv)[(*argc)++] = strdup("--verbose");
+    (*argv)[(*argc)++] = strdup("--first-cycle");
+    (*argv)[(*argc)++] = strdup("1,30");
+    (*argv)[(*argc)++] = strdup("--final-cycle");
+    (*argv)[(*argc)++] = strdup("2,32");
+    (*argv)[(*argc)++] = strdup("--first-index-cycle");
+    (*argv)[(*argc)++] = strdup("3,6,11");
+    (*argv)[(*argc)++] = strdup("--final-index-cycle");
+    (*argv)[(*argc)++] = strdup("5,10,12");
+    (*argv)[(*argc)++] = strdup("--barcode-tag");
+    (*argv)[(*argc)++] = strdup("b1,b2,b3");
+    (*argv)[(*argc)++] = strdup("--quality-tag");
+    (*argv)[(*argc)++] = strdup("q1,q2,q3");
 
     assert(*argc<100);
 }
@@ -317,12 +356,12 @@ void test_paramaters(void)
         return;
     }
 
-    checkLike("options: intensity-dir", "test/i2b/110323_HS13_06000_B_B039WABXX/Data/Intensities", opts->intensity_dir);
-    checkEqual("options: output-file", "test/i2b/out/xxx.sam", opts->output_file);
+    checkLike("options: intensity-dir", "test/i2b/data/110323_HS13_06000_B_B039WABXX/Data/Intensities", opts->intensity_dir);
+    checkEqual("options: output-file", "test/i2b/data/out/xxx.sam", opts->output_file);
     checkEqual("options: sample-alias", "testlibrary", opts->sample_alias);
     checkEqual("options: study-name", "teststudy", opts->study_name);
-    checkLike("options: run-folder", "test/i2b/110323_HS13_06000_B_B039WABXX", opts->run_folder);
-    checkLike("options: basecalls-dir", "test/i2b/110323_HS13_06000_B_B039WABXX/Data/Intensities/BaseCalls", opts->basecalls_dir);
+    checkLike("options: run-folder", "test/i2b/data/110323_HS13_06000_B_B039WABXX", opts->run_folder);
+    checkLike("options: basecalls-dir", "test/i2b/data/110323_HS13_06000_B_B039WABXX/Data/Intensities/BaseCalls", opts->basecalls_dir);
     icheckEqual("options: lane", 1, opts->lane);
     icheckEqual("options: generate-secondary-basecalls", 1, opts->generate_secondary_basecalls);
     icheckEqual("options: no-filter", 1, opts->no_filter);
@@ -331,11 +370,10 @@ void test_paramaters(void)
     checkEqual("options: platform", "Illumina", opts->platform);
     icheckEqual("options: first-tile", 1103, opts->first_tile);
     icheckEqual("options: tile-limit", 5, opts->tile_limit);
-    checkEqual("options: barcode-tag", "AB", opts->barcode_tag);
-    checkEqual("options: quality-tag", "CD", opts->quality_tag);
-    checkEqual("options: sec-barcode-tag", "WX", opts->barcode_tag2);
-    checkEqual("options: sec-quality-tag", "YZ", opts->quality_tag2);
-    icheckEqual("options: sec-bc-read", 2, opts->sec_bc_read);
+    checkEqual("options: barcode-tag", "AB", opts->barcode_tag->entries[0]);
+    checkEqual("options: quality-tag", "CD", opts->quality_tag->entries[0]);
+    checkEqual("options: sec-barcode-tag", "WX", opts->barcode_tag->entries[1]);
+    checkEqual("options: sec-quality-tag", "YZ", opts->quality_tag->entries[1]);
     icheckEqual("options: first-cycle", 3, opts->first_cycle->end);
     icheckEqual("options: first-cycle[0]", 7, opts->first_cycle->entries[0]);
     icheckEqual("options: first-cycle[1]", 17, opts->first_cycle->entries[1]);
@@ -343,18 +381,18 @@ void test_paramaters(void)
     icheckEqual("options: final-cycle", 1, opts->final_cycle->end);
     icheckEqual("options: final-index-cycle", 1, opts->final_index_cycle->end);
     icheckEqual("options: final-cycle[0]", 9, opts->final_cycle->entries[0]);
-    icheckEqual("options: add-cluster-index-tag", 1, opts->add_cluster_index_tag);
 }
 
-void checkFiles(char *name, char *fname)
+void checkFiles(char *name, char *outputfile, char *fname)
 {
-    char command[256];
+    char command[1024];
 
-    sprintf(command,"samtools view -H %s | grep @RG > /tmp/got.txt", MKNAME(DATA_DIR,"/out/xxx.bam"));
+    sprintf(command,"samtools view -H %s | grep @RG > %s.got.txt", outputfile, outputfile);
     if (system(command)) { fprintf(stderr,"samtools failed\n"); failure++; }
-    sprintf(command, "samtools view -H %s | grep @RG > /tmp/expected.txt", fname);
+    sprintf(command, "samtools view -H %s | grep @RG > %s.expected.txt", fname, outputfile);
     if (system(command)) { fprintf(stderr,"samtools failed\n"); failure++; }
-    int result = system("diff /tmp/got.txt /tmp/expected.txt");
+    sprintf(command,"diff %s.got.txt %s.expected.txt", outputfile, outputfile);
+    int result = system(command);
     if (result) {
         fprintf(stderr, "%s: test 1 failed\n", name);
         failure++;
@@ -362,11 +400,12 @@ void checkFiles(char *name, char *fname)
         success++;
     }
 
-    sprintf(command,"samtools view %s | head | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > /tmp/got.txt",MKNAME(DATA_DIR,"/out/xxx.bam"));
+    sprintf(command,"samtools view %s | head | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > %s.got.txt",outputfile,outputfile);
     if (system(command)) { fprintf(stderr,"samtools failed\n"); failure++; }
-    sprintf(command,"samtools view %s | head | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > /tmp/expected.txt", fname);
+    sprintf(command,"samtools view %s | head | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > %s.expected.txt", fname,outputfile);
     if (system(command)) { fprintf(stderr,"samtools failed\n"); failure++; }
-    result = system("diff /tmp/got.txt /tmp/expected.txt");
+    sprintf(command,"diff %s.got.txt %s.expected.txt", outputfile, outputfile);
+    result = system(command);
     if (result) {
         fprintf(stderr, "%s: test 2 failed\n", name);
         failure++;
@@ -374,11 +413,12 @@ void checkFiles(char *name, char *fname)
         success++;
     }
 
-    sprintf(command,"samtools view %s | tail | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > /tmp/got.txt", MKNAME(DATA_DIR,"/out/xxx.bam"));
+    sprintf(command,"samtools view %s | tail | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > %s.got.txt", outputfile,outputfile);
     if (system(command)) { fprintf(stderr,"samtools failed\n"); failure++; }
-    sprintf(command,"samtools view %s | tail | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > /tmp/expected.txt", fname);
+    sprintf(command,"samtools view %s | tail | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > %s.expected.txt", fname,outputfile);
     if (system(command)) { fprintf(stderr,"samtools failed\n"); failure++; }
-    result = system("diff /tmp/got.txt /tmp/expected.txt");
+    sprintf(command,"diff %s.got.txt %s.expected.txt", outputfile, outputfile);
+    result = system(command);
     if (result) {
         fprintf(stderr, "%s: test 3 failed\n", name);
         failure++;
@@ -389,6 +429,8 @@ void checkFiles(char *name, char *fname)
 
 int main(int argc, char**argv)
 {
+    char template[] = "/tmp/bambi.XXXXXX";
+    char *TMPDIR = mkdtemp(template);
     int getopt_char;
     while ((getopt_char = getopt(argc, argv, "v")) != -1) {
         switch (getopt_char) {
@@ -403,6 +445,14 @@ int main(int argc, char**argv)
 
     // Cleanup getopt
     optind = 1;
+
+    if (TMPDIR == NULL) {
+        fprintf(stderr,"Can't open temporary directory\n");
+        exit(1);
+    } else {
+        if (verbose) fprintf(stderr,"Created temporary directory: %s\n", TMPDIR);
+    }
+    char *outputfile = calloc(1,strlen(TMPDIR)+64);
 
     int argc_1;
     char** argv_1;
@@ -423,40 +473,58 @@ int main(int argc, char**argv)
     // simple test
     //
 
-    setup_test_1(&argc_1, &argv_1);
+    if (verbose) fprintf(stderr,"\n===> Simple test\n");
+    sprintf(outputfile,"%s/i2b_1.bam",TMPDIR);
+    setup_test_1(&argc_1, &argv_1, outputfile);
     main_i2b(argc_1-1, argv_1+1);
-    checkFiles("Simple test", MKNAME(DATA_DIR,"/out/test1.bam"));
+    checkFiles("Simple test", outputfile, MKNAME(DATA_DIR,"/out/test1.bam"));
 
 
     //
     // Test with non-standard read group ID
     //
 
-    setup_test_2(&argc_1, &argv_1);
+    if (verbose) fprintf(stderr,"\n===> Read Group ID test\n");
+    sprintf(outputfile,"%s/i2b_2.bam",TMPDIR);
+    setup_test_2(&argc_1, &argv_1, outputfile);
     main_i2b(argc_1-1,argv_1+1);
-    checkFiles("Read Group ID test", MKNAME(DATA_DIR,"/out/test2.bam"));
+    checkFiles("Read Group ID test", outputfile, MKNAME(DATA_DIR,"/out/test2.bam"));
 
     //
     // cycle range test
     //
-    setup_test_4(&argc_1, &argv_1);
+    if (verbose) fprintf(stderr,"\n===> Cycle Range test\n");
+    sprintf(outputfile,"%s/i2b_4.bam",TMPDIR);
+    setup_test_4(&argc_1, &argv_1, outputfile);
     main_i2b(argc_1-1,argv_1+1);
-    checkFiles("Cycle Range test", MKNAME(DATA_DIR,"/out/test4.bam"));
+    checkFiles("Cycle Range test", outputfile, MKNAME(DATA_DIR,"/out/test4.bam"));
 
     //
     // bc-read test
     //
-    setup_test_5(&argc_1, &argv_1);
+    if (verbose) fprintf(stderr,"\n===> bc-read test\n");
+    sprintf(outputfile,"%s/i2b_5.bam",TMPDIR);
+    setup_test_5(&argc_1, &argv_1, outputfile);
     main_i2b(argc_1-1,argv_1+1);
-    checkFiles("BC_READ test", MKNAME(DATA_DIR,"/out/test5.bam"));
+    checkFiles("BC_READ test", outputfile, MKNAME(DATA_DIR,"/out/test5.bam"));
 
     //
     // dual index run
     //
-    setup_test_6(&argc_1, &argv_1);
+    if (verbose) fprintf(stderr,"\n===> Dual Index test\n");
+    sprintf(outputfile,"%s/i2b_6.bam",TMPDIR);
+    setup_test_6(&argc_1, &argv_1, outputfile);
     main_i2b(argc_1-1,argv_1+1);
-    checkFiles("Dual Index test", MKNAME(DATA_DIR,"/out/test6.bam"));
+    checkFiles("Dual Index test", outputfile, MKNAME(DATA_DIR,"/out/test6.bam"));
 
+    //
+    // multiple barcode tags run
+    //
+    if (verbose) fprintf(stderr,"\n===> Multiple Tags test\n");
+    sprintf(outputfile,"%s/i2b_7.bam",TMPDIR);
+    setup_test_7(&argc_1, &argv_1, outputfile);
+    main_i2b(argc_1-1,argv_1+1);
+    checkFiles("Multiple barcode tags test", outputfile, MKNAME(DATA_DIR,"/out/test7.bam"));
 
     printf("i2b tests: %s\n", failure ? "FAILED" : "Passed");
     return failure ? EXIT_FAILURE : EXIT_SUCCESS;
