@@ -1,0 +1,59 @@
+<?xml version="1.0" ?>
+<RunInfo Version="4" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Run Id="160919_nextseq_6230" Number="2">
+    <Date>160919</Date>
+    <Reads>
+      <Read IsIndexedRead="N" NumCycles="16" Number="1"/>
+      <Read IsIndexedRead="N" NumCycles="16" Number="2"/>
+    </Reads>
+    <FlowcellLayout LaneCount="1" LanePerSection="2" SectionPerLane="3" SurfaceCount="2" SwathCount="3" TileCount="2">
+      <TileSet TileNamingConvention="FiveDigit">
+        <Tiles>
+          <Tile>1_11101</Tile>
+          <Tile>1_11102</Tile>
+          <Tile>1_21101</Tile>
+          <Tile>1_21102</Tile>
+          <Tile>1_12101</Tile>
+          <Tile>1_12102</Tile>
+          <Tile>1_22101</Tile>
+          <Tile>1_22102</Tile>
+          <Tile>1_13101</Tile>
+          <Tile>1_13102</Tile>
+          <Tile>1_23101</Tile>
+          <Tile>1_23102</Tile>
+          <Tile>1_11201</Tile>
+          <Tile>1_11202</Tile>
+          <Tile>1_21201</Tile>
+          <Tile>1_21202</Tile>
+          <Tile>1_12201</Tile>
+          <Tile>1_12202</Tile>
+          <Tile>1_22201</Tile>
+          <Tile>1_22202</Tile>
+          <Tile>1_13201</Tile>
+          <Tile>1_13202</Tile>
+          <Tile>1_23201</Tile>
+          <Tile>1_23202</Tile>
+          <Tile>1_11301</Tile>
+          <Tile>1_11302</Tile>
+          <Tile>1_21301</Tile>
+          <Tile>1_21302</Tile>
+          <Tile>1_12301</Tile>
+          <Tile>1_12302</Tile>
+          <Tile>1_22301</Tile>
+          <Tile>1_22302</Tile>
+          <Tile>1_13301</Tile>
+          <Tile>1_13302</Tile>
+          <Tile>1_23301</Tile>
+          <Tile>1_23302</Tile>
+        </Tiles>
+      </TileSet>
+    </FlowcellLayout>
+    <ImageDimensions Height="7241" Width="2048"/>
+    <ImageChannels>
+      <Name>Red</Name>
+      <Name>Green</Name>
+    </ImageChannels>
+  </Run>
+  <Flowcell>TESTFLOWCELL</Flowcell>
+  <Instrument>nextseq</Instrument>
+</RunInfo>
