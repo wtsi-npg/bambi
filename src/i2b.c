@@ -898,6 +898,41 @@ void getCycleRangeFromFile(va_t *cycleRange, xmlDocPtr doc)
 }
 
 /*
+ * Check if we have two cycle indexes, which are consecutive, and have *no* secondary barcode tag.
+ * If so, merge the two indexes into one.
+ */
+void mergeIndexes(va_t *cycleRange, opts_t *opts)
+{
+    int i1=-1, i2=-1;
+    int n;
+    if (opts->barcode_tag->end > 1) return;     // there is a secondary barcode tag specified
+
+    for (n = 0; n < cycleRange->end; n++) {
+        cycleRangeEntry_t *cr = cycleRange->entries[n];
+        if (strcmp(cr->readname, "readIndex") == 0) i1 = n;
+        if (strcmp(cr->readname, "readIndex2") == 0) i2 = n;
+    }
+
+    if (i1 > -1 && i2 > -1) {
+        // we have two indexes
+        cycleRangeEntry_t *cr1 = cycleRange->entries[i1];
+        cycleRangeEntry_t *cr2 = cycleRange->entries[i2];
+        if (cr1->last+1 == cr2->first) {
+            // and they look consecutive to me
+            // so merge them
+            cr1->last = cr2->last;
+            // remove i2 entry
+            cycleRange->end--;
+            free(cycleRange->entries[i2]);
+            for (n=i2; n < cycleRange->end; n++) {
+                cycleRange->entries[n] = cycleRange->entries[n+1];
+            }
+        }
+    }
+}
+
+
+/*
  * Try to find a cycle range from somewhere
  */
 va_t *getCycleRange(opts_t *opts)
@@ -960,6 +995,7 @@ va_t *getCycleRange(opts_t *opts)
     }
 
     if (ptr) xmlXPathFreeObject(ptr);
+    mergeIndexes(cycleRange, opts);
     return cycleRange;
 }
 
@@ -1242,6 +1278,11 @@ void writeRecord(int flags, opts_t *opts, char *readName,
 
     // add read group
     bam_aux_append(bam, "RG", 'Z', strlen(opts->read_group_id)+1, (uint8_t *)opts->read_group_id);
+
+    if (ib->end > opts->barcode_tag->end) {
+        fprintf(stderr, "Not enough barcode tags. This is probably a dual index run with only one barcode tag specified\n");
+        exit(1);
+    }
 
     // add index tags
     for (n=0; n < ib->end; n++) {
