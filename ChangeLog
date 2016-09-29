@@ -1,4 +1,7 @@
 
+	[0.9.3]
+	changes to metrics file output for backwards compatibility (tag#0: no tag name, and perfect_matches pf_perfect matches set to 0)
+
 	[0.9.2]
 	include merge tag function for dual indexes
 	Bugfix: bam_aux_update_str()
