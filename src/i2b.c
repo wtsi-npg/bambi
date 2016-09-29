@@ -791,7 +791,7 @@ ia_t *getTileList(opts_t *opts)
         int numSectionsPerLane = getXMLAttr_int(opts->runinfoConfig, "//FlowcellLayout", "SectionPerLane");
 
         char *TileNamingConvention = getXMLAttr(opts->runinfoConfig, "//FlowcellLayout/TileSet", "TileNamingConvention");
-        if (strcmp(TileNamingConvention,"FiveDigit") == 0) {
+        if (TileNamingConvention && strcmp(TileNamingConvention,"FiveDigit") == 0) {
             // probably a nextSeq with 5 digit tile numbers...
             if (numSurfaces && numSwaths && numTilesPerSwath && numSectionsPerLane) {
                 int ispl, isur, isw, itile;

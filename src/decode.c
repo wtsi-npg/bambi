@@ -401,6 +401,10 @@ int writeMetrics(bc_array_t *barcodeArray, opts_t *opts)
         bc_details_t *bcd = barcodeArray->entries[n];
         writeMetricsLine(f, bcd, opts, total_reads, max_reads, total_pf_reads, max_pf_reads, total_pf_reads_assigned, nReads);
     }
+    // treat Tag 0 as a special case
+    barcodeArray->entries[0]->perfect = 0;
+    barcodeArray->entries[0]->pf_perfect = 0;
+    barcodeArray->entries[0]->name[0] = 0;
     writeMetricsLine(f, barcodeArray->entries[0], opts, total_reads, max_reads, total_pf_reads, max_pf_reads, 0, nReads);
 
     fclose(f);

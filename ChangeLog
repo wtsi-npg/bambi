@@ -1,0 +1,11 @@
+
+	[0.9.2]
+	include merge tag function for dual indexes
+	Bugfix: bam_aux_update_str()
+
+	[0.9.1]
+	i2b - added support for multiple barcode and quality tags
+
+	[0.9]
+	Initial release: implements i2b (converts Illumina files to SAM/BAM/CRAM files) and decode (decode a multiplexed SAM/BAM/CRAM file by read groups)
+
