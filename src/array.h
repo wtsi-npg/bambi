@@ -21,6 +21,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <stdbool.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 
 /*
  * integer array functions
@@ -37,6 +39,8 @@ int ia_compare(const void *ia1, const void *ia2);
 void ia_sort(ia_t *ia);
 void ia_push(ia_t *ia, int i);
 void ia_free(ia_t *ia);
+char *ia_join(ia_t *ia, char *delim);
+int ia_sum(ia_t *ia);
 static inline bool ia_isEmpty(ia_t *ia) { return (ia->end == 0); }
 
 

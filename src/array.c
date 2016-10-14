@@ -17,6 +17,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "array.h"
+#include <assert.h>
 
 /*
  * integer array functions
@@ -56,6 +57,36 @@ ia_t *ia_init(int max)
     ia->max = max;
     ia->entries = calloc(ia->max, sizeof(int));
     return ia;
+}
+
+char *ia_join(ia_t *ia, char *delim)
+{
+    int m = 64;
+    char *s = calloc(m,1);
+    char *a = calloc(64,1);
+    int n;
+
+    for (n=0; n < ia->end; n++) {
+        while (strlen(s)+strlen(delim)>=m) { m *= 2; s = realloc(s,m); }
+        if (n) strcat(s,delim);
+        sprintf(a,"%d",ia->entries[n]);
+        assert(strlen(a)<64);
+        while (strlen(s)+strlen(a)>=m) { m *= 2; s = realloc(s,m); }
+        strcat(s,a);
+        assert(strlen(s) < m);
+    }
+    free(a);
+    return s;
+}
+
+int ia_sum(ia_t *ia)
+{
+    int sum=0;
+    int n;
+    for (n=0; n < ia->end; n++) {
+        sum += ia->entries[n];
+    }
+    return sum;
 }
 
 
