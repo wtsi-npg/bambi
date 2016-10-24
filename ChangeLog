@@ -1,3 +1,4 @@
+    Implemented 'bambi chrsplit' for SplitBamByChromosome
     Implemented 'bambi select' for alignment filtering
 
 	[0.9.3]
