@@ -1,0 +1,75 @@
+<html><head>
+<title>Overview of Bambi command-line tools</title>
+<link rel="stylesheet" type="text/css" href="style.css" media="screen">
+<script type="text/javascript" src="prototype.js">
+</script>
+
+<script type="text/javascript">
+function update_contents()
+{
+    new Ajax.Updater('stand-options','manual/standard-options.html',{method: 'get'});
+    new Ajax.Updater('sidebar-commands','manual/command-line-sidebar.html',{method: 'get'});
+    new Ajax.Updater('command-line-usage','manual/command-line-usage.html',{method: 'get'});
+}
+</script>
+</head>
+<body onload="update_contents()">
+
+<div id="wrap">
+
+<div id="header">
+  <table border="0" bordercolor="white" cellspacing="0" width="100%">
+	  <tbody><tr>
+	  <td width="83%"><h1><a href="index.html">Bambi</a></h1></td>
+	  <td style="vertical-align:middle"><a href="https://github.com/wtsi-npg/bambi"><img src="github.png" width="56" height="24" border="0" alt="Github logo" /></a></td>
+	  </tr></tbody>
+	</table>
+</div>
+
+<div id="menu">
+  <ul>
+	<li><a href="index.html">Home</a></li>
+  </ul>
+</div>
+
+<div id="sidebar">
+
+<h3>Github</h3>
+<ul>
+  <li><a href="https://github.com/wtsi-npg/bambi">Bambi</a></li>
+</ul>
+
+<h3>Command-line tools</h3>
+
+<ul>
+<li><a href="index.html#Overview">Overview</a>
+<div id="sidebar-commands"/>
+</ul>
+
+<h3>HTSLib</h3>
+<ul>
+  <li><a href="https://github.com/samtools/htslib">HTSLib</a></li>
+</ul>
+
+</div>
+
+<div id="main">
+
+<a name="Overview"/>
+<h2>Overview of Bambi command-line tools</h2>
+
+<p>
+Bambi is a collection of tools to generate or process BAM/SAM files using the <a href="https://github.com/samtools/htslib">HTSLib</a> 'C' library.
+</p>
+<p>
+It currently includes <b>i2b</b>, <b>decode</b>, <b>select</b>, and <b>chrsplit</b>.
+<p>
+<p>The Bambi command-line tools are packaged as a single executable and are run as follows:</p>
+<pre>bambi <i>command</i> [options]</pre>
+<h3>Standard Options</h3>
+<p>The following options are relevant for most Bambi programs:</p>
+<div id="stand-options"></div>
+<div id="command-line-usage"></div>
+</div>
+</div>
+</body></html>
