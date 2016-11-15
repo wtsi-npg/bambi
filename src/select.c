@@ -670,7 +670,6 @@ int main_select(int argc, char *argv[])
 {
     int ret = 1;
     opts_t* opts = select_parse_args(argc, argv);
-    verbose = opts->verbose;
     if (opts) ret = aln_select(opts);
     free_opts(opts);
     return ret;
