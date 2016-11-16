@@ -522,7 +522,7 @@ ia_t *checkAlignmentsByRef(va_t *recordSetList, bool result)
         va_t *recordSet = recordSetList->entries[i];
         for (j=0; j < recordSet->end; j++) {
             bam1_t *rec = recordSet->entries[j];
-            if ( (rec->core.flag & BAM_FPAIRED) && (rec->core.flag & BAM_FREAD2) ) {
+            if ( (rec->core.flag & BAM_FPAIRED) && ( (bool)(rec->core.flag & BAM_FREAD2) == result )) {
                 if ( !(rec->core.flag & BAM_FUNMAP) ) {
                     found = 1;
                 }
