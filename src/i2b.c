@@ -40,6 +40,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "filterfile.h"
 #include "bclfile.h"
 #include "array.h"
+#include "parse.h"
 
 #define DEFAULT_BARCODE_TAG "BC"
 #define DEFAULT_QUALITY_TAG "QT"
@@ -330,29 +331,6 @@ static void usage(FILE *write_to)
 "       --compression-level             [0..9]\n"
 );
 }
-
-void parse_tags(va_t *tags, char *arg)
-{
-    char *argstr = strdup(arg);
-    char *s = strtok(argstr,",");
-    while (s) {
-        va_push(tags,strdup(s));
-        s = strtok(NULL,",");
-    }
-    free(argstr);
-}
-
-void parse_int(ia_t *ia, char *arg)
-{
-    char *argstr = strdup(arg);
-    char *s = strtok(argstr,",");
-    while (s) {
-        ia_push(ia,atoi(s));
-        s = strtok(NULL,",");
-    }
-    free(argstr);
-}
-
 /*
  * Takes the command line options and turns them into something we can understand
  */

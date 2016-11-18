@@ -31,7 +31,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 int main_decode(int argc, char *argv[]);
 int main_i2b(int argc, char *argv[]);
-int main_afilter(int argc, char *argv[]);
+int main_select(int argc, char *argv[]);
 
 const char *bambi_version()
 {
@@ -80,7 +80,7 @@ static void usage(FILE *fp)
 "Commands:\n"
 "     decode         decode a multiplexed SAM/BAM/CRAM file by read groups\n"
 "     i2b            converts illumina files to SAM/BAM/CRAM files\n"
-"     afilter        alignment filter\n"
+"     select         select reads by alignment\n"
 "\n");
 }
 
@@ -101,6 +101,7 @@ int main(int argc, char *argv[])
     int ret = 0;
          if (strcmp(argv[1], "decode") == 0)    ret = main_decode(argc-1, argv+1);
     else if (strcmp(argv[1], "i2b") == 0)       ret = main_i2b(argc-1, argv+1);
+    else if (strcmp(argv[1], "select") == 0)    ret = main_select(argc-1, argv+1);
     else if (strcmp(argv[1], "--version") == 0) {
         printf( "bambi %s\n"
                 "Using htslib %s\n"
