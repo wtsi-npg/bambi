@@ -21,6 +21,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef __BAMBI_H__
 #define __BAMBI_H__
 
+#define INDEX_SEPARATOR "-"
+
 #include "config.h"
 #include "hts_addendum.h"
 #include "array.h"

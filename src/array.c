@@ -64,9 +64,8 @@ char *ia_join(ia_t *ia, char *delim)
     int m = 64;
     char *s = calloc(m,1);
     char *a = calloc(64,1);
-    int n;
 
-    for (n=0; n < ia->end; n++) {
+    for (int n=0; n < ia->end; n++) {
         while (strlen(s)+strlen(delim)>=m) { m *= 2; s = realloc(s,m); }
         if (n) strcat(s,delim);
         sprintf(a,"%d",ia->entries[n]);
@@ -82,8 +81,7 @@ char *ia_join(ia_t *ia, char *delim)
 int ia_sum(ia_t *ia)
 {
     int sum=0;
-    int n;
-    for (n=0; n < ia->end; n++) {
+    for (int n=0; n < ia->end; n++) {
         sum += ia->entries[n];
     }
     return sum;
@@ -117,12 +115,29 @@ void va_push(va_t *va, void *ent)
 
 void va_free(va_t *va)
 {
-    int n;
     if (!va) return;
-    for (n=0; n < va->end; n++) {
+    for (int n=0; n < va->end; n++) {
         va->free_entry(va->entries[n]);
     }
     free(va->entries);
     free(va);
 }
+
+char *va_join(va_t *va, char *delim)
+{
+    int m = 64;
+    char *s = calloc(m,1);
+    char *a;
+
+    for (int n=0; n < va->end; n++) {
+        while (strlen(s)+strlen(delim)>=m) { m *= 2; s = realloc(s,m); }
+        if (n) strcat(s,delim);
+        a = va->entries[n];
+        while (strlen(s)+strlen(a)>=m) { m *= 2; s = realloc(s,m); }
+        strcat(s,a);
+        assert(strlen(s) < m);
+    }
+    return s;
+}
+
 
