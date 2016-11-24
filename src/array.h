@@ -59,6 +59,7 @@ va_t *va_init(int max, void(*free_entry)(void*));
 void va_push(va_t *va, void *ent);
 void va_free(va_t *va);
 static inline bool va_isEmpty(va_t *va) { return va->end == 0; }
+char *va_join(va_t *va, char *delim);
 
 #endif
 

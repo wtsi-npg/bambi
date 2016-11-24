@@ -32,6 +32,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 int main_decode(int argc, char *argv[]);
 int main_i2b(int argc, char *argv[]);
 int main_select(int argc, char *argv[]);
+int main_chrsplit(int argc, char *argv[]);
 
 const char *bambi_version()
 {

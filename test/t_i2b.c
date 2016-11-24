@@ -91,9 +91,16 @@ void setup_param_test(int* argc, char*** argv)
     (*argv)[(*argc)++] = strdup("--first-cycle");
     (*argv)[(*argc)++] = strdup("70");
     (*argv)[(*argc)++] = strdup("--final-cycle");
-    (*argv)[(*argc)++] = strdup("9");
+    (*argv)[(*argc)++] = strdup("16");
+    (*argv)[(*argc)++] = strdup("--final-cycle");
+    (*argv)[(*argc)++] = strdup("69");
+    (*argv)[(*argc)++] = strdup("--final-cycle");
+    (*argv)[(*argc)++] = strdup("70");
+    (*argv)[(*argc)++] = strdup("--first-index-cycle");
+    (*argv)[(*argc)++] = strdup("1");
     (*argv)[(*argc)++] = strdup("--final-index-cycle");
-    (*argv)[(*argc)++] = strdup("9");
+    (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("-s");
 
     assert(*argc<100);
 }
@@ -313,6 +320,89 @@ void setup_tags_test(int* argc, char*** argv, char *outputfile, bool verbose)
     assert(*argc<100);
 }
 
+void separator_test(int* argc, char*** argv, char *outputfile, bool verbose)
+{
+    *argc = 0;
+    *argv = (char**)calloc(sizeof(char*), 100);
+    (*argv)[(*argc)++] = strdup("bambi");
+    (*argv)[(*argc)++] = strdup("i2b");
+    (*argv)[(*argc)++] = strdup("-i");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/160919_hiseq2500_4966_FC/Data/Intensities"));
+    (*argv)[(*argc)++] = strdup("-o");
+    (*argv)[(*argc)++] = strdup(outputfile);
+    (*argv)[(*argc)++] = strdup("--lane");
+    (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("--first-tile");
+    (*argv)[(*argc)++] = strdup("1101");
+    (*argv)[(*argc)++] = strdup("--tile-limit");
+    (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("--library-name");
+    (*argv)[(*argc)++] = strdup("TestLibrary");
+    (*argv)[(*argc)++] = strdup("--sample-alias");
+    (*argv)[(*argc)++] = strdup("TestSample");
+    (*argv)[(*argc)++] = strdup("--study-name");
+    (*argv)[(*argc)++] = strdup("Study TestStudy");
+    (*argv)[(*argc)++] = strdup("--run-start-date");
+    (*argv)[(*argc)++] = strdup("2011-03-23T00:00:00+0000");
+    if (verbose) (*argv)[(*argc)++] = strdup("--verbose");
+    (*argv)[(*argc)++] = strdup("--first-cycle");
+    (*argv)[(*argc)++] = strdup("1,30");
+    (*argv)[(*argc)++] = strdup("--final-cycle");
+    (*argv)[(*argc)++] = strdup("2,32");
+    (*argv)[(*argc)++] = strdup("--first-index-cycle");
+    (*argv)[(*argc)++] = strdup("3,6,11");
+    (*argv)[(*argc)++] = strdup("--final-index-cycle");
+    (*argv)[(*argc)++] = strdup("4,9,12");
+    (*argv)[(*argc)++] = strdup("--barcode-tag");
+    (*argv)[(*argc)++] = strdup("b1,b2,b1");
+    (*argv)[(*argc)++] = strdup("--quality-tag");
+    (*argv)[(*argc)++] = strdup("q1,q2,q1");
+    (*argv)[(*argc)++] = strdup("-s");
+
+    assert(*argc<100);
+}
+
+void no_separator_test(int* argc, char*** argv, char *outputfile, bool verbose)
+{
+    *argc = 0;
+    *argv = (char**)calloc(sizeof(char*), 100);
+    (*argv)[(*argc)++] = strdup("bambi");
+    (*argv)[(*argc)++] = strdup("i2b");
+    (*argv)[(*argc)++] = strdup("-i");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/160919_hiseq2500_4966_FC/Data/Intensities"));
+    (*argv)[(*argc)++] = strdup("-o");
+    (*argv)[(*argc)++] = strdup(outputfile);
+    (*argv)[(*argc)++] = strdup("--lane");
+    (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("--first-tile");
+    (*argv)[(*argc)++] = strdup("1101");
+    (*argv)[(*argc)++] = strdup("--tile-limit");
+    (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("--library-name");
+    (*argv)[(*argc)++] = strdup("TestLibrary");
+    (*argv)[(*argc)++] = strdup("--sample-alias");
+    (*argv)[(*argc)++] = strdup("TestSample");
+    (*argv)[(*argc)++] = strdup("--study-name");
+    (*argv)[(*argc)++] = strdup("Study TestStudy");
+    (*argv)[(*argc)++] = strdup("--run-start-date");
+    (*argv)[(*argc)++] = strdup("2011-03-23T00:00:00+0000");
+    if (verbose) (*argv)[(*argc)++] = strdup("--verbose");
+    (*argv)[(*argc)++] = strdup("--first-cycle");
+    (*argv)[(*argc)++] = strdup("1,30");
+    (*argv)[(*argc)++] = strdup("--final-cycle");
+    (*argv)[(*argc)++] = strdup("2,32");
+    (*argv)[(*argc)++] = strdup("--first-index-cycle");
+    (*argv)[(*argc)++] = strdup("3,6,11");
+    (*argv)[(*argc)++] = strdup("--final-index-cycle");
+    (*argv)[(*argc)++] = strdup("4,9,12");
+    (*argv)[(*argc)++] = strdup("--barcode-tag");
+    (*argv)[(*argc)++] = strdup("b1,b2,b1");
+    (*argv)[(*argc)++] = strdup("--quality-tag");
+    (*argv)[(*argc)++] = strdup("q1,q2,q1");
+
+    assert(*argc<100);
+}
+
 void checkLike(char *name, char *expected, char *actual)
 {
     if (actual == NULL) actual = "<null>";
@@ -377,9 +467,10 @@ void test_paramaters(void)
     icheckEqual("options: first-cycle[0]", 7, opts->first_cycle->entries[0]);
     icheckEqual("options: first-cycle[1]", 17, opts->first_cycle->entries[1]);
     icheckEqual("options: first-cycle[2]", 70, opts->first_cycle->entries[2]);
-    icheckEqual("options: final-cycle", 1, opts->final_cycle->end);
+    icheckEqual("options: final-cycle", 3, opts->final_cycle->end);
     icheckEqual("options: final-index-cycle", 1, opts->final_index_cycle->end);
-    icheckEqual("options: final-cycle[0]", 9, opts->final_cycle->entries[0]);
+    icheckEqual("options: final-cycle[0]", 16, opts->final_cycle->entries[0]);
+    icheckEqual("options: index-separator", 1, opts->separator);
 }
 
 void checkFiles(char *name, char *outputfile, char *fname)
@@ -524,6 +615,24 @@ int main(int argc, char**argv)
     setup_tags_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
     checkFiles("Multiple barcode tags test", outputfile, MKNAME(DATA_DIR,"/out/test7.bam"));
+
+    //
+    // separator test
+    //
+    if (verbose) fprintf(stderr,"\n===> Separator test\n");
+    sprintf(outputfile,"%s/i2b_8.bam",TMPDIR);
+    separator_test(&argc_1, &argv_1, outputfile, verbose);
+    main_i2b(argc_1-1,argv_1+1);
+    checkFiles("separator test", outputfile, MKNAME(DATA_DIR,"/out/test8.bam"));
+
+    //
+    // no separator test
+    //
+    if (verbose) fprintf(stderr,"\n===> no Separator test\n");
+    sprintf(outputfile,"%s/i2b_9.bam",TMPDIR);
+    no_separator_test(&argc_1, &argv_1, outputfile, verbose);
+    main_i2b(argc_1-1,argv_1+1);
+    checkFiles("no separator test", outputfile, MKNAME(DATA_DIR,"/out/test9.bam"));
 
     printf("i2b tests: %s\n", failure ? "FAILED" : "Passed");
     return failure ? EXIT_FAILURE : EXIT_SUCCESS;

@@ -1,4 +1,4 @@
-AM_CPPFLAGS = $(HTSLIB_CPPFLAGS)
+AM_CPPFLAGS = $(HTSLIB_CPPFLAGS) -std=gnu99
 AM_LDFLAGS = $(HTSLIB_LDFLAGS)
 
 check_PROGRAMS = t_bamit t_chrsplit t_select t_bclfile t_decode t_filterfile t_posfile t_i2b
@@ -29,7 +29,7 @@ t_filterfile_CFLAGS = -DDATA_DIR=$(abs_srcdir)/data
 t_posfile_SOURCES = t_posfile.c
 t_posfile_CFLAGS = -DDATA_DIR=$(abs_srcdir)/data
 
-t_i2b_SOURCES = t_i2b.c ../src/posfile.c ../src/bclfile.c ../src/filterfile.c ../src/array.c ../src/parse.c
+t_i2b_SOURCES = t_i2b.c ../src/posfile.c ../src/bclfile.c ../src/filterfile.c ../src/array.c ../src/parse.c ../src/hts_addendum.c
 t_i2b_CFLAGS = -I$(top_srcdir)/src -I/usr/include/libxml2 -DDATA_DIR=$(abs_srcdir)/data
 t_i2b_LDADD = $(HTSLIB_HOME)/lib/libhts.a -lz -ldl -lxml2 -lpthread -llzma -lbz2
 

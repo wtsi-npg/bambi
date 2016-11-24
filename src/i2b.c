@@ -57,7 +57,7 @@ typedef struct {
     int first, last;
 } cycleRangeEntry_t;
 
-void freeCycleRange(void *ent)
+static void freeCycleRange(void *ent)
 {
     cycleRangeEntry_t *cr = (cycleRangeEntry_t *)ent;
     free(cr->readname);
@@ -77,13 +77,13 @@ typedef struct {
     bclfile_t *bcl;
 } bclFileArrayEntry_t;
 
-void freeBCLFileArray(void *ent)
+static void freeBCLFileArray(void *ent)
 {
     bclfile_t *bcl = (bclfile_t *)ent;
     bclfile_close(bcl);
 }
 
-void freeBCLReadArray(void *ent)
+static void freeBCLReadArray(void *ent)
 {
     bclReadArrayEntry_t *ra = (bclReadArrayEntry_t *)ent;
     free(ra->readname);
@@ -92,26 +92,20 @@ void freeBCLReadArray(void *ent)
     free(ra);
 }
 
+/*
+ * Tile array
+ */
 typedef struct {
     int tile;
     int clusters;
 } tileIndexEntry_t;
-
-void freetileIndexArray(void *ent)
-{
-    free(ent);
-}
-
-void freeTagArray(void *ent)
-{
-    free(ent);
-}
 
 /*
  * structure to hold options
  */
 typedef struct {
     int verbose;
+    bool separator;
     char *argv_list;
     char *run_folder;
     char *intensity_dir;
@@ -184,7 +178,7 @@ static void free_opts(opts_t* opts)
 /*
  * do something clever with an XML document
  */
-xmlXPathObjectPtr getnodeset(xmlDocPtr doc, char *xpath)
+static xmlXPathObjectPtr getnodeset(xmlDocPtr doc, char *xpath)
 {
     xmlXPathContextPtr context;
     xmlXPathObjectPtr result;
@@ -267,7 +261,7 @@ static char *getXMLVal(xmlDocPtr doc, char *xpath)
 /*
  * Load an XML file into a xmlDoc pointer
  */
-xmlDocPtr loadXML(char *dir, char *fname, int verbose)
+static xmlDocPtr loadXML(char *dir, char *fname, int verbose)
 {
     xmlDocPtr doc;
     char *tmp = calloc(1, strlen(dir) + strlen(fname) + 2);
@@ -326,6 +320,7 @@ static void usage(FILE *write_to)
 "       --final-cycle                   Last cycle for each standard (non-index) read. Comma separated list.\n"
 "       --first-index-cycle             First cycle for each index read. Comma separated list.\n"
 "       --final-index-cycle             Last cycle for each index read. Comma separated list.\n"
+"  -s   --index-separator               Separate dual indexes with a '" INDEX_SEPARATOR "' character.\n"
 "  -v   --verbose                       verbose output\n"
 "       --output-fmt                    [sam/bam/cram] [default: bam]\n"
 "       --compression-level             [0..9]\n"
@@ -334,11 +329,11 @@ static void usage(FILE *write_to)
 /*
  * Takes the command line options and turns them into something we can understand
  */
-opts_t* i2b_parse_args(int argc, char *argv[])
+static opts_t* i2b_parse_args(int argc, char *argv[])
 {
     if (argc == 1) { usage(stdout); return NULL; }
 
-    const char* optstring = "vr:i:b:l:o:";
+    const char* optstring = "vsr:i:b:l:o:";
 
     static const struct option lopts[] = {
         { "verbose",                    0, 0, 'v' },
@@ -347,6 +342,7 @@ opts_t* i2b_parse_args(int argc, char *argv[])
         { "basecalls-dir",              1, 0, 'b' },
         { "lane",                       1, 0, 'l' },
         { "output-file",                1, 0, 'o' },
+        { "index-separator",            0, 0, 's' },
         { "generate-secondary-basecalls", 0, 0, 0 },
         { "no-filter",                  0, 0, 0 },
         { "read-group-id",              1, 0, 0 },
@@ -386,8 +382,8 @@ opts_t* i2b_parse_args(int argc, char *argv[])
     opts->final_cycle = ia_init(5);
     opts->first_index_cycle = ia_init(5);
     opts->final_index_cycle = ia_init(5);
-    opts->barcode_tag = va_init(5, freeTagArray);
-    opts->quality_tag = va_init(5, freeTagArray);
+    opts->barcode_tag = va_init(5, free);
+    opts->quality_tag = va_init(5, free);
 
     int opt;
     int option_index = 0;
@@ -405,6 +401,8 @@ opts_t* i2b_parse_args(int argc, char *argv[])
         case 'l':   opts->lane = atoi(optarg);
                     break;
         case 'v':   opts->verbose++;
+                    break;
+        case 's':   opts->separator = true;
                     break;
         case 0:     arg = lopts[option_index].name;
                          if (strcmp(arg, "output-fmt") == 0)                   opts->output_fmt = strdup(optarg);
@@ -557,13 +555,37 @@ opts_t* i2b_parse_args(int argc, char *argv[])
         opts->run_start_date = tmp;
     }
 
+    // check barcode tags and quality tags
+    if (opts->barcode_tag->end != opts->quality_tag->end) {
+        fprintf(stderr,"You must have the same number of barcode tags and quality tags\n");
+        fprintf(stderr,"Barcode_tags: %s\n", va_join(opts->barcode_tag, ", "));
+        fprintf(stderr,"Quality_tags: %s\n", va_join(opts->quality_tag, ", "));
+        return NULL;
+    }
+
+    // Check cycles
+    if (opts->first_cycle->end != opts->final_cycle->end) {
+        fprintf(stderr,"You must have the same number of first and final cycles\n");
+        fprintf(stderr,"First_cycle: %s\n", ia_join(opts->first_cycle,", "));
+        fprintf(stderr,"Final_cycle: %s\n", ia_join(opts->final_cycle,", "));
+        return NULL;
+    }
+
+    // check indexes
+    if (opts->first_index_cycle->end != opts->final_index_cycle->end) {
+        fprintf(stderr,"You must have the same number of first and final indexes\n");
+        fprintf(stderr,"First_index: %s\n", ia_join(opts->first_index_cycle,", "));
+        fprintf(stderr,"Final_index: %s\n", ia_join(opts->final_index_cycle,", "));
+        return NULL;
+    }
+
     return opts;
 }
 
 /*
  * convert SAM_hdr to bam_hdr
  */
-void sam_hdr_unparse(SAM_hdr *sh, bam_hdr_t *h)
+static void sam_hdr_unparse(SAM_hdr *sh, bam_hdr_t *h)
 {
     free(h->text);
     sam_hdr_rebuild(sh);
@@ -575,7 +597,7 @@ void sam_hdr_unparse(SAM_hdr *sh, bam_hdr_t *h)
 /*
  * Add the header lines to the BAM file
  */
-int addHeader(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
+static int addHeader(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
 {
     SAM_hdr *sh = sam_hdr_parse_(output_header->text,output_header->l_text);
     char *version = NULL;
@@ -655,7 +677,7 @@ int addHeader(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
  * Get an ID - depending on what config files we have and what is in them
  *             this is either instrument_runid or computer_experiment
  */
-char *getId(opts_t *opts)
+static char *getId(opts_t *opts)
 {
     xmlDocPtr doc;
     char *runid = NULL;
@@ -692,7 +714,7 @@ char *getId(opts_t *opts)
  * Load the tile index array (the BCI file)
  * This is only for NextSeq 
  */
-va_t *getTileIndex(opts_t *opts)
+static va_t *getTileIndex(opts_t *opts)
 {
     va_t *tileIndex = NULL;
     char *fname = calloc(1,strlen(opts->basecalls_dir)+64);
@@ -701,7 +723,7 @@ va_t *getTileIndex(opts_t *opts)
     if (fhandle < 0) {
         if (opts->verbose) fprintf(stderr,"Can't open BCI file %s\n", fname);
     } else {
-        tileIndex = va_init(100,freetileIndexArray);
+        tileIndex = va_init(100,free);
         int n;
         do {
             tileIndexEntry_t *ti = calloc(1, sizeof(tileIndexEntry_t));
@@ -719,7 +741,7 @@ va_t *getTileIndex(opts_t *opts)
 /*
  * load tile list from basecallsConfig or intensityConfig
  */
-ia_t *getTileList(opts_t *opts)
+static ia_t *getTileList(opts_t *opts)
 {
     ia_t *tiles = ia_init(100);
     xmlXPathObjectPtr ptr;
@@ -734,8 +756,7 @@ ia_t *getTileList(opts_t *opts)
     free(xpath);
 
     if (ptr && ptr->nodesetval) {
-        int n;
-        for (n=0; n < ptr->nodesetval->nodeNr; n++) {
+        for (int n=0; n < ptr->nodesetval->nodeNr; n++) {
             char *t = (char *)ptr->nodesetval->nodeTab[n]->children->content;
             if (t) ia_push(tiles,atoi(t));
         }
@@ -744,8 +765,7 @@ ia_t *getTileList(opts_t *opts)
         // Maybe this is a NewSeq run?
         ptr = getnodeset(opts->parametersConfig, "//SelectedTiles/Tile");
         if (ptr && ptr->nodesetval) {
-            int n;
-            for (n=0; n < ptr->nodesetval->nodeNr; n++) {
+            for (int n=0; n < ptr->nodesetval->nodeNr; n++) {
                 char *t = (char *)ptr->nodesetval->nodeTab[n]->children->content;
                 char *saveptr;
                 char *lane = strtok_r(t, "_", &saveptr);
@@ -772,11 +792,10 @@ ia_t *getTileList(opts_t *opts)
         if (TileNamingConvention && strcmp(TileNamingConvention,"FiveDigit") == 0) {
             // probably a nextSeq with 5 digit tile numbers...
             if (numSurfaces && numSwaths && numTilesPerSwath && numSectionsPerLane) {
-                int ispl, isur, isw, itile;
-                for (ispl = 1; ispl <= numSectionsPerLane; ispl++) {
-                    for (isur = 1; isur <= numSurfaces; isur++) {
-                        for (isw = 1; isw <= numSwaths; isw++) {
-                            for (itile = 1; itile <= numTilesPerSwath; itile++) {
+                for (int ispl = 1; ispl <= numSectionsPerLane; ispl++) {
+                    for (int isur = 1; isur <= numSurfaces; isur++) {
+                        for (int isw = 1; isw <= numSwaths; isw++) {
+                            for (int itile = 1; itile <= numTilesPerSwath; itile++) {
                                 ia_push(tiles, 10000 * isur + 1000 * ispl + 100 * isw + itile);
                             }
                         }
@@ -786,10 +805,9 @@ ia_t *getTileList(opts_t *opts)
         } else {
             // 'normal' four digit tile numbers
             if (numSurfaces && numSwaths && numTilesPerSwath) {
-                int isur, isw, itile;
-                for (isur = 1; isur <= numSurfaces; isur++) {
-                    for (isw = 1; isw <= numSwaths; isw++) {
-                        for (itile = 1; itile <= numTilesPerSwath; itile++) {
+                for (int isur = 1; isur <= numSurfaces; isur++) {
+                    for (int isw = 1; isw <= numSwaths; isw++) {
+                        for (int itile = 1; itile <= numTilesPerSwath; itile++) {
                             ia_push(tiles, 1000 * isur + 100 * isw + itile);
                         }
                     }
@@ -808,13 +826,11 @@ ia_t *getTileList(opts_t *opts)
     if (opts->tile_limit && opts->first_tile==0) opts->first_tile = tiles->entries[0];
 
     if (opts->first_tile != 0) {
-        int n;
         ia_t *new_tiles = ia_init(100);
-        for (n=0; n < tiles->end; n++) {
+        for (int n=0; n < tiles->end; n++) {
             if (tiles->entries[n] == opts->first_tile) {
-                int i, tl;
-                tl = opts->tile_limit ? opts->tile_limit : tiles->end;
-                for (i=n; i < n+tl; i++) {
+                int tl = opts->tile_limit ? opts->tile_limit : tiles->end;
+                for (int i=n; i < n+tl; i++) {
                     if (i < tiles->end) {
                         ia_push(new_tiles,tiles->entries[i]);
                     }
@@ -832,9 +848,9 @@ ia_t *getTileList(opts_t *opts)
     return tiles;
 }
 
-char *getCycleName(int readCount, bool isIndex)
+static char *getCycleName(int readCount, bool isIndex)
 {
-    // implements naming convention used by earlier versions of Lane.java
+    // implements naming convention used by Illumina2Bam
     char *cycleName = calloc(1,16);
 ;
     if (isIndex) {
@@ -846,13 +862,12 @@ char *getCycleName(int readCount, bool isIndex)
     return cycleName;
 }
 
-void getCycleRangeFromFile(va_t *cycleRange, xmlDocPtr doc)
+static void getCycleRangeFromFile(va_t *cycleRange, xmlDocPtr doc)
 {
     xmlXPathObjectPtr ptr;
     int readCount = 1;
     int cycleCount = 1;
     int indexCount = 1;
-    int n;
 
     if (!doc) return;
     ptr = getnodeset(doc,"/RunInfo/Run/Reads/Read");
@@ -860,7 +875,7 @@ void getCycleRangeFromFile(va_t *cycleRange, xmlDocPtr doc)
     if (!ptr || !ptr->nodesetval) ptr = getnodeset(doc, "/RunParameters/Reads/RunInfoRead");
     if (!ptr || !ptr->nodesetval) return;   // still can't find them. Give up.
 
-    for (n=0; n < ptr->nodesetval->nodeNr; n++) {
+    for (int n=0; n < ptr->nodesetval->nodeNr; n++) {
         xmlNodePtr np = ptr->nodesetval->nodeTab[n];
         cycleRangeEntry_t *cr = calloc(1,sizeof(cycleRangeEntry_t));
         int numCycles = xmlGetProp_int(np,"NumCycles");
@@ -879,13 +894,12 @@ void getCycleRangeFromFile(va_t *cycleRange, xmlDocPtr doc)
  * Check if we have two cycle indexes, which are consecutive, and have *no* secondary barcode tag.
  * If so, merge the two indexes into one.
  */
-void mergeIndexes(va_t *cycleRange, opts_t *opts)
+static void mergeIndexes(va_t *cycleRange, opts_t *opts)
 {
     int i1=-1, i2=-1;
-    int n;
     if (opts->barcode_tag->end > 1) return;     // there is a secondary barcode tag specified
 
-    for (n = 0; n < cycleRange->end; n++) {
+    for (int n = 0; n < cycleRange->end; n++) {
         cycleRangeEntry_t *cr = cycleRange->entries[n];
         if (strcmp(cr->readname, "readIndex") == 0) i1 = n;
         if (strcmp(cr->readname, "readIndex2") == 0) i2 = n;
@@ -902,7 +916,7 @@ void mergeIndexes(va_t *cycleRange, opts_t *opts)
             // remove i2 entry
             cycleRange->end--;
             free(cycleRange->entries[i2]);
-            for (n=i2; n < cycleRange->end; n++) {
+            for (int n=i2; n < cycleRange->end; n++) {
                 cycleRange->entries[n] = cycleRange->entries[n+1];
             }
         }
@@ -913,25 +927,24 @@ void mergeIndexes(va_t *cycleRange, opts_t *opts)
 /*
  * Try to find a cycle range from somewhere
  */
-va_t *getCycleRange(opts_t *opts)
+static va_t *getCycleRange(opts_t *opts)
 {
     va_t *cycleRange = va_init(100, freeCycleRange);
     xmlDocPtr doc;
     xmlXPathObjectPtr ptr = NULL;
-    int n;
 
     //
     // read from command line options
     //
     if (!ia_isEmpty(opts->first_cycle)) {
-        for (n=0; n < opts->first_cycle->end; n++) {
+        for (int n=0; n < opts->first_cycle->end; n++) {
             cycleRangeEntry_t *cr = calloc(1,sizeof(cycleRangeEntry_t));
             cr->readname = getCycleName(n+1,false);
             cr->first = opts->first_cycle->entries[n];
             cr->last = opts->final_cycle->entries[n];
             va_push(cycleRange,cr);
         }
-        for (n=0; n < opts->first_index_cycle->end; n++) {
+        for (int n=0; n < opts->first_index_cycle->end; n++) {
             cycleRangeEntry_t *cr = calloc(1,sizeof(cycleRangeEntry_t));
             cr->readname = getCycleName(n+1,true);
             cr->first = opts->first_index_cycle->entries[n];
@@ -949,8 +962,7 @@ va_t *getCycleRange(opts_t *opts)
         doc = opts->basecallsConfig ? opts->basecallsConfig : opts->intensityConfig;
         ptr = getnodeset(doc, "//RunParameters/Reads");        
         if (ptr && ptr->nodesetval) {
-            int n;
-            for (n=0; n < ptr->nodesetval->nodeNr; n++) {
+            for (int n=0; n < ptr->nodesetval->nodeNr; n++) {
                 xmlNodePtr np = ptr->nodesetval->nodeTab[n];
                 char name[64];
                 cycleRangeEntry_t *cr = calloc(1,sizeof(cycleRangeEntry_t));
@@ -981,11 +993,10 @@ va_t *getCycleRange(opts_t *opts)
  * Find cluster number for a given tile
  * Abort if tile not found
  */
-int findClusterNumber(int tile, va_t *tileIndex)
+static int findClusterNumber(int tile, va_t *tileIndex)
 {
-    int n;
     int clusterNumber = 0;
-    for (n=0; n < tileIndex->end; n++) {
+    for (int n=0; n < tileIndex->end; n++) {
         tileIndexEntry_t *ti = (tileIndexEntry_t *)tileIndex->entries[n];
         if (ti->tile == tile)
             return clusterNumber;
@@ -995,10 +1006,9 @@ int findClusterNumber(int tile, va_t *tileIndex)
     exit(1);
 }
 
-int findClusters(int tile, va_t *tileIndex)
+static int findClusters(int tile, va_t *tileIndex)
 {
-    int n;
-    for (n=0; n < tileIndex->end; n++) {
+    for (int n=0; n < tileIndex->end; n++) {
         tileIndexEntry_t *ti = (tileIndexEntry_t *)tileIndex->entries[n];
         if (ti->tile == tile)
             return ti->clusters;
@@ -1015,7 +1025,7 @@ int findClusters(int tile, va_t *tileIndex)
  * Open and return the first one found, or NULL if not found.
  */
 
-posfile_t *openPositionFile(int tile, va_t *tileIndex, opts_t *opts)
+static posfile_t *openPositionFile(int tile, va_t *tileIndex, opts_t *opts)
 {
     posfile_t *posfile = NULL;
 
@@ -1082,7 +1092,7 @@ posfile_t *openPositionFile(int tile, va_t *tileIndex, opts_t *opts)
 /*
  * find and open the filter file
  */
-filter_t *openFilterFile(int tile, va_t *tileIndex, opts_t *opts)
+static filter_t *openFilterFile(int tile, va_t *tileIndex, opts_t *opts)
 {
     filter_t *filter = NULL;
     char *fname = calloc(1,strlen(opts->basecalls_dir)+128); // a bit arbitrary :-(
@@ -1109,7 +1119,7 @@ filter_t *openFilterFile(int tile, va_t *tileIndex, opts_t *opts)
 /*
  * Open a single bcl (or scl) file
  */
-bclfile_t *openBclFile(char *basecalls, int lane, int tile, int cycle, char *ext, va_t *tileIndex)
+static bclfile_t *openBclFile(char *basecalls, int lane, int tile, int cycle, char *ext, va_t *tileIndex)
 {
     char *fname = calloc(1, strlen(basecalls)+128);
     if (tileIndex) {    // NextSeq format
@@ -1133,21 +1143,19 @@ bclfile_t *openBclFile(char *basecalls, int lane, int tile, int cycle, char *ext
 /*
  * Find and open all the relevant bcl and scl files
  */
-va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, va_t *tileIndex)
+static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, va_t *tileIndex)
 {
-    int n, cycle, nCycles;
-
     va_t *bclReadArray = va_init(5,freeBCLReadArray);
 
-    for (n=0; n < cycleRange->end; n++) {
+    for (int n=0; n < cycleRange->end; n++) {
         cycleRangeEntry_t *cr = cycleRange->entries[n];
         bclReadArrayEntry_t *ra = calloc(1, sizeof(bclReadArrayEntry_t));
         ra->readname = strdup(cr->readname);
-        nCycles = cr->last - cr->first + 1;
+        int nCycles = cr->last - cr->first + 1;
         ra->bclFileArray = va_init(nCycles, freeBCLFileArray);
         ra->sclFileArray = va_init(nCycles, freeBCLFileArray);
 
-        for (cycle = cr->first; cycle <= cr->last; cycle++) {
+        for (int cycle = cr->first; cycle <= cr->last; cycle++) {
             bclfile_t *bcl = openBclFile(opts->basecalls_dir, opts->lane, tile, cycle, "bcl", tileIndex);
             va_push(ra->bclFileArray, bcl);
 
@@ -1165,7 +1173,7 @@ va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, va_t *tileIndex)
 /*
  * calculate and return the readname
  */
-char *getReadName(char *id, int lane, int tile, int x, int y)
+static char *getReadName(char *id, int lane, int tile, int x, int y)
 {
     char *readName = calloc(1, 128);
 
@@ -1181,10 +1189,9 @@ char *getReadName(char *id, int lane, int tile, int x, int y)
     return readName;
 }
 
-bool readArrayContains(va_t *bclReadArray, char *readname)
+static bool readArrayContains(va_t *bclReadArray, char *readname)
 {
-    int n;
-    for (n=0; n < bclReadArray->end; n++) {
+    for (int n=0; n < bclReadArray->end; n++) {
         bclReadArrayEntry_t *ra = bclReadArray->entries[n];
         if (strcmp(readname, ra->readname) == 0) return true;
     }
@@ -1194,16 +1201,14 @@ bool readArrayContains(va_t *bclReadArray, char *readname)
 /*
  * read all the bases and qualities for a given read name ("read1" or "read2")
  */
-void getBases(va_t *bclReadArray, char *readname, va_t *bases, va_t *qualities, bool convert_qual)
+static void getBases(va_t *bclReadArray, char *readname, va_t *bases, va_t *qualities, bool convert_qual)
 {
-    int n;
-    for (n=0; n < bclReadArray->end; n++) {
+    for (int n=0; n < bclReadArray->end; n++) {
         bclReadArrayEntry_t *ra = bclReadArray->entries[n];
         if (strcmp(ra->readname, readname) == 0) {
             char *b = calloc(1, ra->bclFileArray->end+1);
             char *q = calloc(1, ra->bclFileArray->end+1);
-            int i;
-            for (i=0; i < ra->bclFileArray->end; i++) {
+            for (int i=0; i < ra->bclFileArray->end; i++) {
                 bclfile_t *bcl = ra->bclFileArray->entries[i];
                 if (bclfile_next(bcl) < 0) {
                     fprintf(stderr,"Failed to read bcl file\n");
@@ -1222,7 +1227,7 @@ void getBases(va_t *bclReadArray, char *readname, va_t *bases, va_t *qualities, 
 /*
  * set the BAM flag
  */
-int setFlag(bool second, bool filtered, bool ispaired)
+static int setFlag(bool second, bool filtered, bool ispaired)
 {
     int flags = 0;
 
@@ -1238,14 +1243,34 @@ int setFlag(bool second, bool filtered, bool ispaired)
 }
 
 /*
+ * Add an aux tag to a BAM record, if it doesn't already exist
+ * If it does, concatenate it to the existing tag data
+ */
+static void update_aux(bam1_t *bam, char *auxtag, char *data, opts_t *opts)
+{
+    uint8_t *s = bam_aux_get(bam,auxtag);
+    if (s) {
+        // update existing tag
+        char *new_data = calloc(1, strlen(bam_aux2Z(s)) + strlen(INDEX_SEPARATOR) + strlen(data) + 1);
+        strcpy(new_data, bam_aux2Z(s));
+        if (opts->separator) strcat(new_data, INDEX_SEPARATOR);
+        strcat(new_data, data);
+        bam_aux_update_str(bam, auxtag, strlen(new_data)+1, new_data);
+        free(new_data);
+    } else {
+        // add new tag
+        bam_aux_append(bam, auxtag, 'Z', strlen(data)+1, (uint8_t *)data);
+    }
+}
+
+/*
  * Write a BAM record
  */
-void writeRecord(int flags, opts_t *opts, char *readName, 
+static void writeRecord(int flags, opts_t *opts, char *readName, 
                  char *bases, char *qualities, va_t *ib, va_t *iq,
                  samFile *output_file, bam_hdr_t *output_header)
 {
     bam1_t *bam = bam_init1();
-    int n;
 
     int r = bam_construct_seq(&bam, 0, readName, strlen(readName),
                                 flags, -1, 0, 0, 0, 0, (uint32_t*)"", -1, 0, 0, strlen(bases), bases, qualities);
@@ -1263,11 +1288,9 @@ void writeRecord(int flags, opts_t *opts, char *readName,
     }
 
     // add index tags
-    for (n=0; n < ib->end; n++) {
-        char *tag = ib->entries[n];
-        bam_aux_append(bam, opts->barcode_tag->entries[n], 'Z', strlen(tag)+1, (uint8_t *)tag);
-        tag = iq->entries[n];
-        bam_aux_append(bam, opts->quality_tag->entries[n], 'Z', strlen(tag)+1, (uint8_t *)tag);
+    for (int n=0; n < ib->end; n++) {
+        update_aux(bam, opts->barcode_tag->entries[n], ib->entries[n], opts);
+        update_aux(bam, opts->quality_tag->entries[n], iq->entries[n], opts);
     }
 
     r = sam_write1(output_file, output_header, bam);
@@ -1281,13 +1304,12 @@ void writeRecord(int flags, opts_t *opts, char *readName,
 /*
  * Write all the BAM records for a given tile
  */
-int processTile(int tile, samFile *output_file, bam_hdr_t *output_header, va_t *cycleRange, va_t *tileIndex, opts_t *opts)
+static int processTile(int tile, samFile *output_file, bam_hdr_t *output_header, va_t *cycleRange, va_t *tileIndex, opts_t *opts)
 {
     va_t *bclReadArray;
     int filtered;
     int max_cluster = 0;
     int nRecords = 0;
-    int c;
 
     if (opts->verbose) fprintf(stderr,"Processing Tile %d\n", tile);
     posfile_t *posfile = openPositionFile(tile, tileIndex, opts);
@@ -1325,7 +1347,7 @@ int processTile(int tile, samFile *output_file, bam_hdr_t *output_header, va_t *
         if (ispaired) getBases(bclReadArray, "read2", bases, qualities, false);
 
         // read each index and put into first or second read
-        for (c=0; c < cycleRange->end; c++) {
+        for (int c=0; c < cycleRange->end; c++) {
             char *cname = getCycleName(c+1,true);
             if (readArrayContains(bclReadArray,cname)) {
                 if (c >= opts->bc_read->end) ia_push(opts->bc_read,1);   // supply a default
@@ -1365,23 +1387,21 @@ int processTile(int tile, samFile *output_file, bam_hdr_t *output_header, va_t *
 /*
  * process all the tiles and write all the BAM records
  */
-int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
+static int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
 {
     int retcode = 0;
     ia_t *tiles = getTileList(opts);
     va_t *cycleRange = getCycleRange(opts);;
     va_t *tileIndex = getTileIndex(opts);
 
-    int n;
-
-    for (n=0; n < cycleRange->end; n++) {
+    for (int n=0; n < cycleRange->end; n++) {
         cycleRangeEntry_t *cr = (cycleRangeEntry_t *)cycleRange->entries[n];
         if (opts->verbose) fprintf(stderr,"CycleRange: %s\t%d\t%d\n", cr->readname, cr->first, cr->last);
     }
 
     if (tiles->end == 0) fprintf(stderr, "There are no tiles to process\n");
 
-    for (n=0; n < tiles->end; n++) {
+    for (int n=0; n < tiles->end; n++) {
         if (processTile(tiles->entries[n], output_file, output_header, cycleRange, tileIndex, opts)) {
             fprintf(stderr,"Error processing tile %d\n", tiles->entries[n]);
             retcode = 1;
