@@ -106,4 +106,7 @@ int main(int argc, char**argv)
     icheckEqual("Number of records", 6, n);
     icheckEqual("End of records", false, BAMit_hasnext(bit));
     BAMit_free(bit);
+
+    printf("BAMit tests: %s\n", failure ? "FAILED" : "Passed");
+    return failure ? EXIT_FAILURE : EXIT_SUCCESS;
 }
