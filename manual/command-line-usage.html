@@ -3,7 +3,14 @@
 <p>USAGE: bambi i2b [options]
 <p>
 <p>Convert Illumina BCL to BAM, SAM, or CRAM file.
-<p></p>
+<p>
+This command will take the output from an Illumina run, the intensities directory, basecalls directory, and so on,
+and convert the information into a BAM file (or SAM or CRAM depending on the --output-fmt paramater).
+</p>
+<p>
+Most of the paramaters are read from the various configuration XML files, but may be overwritten on the 
+command line.
+</p>
 <table>
 <tr><th>Option</th><th>Description</th></tr>
 <tr><td>--intensity-dir -i</td><td>Illumina intensities directory including config xml file, and clocs, locs or pos files under lane directory.  Required. </td></tr>
@@ -30,6 +37,7 @@
 <tr><td>--final-cycle</td><td>Last cycle for each standard (non-index) read. Comma separated list.</td></tr>
 <tr><td>--first-index-cycle</td><td>First cycle for each index read. Comma separated list.</td></tr>
 <tr><td>--final-index-cycle</td><td>Last cycle for each index read. Comma separated list.</td></tr>
+<tr><td>--index-separator -s</td><td>Separate multiple indexes with a '-' character [default: false]</td></tr>
 <tr><td>--verbose -v</td><td>Display progress messages</td></tr>
 <tr><td>--output-fmt</td><td>[sam/bam/cram] [default: 'bam']</td></tr>
 <tr><td>--conpression-level</td><td>[0..9]</td></tr>
