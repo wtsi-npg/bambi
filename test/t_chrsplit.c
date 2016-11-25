@@ -264,6 +264,6 @@ int main(int argc, char**argv)
     testxahuman(TMPDIR);
     testxahuman_exclude_unaligned(TMPDIR);
 
-    printf("select tests: %s\n", failure ? "FAILED" : "Passed");
+    printf("chrsplit tests: %s\n", failure ? "FAILED" : "Passed");
     return failure ? EXIT_FAILURE : EXIT_SUCCESS;
 }

@@ -1,7 +1,7 @@
 AM_CPPFLAGS = $(HTSLIB_CPPFLAGS) -std=gnu99
 AM_LDFLAGS = $(HTSLIB_LDFLAGS)
 
-check_PROGRAMS = t_bamit t_chrsplit t_select t_bclfile t_decode t_filterfile t_posfile t_i2b
+check_PROGRAMS = t_array t_bamit t_chrsplit t_select t_bclfile t_decode t_filterfile t_posfile t_i2b
 
 t_select_SOURCES = t_select.c $(top_srcdir)/src/select.c ../src/array.c ../src/bamit.c ../src/parse.c ../src/hts_addendum.c
 t_select_CFLAGS = -I$(top_srcdir)/src -DDATA_DIR=$(abs_srcdir)/data
@@ -14,6 +14,10 @@ t_chrsplit_LDADD = $(HTSLIB_HOME)/lib/libhts.a -lz -ldl -lxml2 -lpthread -llzma 
 t_bamit_SOURCES = t_bamit.c $(top_srcdir)/src/bamit.c 
 t_bamit_CFLAGS = -I$(top_srcdir)/src -DDATA_DIR=$(abs_srcdir)/data
 t_bamit_LDADD = $(HTSLIB_HOME)/lib/libhts.a -lz -ldl -lxml2 -lpthread -llzma -lbz2
+
+t_array_SOURCES = t_array.c $(top_srcdir)/src/array.c 
+t_array_CFLAGS = -I$(top_srcdir)/src -DDATA_DIR=$(abs_srcdir)/data
+t_array_LDADD = $(HTSLIB_HOME)/lib/libhts.a -lz -ldl -lxml2 -lpthread -llzma -lbz2
 
 t_bclfile_SOURCES = t_bclfile.c
 t_bclfile_CFLAGS = -DDATA_DIR=$(abs_srcdir)/data
