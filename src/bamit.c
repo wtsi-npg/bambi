@@ -16,6 +16,8 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <stdio.h>
+
 #include "bamit.h"
 
 BAMit_t *BAMit_init(samFile *f, bam_hdr_t *h)
@@ -28,6 +30,42 @@ BAMit_t *BAMit_init(samFile *f, bam_hdr_t *h)
     bit->nextRec = bam_init1();
     if (f->is_write == 0) r = sam_read1(bit->f, bit->h, bit->nextRec);
     return bit;
+}
+
+/*
+ * Open a BAM file
+ * arguments are: char *fname               filename to open
+ *                char mode                 'r' or 'w'
+ *                char *fmt                 format [bam,sam,cram]
+ *                char compression level    [0..9]
+ */
+BAMit_t *BAMit_open(char *fname, char mode, char *fmt, char compression_level)
+{
+    samFile *f = NULL;
+    bam_hdr_t *h = NULL;
+    htsFormat *format = NULL;
+    char m[] = "xbC";
+
+    if (fmt) {
+        format = calloc(1,sizeof(htsFormat));
+        if (hts_parse_format(format, fmt) < 0) {
+            fprintf(stderr,"Unknown input format: %s\n", fmt);
+            exit(1);
+        }
+    }
+    m[0] = mode;
+    m[2] = compression_level;
+    f = hts_open_format(fname, m, format);
+    free(format);
+    if (!f) {
+        fprintf(stderr,"Could not open file (%s)\n", fname);
+        exit(1);
+    }
+
+    if (mode == 'r') h = sam_hdr_read(f);
+    else             h = bam_hdr_init();
+
+    return BAMit_init(f,h);
 }
 
 void BAMit_free(void *ptr)

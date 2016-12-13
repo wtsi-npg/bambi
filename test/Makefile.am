@@ -1,7 +1,11 @@
 AM_CPPFLAGS = $(HTSLIB_CPPFLAGS) -std=gnu99
 AM_LDFLAGS = $(HTSLIB_LDFLAGS)
 
-check_PROGRAMS = t_array t_bamit t_chrsplit t_select t_bclfile t_decode t_filterfile t_posfile t_i2b
+check_PROGRAMS = t_read2tags t_array t_bamit t_chrsplit t_select t_bclfile t_decode t_filterfile t_posfile t_i2b
+
+t_read2tags_SOURCES = t_read2tags.c $(top_srcdir)/src/read2tags.c ../src/array.c ../src/bamit.c ../src/parse.c ../src/hts_addendum.c
+t_read2tags_CFLAGS = -I$(top_srcdir)/src -DDATA_DIR=$(abs_srcdir)/data
+t_read2tags_LDADD = $(HTSLIB_HOME)/lib/libhts.a -lz -ldl -lxml2 -lpthread -llzma -lbz2
 
 t_select_SOURCES = t_select.c $(top_srcdir)/src/select.c ../src/array.c ../src/bamit.c ../src/parse.c ../src/hts_addendum.c
 t_select_CFLAGS = -I$(top_srcdir)/src -DDATA_DIR=$(abs_srcdir)/data

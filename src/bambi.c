@@ -33,6 +33,7 @@ int main_decode(int argc, char *argv[]);
 int main_i2b(int argc, char *argv[]);
 int main_select(int argc, char *argv[]);
 int main_chrsplit(int argc, char *argv[]);
+int main_read2tags(int argc, char *argv[]);
 
 const char *bambi_version()
 {
@@ -83,6 +84,7 @@ static void usage(FILE *fp)
 "     i2b            converts illumina files to SAM/BAM/CRAM files\n"
 "     select         select reads by alignment\n"
 "     chrsplit       split reads by chromosome\n"
+"     read2tags      convert reads into tags\n"
 "\n"
 "bambi <command> for help on a particular command\n"
 "\n");
@@ -107,6 +109,7 @@ int main(int argc, char *argv[])
     else if (strcmp(argv[1], "i2b") == 0)       ret = main_i2b(argc-1, argv+1);
     else if (strcmp(argv[1], "select") == 0)    ret = main_select(argc-1, argv+1);
     else if (strcmp(argv[1], "chrsplit") == 0)  ret = main_chrsplit(argc-1, argv+1);
+    else if (strcmp(argv[1], "read2tags") == 0) ret = main_read2tags(argc-1, argv+1);
     else if (strcmp(argv[1], "--version") == 0) {
         printf( "bambi %s\n"
                 "Using htslib %s\n"
