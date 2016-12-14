@@ -17,6 +17,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "array.h"
+#include <assert.h>
 
 /*
  * integer array functions
@@ -58,6 +59,34 @@ ia_t *ia_init(int max)
     return ia;
 }
 
+char *ia_join(ia_t *ia, char *delim)
+{
+    int m = 64;
+    char *s = calloc(m,1);
+    char *a = calloc(64,1);
+
+    for (int n=0; n < ia->end; n++) {
+        while (strlen(s)+strlen(delim)>=m) { m *= 2; s = realloc(s,m); }
+        if (n) strcat(s,delim);
+        sprintf(a,"%d",ia->entries[n]);
+        assert(strlen(a)<64);
+        while (strlen(s)+strlen(a)>=m) { m *= 2; s = realloc(s,m); }
+        strcat(s,a);
+        assert(strlen(s) < m);
+    }
+    free(a);
+    return s;
+}
+
+int ia_sum(ia_t *ia)
+{
+    int sum=0;
+    for (int n=0; n < ia->end; n++) {
+        sum += ia->entries[n];
+    }
+    return sum;
+}
+
 
 /*
  * generic arrays
@@ -86,12 +115,29 @@ void va_push(va_t *va, void *ent)
 
 void va_free(va_t *va)
 {
-    int n;
     if (!va) return;
-    for (n=0; n < va->end; n++) {
+    for (int n=0; n < va->end; n++) {
         va->free_entry(va->entries[n]);
     }
     free(va->entries);
     free(va);
 }
+
+char *va_join(va_t *va, char *delim)
+{
+    int m = 64;
+    char *s = calloc(m,1);
+    char *a;
+
+    for (int n=0; n < va->end; n++) {
+        while (strlen(s)+strlen(delim)>=m) { m *= 2; s = realloc(s,m); }
+        if (n) strcat(s,delim);
+        a = va->entries[n];
+        while (strlen(s)+strlen(a)>=m) { m *= 2; s = realloc(s,m); }
+        strcat(s,a);
+        assert(strlen(s) < m);
+    }
+    return s;
+}
+
 

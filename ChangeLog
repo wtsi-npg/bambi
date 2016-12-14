@@ -1,3 +1,5 @@
+    Implemented 'bambi chrsplit' for SplitBamByChromosome
+    Implemented 'bambi select' for alignment filtering
 
 	[0.9.3]
 	changes to metrics file output for backwards compatibility (tag#0: no tag name, and perfect_matches pf_perfect matches set to 0)
