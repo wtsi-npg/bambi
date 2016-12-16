@@ -1,4 +1,4 @@
-AM_CPPFLAGS = $(HTSLIB_CPPFLAGS) -std=gnu99
+AM_CPPFLAGS = $(HTSLIB_CPPFLAGS) -std=gnu99 -Werror
 AM_LDFLAGS = $(HTSLIB_LDFLAGS)
 
 check_PROGRAMS = t_read2tags t_array t_bamit t_chrsplit t_select t_bclfile t_decode t_filterfile t_posfile t_i2b

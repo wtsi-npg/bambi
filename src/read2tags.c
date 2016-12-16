@@ -382,7 +382,7 @@ static void shuffle(char *s)
 /*
  * Process one record
  */
-bam1_t * process_record(bam1_t *rec, opts_t *opts)
+static bam1_t *process_record(bam1_t *rec, opts_t *opts)
 {
     pos_t *pos;
     int recno = 0;
@@ -438,11 +438,101 @@ bam1_t * process_record(bam1_t *rec, opts_t *opts)
 }
 
 /*
+ * validate a record before we try to process it
+ */
+static int invalid_record(bam1_t *rec, int nrec)
+{
+    if (rec->core.n_cigar || rec->core.pos != -1) {
+        fprintf(stderr,"record %d (%s) is aligned. We only handle unaligned records.\n", nrec, bam_get_qname(rec));
+        return -1;
+    }
+    if (rec->core.flag & (BAM_FREVERSE | BAM_FMREVERSE)) {
+        fprintf(stderr,"record %d (%s) is reversed. We can't handle that.\n", nrec, bam_get_qname(rec));
+        return -1;
+    }
+    if (rec->core.flag & (BAM_FSECONDARY | BAM_FSUPPLEMENTARY)) {
+        fprintf(stderr,"record %d (%s) is secondary or supplementary. We can't handle that.\n", nrec, bam_get_qname(rec));
+        return -1;
+    }
+    return 0;
+}
+
+/*
+ * return the length of some aux data
+ */
+static int aux_type2size(char *s)
+{
+    switch (*s) {
+    case 'A': case 'c': case 'C':
+        return 1;
+    case 's': case 'S':
+        return 2;
+    case 'i': case 'I': case 'f':
+        return 4;
+    case 'd':
+        return 8;
+    case 'Z': case 'H': case 'B':
+        return strlen(s+1) + 1;
+    default:
+        return 0;
+    }
+}
+
+/*
+ * merge two read records, where one of them has no reads
+ */
+static bam1_t *merge_records(bam1_t *r1, bam1_t *r2)
+{
+    bam1_t *src, *dst;
+
+    if (r1->core.l_qseq==0 && r2->core.l_qseq==0) {
+        fprintf(stderr,"Both records are empty (%s) - aborting\n", bam_get_qname(r1));
+        exit(1);
+    }
+
+    // start with the non-empty record...
+    if (r1->core.l_qseq) { dst = bam_dup1(r1); src = r2; }
+    else                 { dst = bam_dup1(r2); src = r1; }
+
+    // copy aux tags from src to dst
+    uint8_t *s;
+    s = bam_get_aux(src);
+    while ((s - bam_get_aux(src)) < bam_get_l_aux(src)) {
+        char tag[3];
+        tag[0] = *s++;
+        tag[1] = *s++;
+        tag[2] = 0;
+        char type = *s;
+        int len = aux_type2size(s++);
+        bam_aux_append(dst,tag,type,len,s);
+        s += len;
+    }
+
+    // turn of paired flags to make single read
+    dst->core.flag &= ~(BAM_FREAD1 | BAM_FREAD2 | BAM_FPAIRED | BAM_FPROPER_PAIR | BAM_FMUNMAP);
+    return dst;
+}
+
+/*
+ * write BAM record, and check for failure
+ */
+static int write_record(BAMit_t *bam, bam1_t *rec)
+{
+    int r = sam_write1(bam->f, bam->h, rec);
+    if (r < 0) {
+        fprintf(stderr,"sam_write1() failed\n");
+        return -1;
+    }
+    return 0;
+}
+
+        
+/*
  * Main code
  *
  * Open and process the BAM file
  */
-static int process(opts_t* opts)
+int process(opts_t* opts)
 {
     int retcode = 1;
     int nrec = 0;
@@ -461,17 +551,26 @@ static int process(opts_t* opts)
     }
 
     while (BAMit_hasnext(bam_in)) {
-        nrec++;
         bam1_t *rec = BAMit_next(bam_in);
-        if (rec->core.n_cigar || rec->core.pos != -1) {
-            fprintf(stderr,"record %d (%s) is aligned. We only handle unaligned records.\n", nrec, bam_get_qname(rec));
-            return -1;
-        }
+        if (invalid_record(rec,++nrec)) return -1;
         bam1_t *newrec = process_record(rec,opts);
-        int r = sam_write1(bam_out->f, bam_out->h, newrec);
-        if (r < 0) {
-            fprintf(stderr,"sam_write1() failed\n");
-            return -1;
+
+        bam1_t *rec2 = BAMit_peek(bam_in);
+        if (rec2 && strcmp(bam_get_qname(rec), bam_get_qname(rec2)) == 0) {
+            rec2 = BAMit_next(bam_in);
+            if (invalid_record(rec2,++nrec)) return -1;
+            bam1_t *newrec2 = process_record(rec2,opts);
+            if ((newrec->core.l_qseq == 0) || (newrec2->core.l_qseq == 0)) {
+                bam1_t *merged_rec = merge_records(newrec, newrec2);
+                if (write_record(bam_out, merged_rec)) return -1;
+                bam_destroy1(merged_rec);
+            } else {
+                if (write_record(bam_out, newrec)) return -1;
+                if (write_record(bam_out, newrec2)) return -1;
+            }
+            bam_destroy1(newrec2);
+        } else {
+            if (write_record(bam_out,newrec)) return -1;
         }
         bam_destroy1(newrec);
     }

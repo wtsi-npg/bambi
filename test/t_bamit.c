@@ -107,7 +107,7 @@ int main(int argc, char**argv)
     icheckEqual("End of records", false, BAMit_hasnext(bit));
     BAMit_free(bit);
 
-    bit = BAMit_open(MKNAME(DATA_DIR,"/bamit.bam"), 'r', NULL, NULL);
+    bit = BAMit_open(MKNAME(DATA_DIR,"/bamit.bam"), 'r', NULL, 0);
     rec = BAMit_next(bit);
     checkEqual("First name", "IL16_986:1:9:9:307", bam_get_qname(rec));
     BAMit_free(bit);

@@ -28,6 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define xMKNAME(d,f) #d f
 #define MKNAME(d,f) xMKNAME(d,f)
 
+int main_read2tags(int srgc, char *argv[]);
 
 const char * bambi_version(void)
 {
@@ -71,6 +72,42 @@ void setup_test_2(int* argc, char*** argv, char *outputfile)
     (*argv)[(*argc)++] = strdup("Qa,Qb");
     (*argv)[(*argc)++] = strdup("-p");
     (*argv)[(*argc)++] = strdup("1:2:4,1:3:5");
+}
+
+void setup_test_3(int* argc, char*** argv, char *outputfile)
+{
+    *argc = 0;
+    *argv = (char**)calloc(sizeof(char*), 100);
+    (*argv)[(*argc)++] = strdup("bambi");
+    (*argv)[(*argc)++] = strdup("select");
+    (*argv)[(*argc)++] = strdup("-i");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/read2tags.sam"));
+    (*argv)[(*argc)++] = strdup("-o");
+    (*argv)[(*argc)++] = strdup(outputfile);
+    (*argv)[(*argc)++] = strdup("-t");
+    (*argv)[(*argc)++] = strdup("Ba");
+    (*argv)[(*argc)++] = strdup("-q");
+    (*argv)[(*argc)++] = strdup("Qa");
+    (*argv)[(*argc)++] = strdup("-p");
+    (*argv)[(*argc)++] = strdup("1:1:999");
+}
+
+void setup_test_4(int* argc, char*** argv, char *outputfile)
+{
+    *argc = 0;
+    *argv = (char**)calloc(sizeof(char*), 100);
+    (*argv)[(*argc)++] = strdup("bambi");
+    (*argv)[(*argc)++] = strdup("select");
+    (*argv)[(*argc)++] = strdup("-i");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/read2tags.sam"));
+    (*argv)[(*argc)++] = strdup("-o");
+    (*argv)[(*argc)++] = strdup(outputfile);
+    (*argv)[(*argc)++] = strdup("-t");
+    (*argv)[(*argc)++] = strdup("Ba");
+    (*argv)[(*argc)++] = strdup("-q");
+    (*argv)[(*argc)++] = strdup("Qa");
+    (*argv)[(*argc)++] = strdup("-p");
+    (*argv)[(*argc)++] = strdup("2:1:999");
 }
 
 void checkFiles(char *tmpdir, char *gotfile, char *expectfile, int verbose)
@@ -143,6 +180,18 @@ int main(int argc, char**argv)
     setup_test_2(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
     checkFiles(TMPDIR,"read2tags_2.bam",MKNAME(DATA_DIR,"/out/read2tags_2.bam"),verbose);
+
+    // remove first record
+    sprintf(outputfile,"%s/read2tags_3.bam", TMPDIR);
+    setup_test_3(&argc_1, &argv_1, outputfile);
+    main_read2tags(argc_1-1, argv_1+1);
+    checkFiles(TMPDIR,"read2tags_3.bam",MKNAME(DATA_DIR,"/out/read2tags_3.bam"),verbose);
+
+    // remove second record
+    sprintf(outputfile,"%s/read2tags_4.bam", TMPDIR);
+    setup_test_4(&argc_1, &argv_1, outputfile);
+    main_read2tags(argc_1-1, argv_1+1);
+    checkFiles(TMPDIR,"read2tags_4.bam",MKNAME(DATA_DIR,"/out/read2tags_4.bam"),verbose);
 
 
     printf("read2tags tests: %s\n", failure ? "FAILED" : "Passed");
