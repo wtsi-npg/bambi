@@ -69,7 +69,7 @@ static bool va_contains(va_t *va, char *s)
     return false;
 }
 
-static char *va_dump(FILE *f, va_t *va)
+static void va_dump(FILE *f, va_t *va)
 {
     int n;
     for (n=0; n < va->end; n++) {

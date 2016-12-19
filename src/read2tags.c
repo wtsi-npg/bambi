@@ -100,7 +100,11 @@ static void parse_positions(va_t *poslist, char *args)
         char *p = strtok_r(s,":",&save_p); if (p) pos->record = atoi(p);
         p = strtok_r(NULL,":",&save_p); if (p) pos->from = atoi(p);
         p = strtok_r(NULL,":",&save_p); if (p) pos->to = atoi(p);
-        if (pos->record <1 || pos->record > 2 || pos->from == 0 || pos->to == 0 || pos->from > pos->to) {
+        if (!p) {
+            // looks like s:e format
+            pos->to = pos->from; pos->from = pos->record; pos->record = 0;
+        }
+        if (pos->record < 0 || pos->record > 2 || pos->from == 0 || pos->to == 0 || pos->from > pos->to) {
             fprintf(stderr,"Invalid pos argument: %s\n", args);
             exit(1);
         }
@@ -385,10 +389,11 @@ static void shuffle(char *s)
 static bam1_t *process_record(bam1_t *rec, opts_t *opts)
 {
     pos_t *pos;
-    int recno = 0;
+    int recno = -1;
     char *tag_data = calloc(1, rec->core.l_qseq+1);
     char *qtag_data = calloc(1, rec->core.l_qseq+1);
 
+    if (!(rec->core.flag & BAM_FPAIRED)) recno = 0;
     if (rec->core.flag & BAM_FREAD1) recno = 1;
     if (rec->core.flag & BAM_FREAD2) recno = 2;
 
@@ -401,19 +406,21 @@ static bam1_t *process_record(bam1_t *rec, opts_t *opts)
     for (int n=0; n < opts->poslist->end; n++) {
         pos = opts->poslist->entries[n];
         if (pos->record == recno) {
-            int from = (pos->from > rec->core.l_qseq) ? rec->core.l_qseq : pos->from;
-            int to = (pos->to > rec->core.l_qseq) ? rec->core.l_qseq : pos->to;
-            int len = to - from + 1;
+            if (pos->from <= rec->core.l_qseq) {
+                int from = (pos->from > rec->core.l_qseq) ? rec->core.l_qseq : pos->from;
+                int to = (pos->to > rec->core.l_qseq) ? rec->core.l_qseq : pos->to;
+                int len = to - from + 1;
 
-            // copy data from read
-            memset(tag_data,0,rec->core.l_qseq+1);
-            memcpy(tag_data, seq + from - 1, len);
-            bam_aux_append(rec, opts->taglist->entries[n], 'Z', len+1, tag_data);
+                // copy data from read
+                memset(tag_data,0,rec->core.l_qseq+1);
+                memcpy(tag_data, seq + from - 1, len);
+                bam_aux_append(rec, opts->taglist->entries[n], 'Z', len+1, tag_data);
 
-            // copy data from quality
-            memset(qtag_data,0,rec->core.l_qseq+1);
-            memcpy(qtag_data, quality + from - 1, len);
-            bam_aux_append(rec, opts->qtaglist->entries[n], 'Z', len+1, qtag_data);
+                // copy data from quality
+                memset(qtag_data,0,rec->core.l_qseq+1);
+                memcpy(qtag_data, quality + from - 1, len);
+                bam_aux_append(rec, opts->qtaglist->entries[n], 'Z', len+1, qtag_data);
+            }
         }
     }
 
@@ -423,11 +430,13 @@ static bam1_t *process_record(bam1_t *rec, opts_t *opts)
     for (int n=0; n < opts->poslist->end; n++) {
         pos = opts->poslist->entries[n];
         if (pos->record == recno) {
-            int from = (pos->from > rec->core.l_qseq) ? rec->core.l_qseq : pos->from;
-            int to = (pos->to > rec->core.l_qseq) ? rec->core.l_qseq : pos->to;
-            int len = to - from + 1;
-            memset(seq + from - 1, 1, len);       // mark as deleted
-            memset(quality + from - 1, 1, len);   // mark as deleted
+            if (pos->from <= rec->core.l_qseq) {
+                int from = (pos->from > rec->core.l_qseq) ? rec->core.l_qseq : pos->from;
+                int to = (pos->to > rec->core.l_qseq) ? rec->core.l_qseq : pos->to;
+                int len = to - from + 1;
+                memset(seq + from - 1, 1, len);       // mark as deleted
+                memset(quality + from - 1, 1, len);   // mark as deleted
+            }
         }
     }
     shuffle(seq); shuffle(quality); // physically remove 'marked as deleted' bytes
@@ -442,7 +451,7 @@ static bam1_t *process_record(bam1_t *rec, opts_t *opts)
  */
 static int invalid_record(bam1_t *rec, int nrec)
 {
-    if (rec->core.n_cigar || rec->core.pos != -1) {
+    if (!(rec->core.flag & BAM_FUNMAP)) {
         fprintf(stderr,"record %d (%s) is aligned. We only handle unaligned records.\n", nrec, bam_get_qname(rec));
         return -1;
     }

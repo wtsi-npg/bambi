@@ -110,6 +110,24 @@ void setup_test_4(int* argc, char*** argv, char *outputfile)
     (*argv)[(*argc)++] = strdup("2:1:999");
 }
 
+void setup_test_5(int* argc, char*** argv, char *outputfile)
+{
+    *argc = 0;
+    *argv = (char**)calloc(sizeof(char*), 100);
+    (*argv)[(*argc)++] = strdup("bambi");
+    (*argv)[(*argc)++] = strdup("select");
+    (*argv)[(*argc)++] = strdup("-i");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/read2tags_5.sam"));
+    (*argv)[(*argc)++] = strdup("-o");
+    (*argv)[(*argc)++] = strdup(outputfile);
+    (*argv)[(*argc)++] = strdup("-t");
+    (*argv)[(*argc)++] = strdup("Ba");
+    (*argv)[(*argc)++] = strdup("-q");
+    (*argv)[(*argc)++] = strdup("Qa");
+    (*argv)[(*argc)++] = strdup("-p");
+    (*argv)[(*argc)++] = strdup("1:10");
+}
+
 void checkFiles(char *tmpdir, char *gotfile, char *expectfile, int verbose)
 {
     char cmd[1024];
@@ -125,9 +143,9 @@ void checkFiles(char *tmpdir, char *gotfile, char *expectfile, int verbose)
 
     // compare records
     if (verbose) fprintf(stderr,"\nComparing records: %s with %s\n", gotfile, expectfile);
-    sprintf(cmd,"samtools view -x %s/%s > %s/got.txt", tmpdir, gotfile, tmpdir);
+    sprintf(cmd,"samtools view %s/%s > %s/got.txt", tmpdir, gotfile, tmpdir);
     if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
-    sprintf(cmd,"samtools view -x %s > %s/expect.txt", expectfile, tmpdir);
+    sprintf(cmd,"samtools view %s > %s/expect.txt", expectfile, tmpdir);
     if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
     sprintf(cmd,"diff %s/got.txt %s/expect.txt", tmpdir, tmpdir);
     if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
@@ -192,6 +210,12 @@ int main(int argc, char**argv)
     setup_test_4(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
     checkFiles(TMPDIR,"read2tags_4.bam",MKNAME(DATA_DIR,"/out/read2tags_4.bam"),verbose);
+
+    // handle single reads
+    sprintf(outputfile,"%s/read2tags_5.bam", TMPDIR);
+    setup_test_5(&argc_1, &argv_1, outputfile);
+    main_read2tags(argc_1-1, argv_1+1);
+    checkFiles(TMPDIR,"read2tags_5.bam",MKNAME(DATA_DIR,"/out/read2tags_5.bam"),verbose);
 
 
     printf("read2tags tests: %s\n", failure ? "FAILED" : "Passed");

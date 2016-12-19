@@ -9,11 +9,11 @@ matrix:
   include:
   - os: linux
     compiler: clang
+    env: CFLAGS="-Wno-pointer-sign""
   - os: linux
     compiler: gcc
   - os: linux
     compiler: gcc
-    env: CFLAGS="-std=gnu99 -O0"
 
 env:
   global:
