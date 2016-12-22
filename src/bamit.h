@@ -34,11 +34,41 @@ typedef struct {
     bam1_t *nextRec;
 } BAMit_t;
 
+/*
+ * Open a BAM file
+ * arguments are: char *fname               filename to open
+ *                char mode                 'r' or 'w'
+ *                char *fmt                 format [bam,sam,cram] or NULL
+ *                char compression level    [0..9] or NULL
+ */
+BAMit_t *BAMit_open(char *fname, char mode, char *fmt, char compression_level);
+
+/*
+ * initialise with open file pointer and header
+ */
 BAMit_t *BAMit_init(samFile *f, bam_hdr_t *h);
-void BAMit_free(void *bit);
+
+/*
+ * read next record and advance to next record
+ */
 bam1_t *BAMit_next(BAMit_t *bit);
+
+/*
+ * read next record *without* advancing to next record
+ */
+
 bam1_t *BAMit_peek(BAMit_t *bit);
+
+/*
+ * return true if there is a next record
+ */
+
 bool BAMit_hasnext(BAMit_t *bit);
+
+/*
+ * free data and close file
+ */
+void BAMit_free(void *bit);
 
 #endif
 
