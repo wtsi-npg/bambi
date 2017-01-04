@@ -37,6 +37,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "array.h"
 #include "bamit.h"
 
+#define DEFAULT_KEEP_TAGS "BC,QT,RG"
+#define DEFAULT_DISCARD_TAGS "as,af,aa,a3,ah"
+
+
 /*
  * position record
  */
@@ -60,6 +64,10 @@ typedef struct {
     va_t *taglist;
     va_t *qtaglist;
     va_t *poslist;
+    va_t *keep_tags;
+    va_t *discard_tags;
+    bool merge;
+    bool replace;
 } opts_t;
 
 /*
@@ -73,6 +81,8 @@ static void free_opts(opts_t* opts)
     va_free(opts->taglist);
     va_free(opts->qtaglist);
     va_free(opts->poslist);
+    va_free(opts->keep_tags);
+    va_free(opts->discard_tags);
     free(opts->output_fmt);
     free(opts->input_fmt);
     free(opts->in_file);
@@ -81,10 +91,47 @@ static void free_opts(opts_t* opts)
 }
 
 /*
+ * Compare two aux tags for equality.
+ * NB: this needs to move into htslib....
+ */
+static int bam_aux_cmp(const uint8_t *s, const uint8_t *d)
+{
+    if (*s == *d) {
+        // same type
+        char type = *s;
+        s++; d++;   // skip over type
+        switch (type) {
+            case 'c': if ((int32_t)*(int8_t*)s == (int32_t)*(int8_t*)d) return 0;
+                      break;
+            case 'C': if ((int32_t)*(uint8_t*)s == (int32_t)*(uint8_t*)d) return 0;
+                      break;
+            case 's': if ((int32_t)*(int16_t*)s == (int32_t)*(int16_t*)d) return 0;
+                      break;
+            case 'S': if ((int32_t)*(uint16_t*)s == (int32_t)*(uint16_t*)d) return 0;
+                      break;
+            case 'i':
+            case 'I': if (*(int32_t*)s == *(int32_t*)d) return 0;
+                      break;
+            case 'A': if (*(char*)s == *(char*)d) return 0;
+                      break;
+            case 'd': if (abs(*(double*)s - *(double*)d) < .0001) return 0;
+                      break;
+            case 'f': if (abs(*(float*)s - *(float*)d) < .0001) return 0;
+                      break;
+            case 'Z':
+            case 'H': if (strcmp((char*)s, (char *)d) == 0) return 0;
+                      break;
+            default: fprintf(stderr,"bam_aux_cmp(): unrecognized type [%c]\n", type);
+        }
+    }
+    return 1;
+}
+
+/*
  * Parse a comma separated list of positions
  * Format is r:s:e,r:s:e,r:s:e,...
  *
- * where r is record number (1 or 2)
+ * where r is record number (0, 1 or 2 and is optional)
  *       s is the start position in the read string
  *       e is the end position in the read string
  * start and end positions are 1 (not zero) based
@@ -127,7 +174,13 @@ static void usage(FILE *write_to)
 "  -o   --output                BAM file to output [default: stdout]\n"
 "  -t   --tags                  comma separated list of barcode tags\n"
 "  -q   --qtags                 comma separated list of quality  tags\n"
+"  -k   --keep-tags             comma separated list of tags to keep when merging records\n"
+"                               [default: " DEFAULT_KEEP_TAGS "]\n"
+"  -d   --discard-tags          comma separated list of tags to discard when merging records\n"
+"                               [default: " DEFAULT_DISCARD_TAGS "]\n"
 "  -p   --positions             comma separated list of positions\n"
+"  -m   --merge                 merge duplicate tags\n"
+"  -r   --replace               replace duplicate tags\n"
 "  -v   --verbose               verbose output\n"
 "       --input-fmt             [sam/bam/cram] [default: bam]\n"
 "       --output-fmt            [sam/bam/cram] [default: bam]\n"
@@ -142,7 +195,7 @@ opts_t* read2tags_parse_args(int argc, char *argv[])
 {
     if (argc == 1) { usage(stdout); return NULL; }
 
-    const char* optstring = "vi:o:t:q:p:";
+    const char* optstring = "vi:o:t:q:p:k:d:mr";
 
     static const struct option lopts[] = {
         { "verbose",            0, 0, 'v' },
@@ -151,6 +204,10 @@ opts_t* read2tags_parse_args(int argc, char *argv[])
         { "tags",               1, 0, 't' },
         { "qtags",              1, 0, 'q' },
         { "positions",          1, 0, 'p' },
+        { "keep-tags",          1, 0, 'k' },
+        { "discard-tags",       1, 0, 'd' },
+        { "merge",              0, 0, 'm' },
+        { "replace",            0, 0, 'r' },
         { "compression-level",  1, 0, 0 },
         { "input-fmt",          1, 0, 0 },
         { "output-fmt",         1, 0, 0 },
@@ -166,6 +223,8 @@ opts_t* read2tags_parse_args(int argc, char *argv[])
     opts->taglist = va_init(5, free);
     opts->qtaglist = va_init(5, free);
     opts->poslist = va_init(5, free);
+    opts->keep_tags = va_init(10, free);
+    opts->discard_tags = va_init(10, free);
 
     int opt;
     int option_index = 0;
@@ -182,7 +241,15 @@ opts_t* read2tags_parse_args(int argc, char *argv[])
                     break;
         case 'p':   parse_positions(opts->poslist,optarg);
                     break;
+        case 'k':   parse_tags(opts->keep_tags,optarg);
+                    break;
+        case 'd':   parse_tags(opts->discard_tags,optarg);
+                    break;
         case 'v':   opts->verbose++;
+                    break;
+        case 'm':   opts->merge = true;
+                    break;
+        case 'r':   opts->replace = true;
                     break;
         case 0:     arg = lopts[option_index].name;
                          if (strcmp(arg, "output-fmt") == 0)              opts->output_fmt = strdup(optarg);
@@ -208,6 +275,8 @@ opts_t* read2tags_parse_args(int argc, char *argv[])
     if (!opts->in_file) opts->in_file = strdup("-"); 
     if (!opts->out_file) opts->out_file = strdup("-"); 
 
+    if (va_isEmpty(opts->keep_tags)) parse_tags(opts->keep_tags,DEFAULT_KEEP_TAGS);
+    if (va_isEmpty(opts->discard_tags)) parse_tags(opts->discard_tags,DEFAULT_DISCARD_TAGS);
     /*
      * And now...validate the inputs
      */
@@ -240,6 +309,11 @@ opts_t* read2tags_parse_args(int argc, char *argv[])
 
     if (opts->compression_level && !isdigit(opts->compression_level)) {
         fprintf(stderr, "compression-level must be a digit in the range [0..9], not '%c'\n", opts->compression_level);
+        usage(stderr); return NULL;
+    }
+
+    if (opts->merge && opts->replace) {
+        fprintf(stderr,"You can't have --merge AND --replace. Choose one.\n");
         usage(stderr); return NULL;
     }
 
@@ -384,6 +458,63 @@ static void shuffle(char *s)
 }
 
 /*
+ * add a new tag to our taglist, or append to existing tag
+ */
+static void add_or_update(va_t *va, char *tag, char *data)
+{
+    int n;
+    for (n=0; n < va->end; n++) {
+        if (strncmp(tag,va->entries[n],2) == 0) break;
+    }
+
+    if (n == va->end) {
+        // add new tag
+        char *e = calloc(1, strlen(tag) + 1 + strlen(data) + 1);
+        strcpy(e, tag);
+        strcat(e, ":");
+        strcat(e, data);
+        va_push(va,e);
+    } else {
+        // update existing tag
+        va->entries[n] = realloc(va->entries[n], strlen(va->entries[n]) + strlen(data) + 1);
+        strcat(va->entries[n],data);
+    }
+    return;
+}
+
+/*
+ * add new tag to the record, or replace or update if it already exists
+ */
+static void add_tag(bam1_t *rec, char *tag, char *data, opts_t *opts)
+{
+    char *s = bam_aux_get(rec,tag);
+    if (s) { // tag already exists
+        if (opts->replace) {
+            bam_aux_del(rec,s);
+            bam_aux_append(rec, tag, 'Z', strlen(data)+1, data);
+        }
+        if (opts->merge) {
+            if (*s != 'Z' && *s != 'H') { 
+                fprintf(stderr,"Trying to merge tag [%s] which is type [%c]\n", tag, *s);
+                exit(1);
+            }
+            char *old_data = bam_aux2Z(s);
+            char *new_data = calloc(1,strlen(old_data)+strlen(data)+1);
+            strcpy(new_data,old_data); strcat(new_data,data);
+            bam_aux_del(rec,s);
+            bam_aux_append(rec, tag, 'Z', strlen(new_data)+1, new_data);
+        }
+        if (!opts->replace && !opts->merge) {
+            fprintf(stderr,"Found duplicate tag [%s] and no --replace or --merge option\n", tag);
+            exit(1);
+        }
+    } else {
+        // add new tag
+        bam_aux_append(rec, tag, 'Z', strlen(data)+1, data);
+    }
+}
+
+/*
  * Process one record
  */
 static bam1_t *process_record(bam1_t *rec, opts_t *opts)
@@ -392,6 +523,8 @@ static bam1_t *process_record(bam1_t *rec, opts_t *opts)
     int recno = -1;
     char *tag_data = calloc(1, rec->core.l_qseq+1);
     char *qtag_data = calloc(1, rec->core.l_qseq+1);
+    va_t *new_tags = va_init(10,free);
+    va_t *new_qtags = va_init(10,free);
 
     if (!(rec->core.flag & BAM_FPAIRED)) recno = 0;
     if (rec->core.flag & BAM_FREAD1) recno = 1;
@@ -414,14 +547,29 @@ static bam1_t *process_record(bam1_t *rec, opts_t *opts)
                 // copy data from read
                 memset(tag_data,0,rec->core.l_qseq+1);
                 memcpy(tag_data, seq + from - 1, len);
-                bam_aux_append(rec, opts->taglist->entries[n], 'Z', len+1, tag_data);
+                add_or_update(new_tags, opts->taglist->entries[n], tag_data);
 
                 // copy data from quality
                 memset(qtag_data,0,rec->core.l_qseq+1);
                 memcpy(qtag_data, quality + from - 1, len);
-                bam_aux_append(rec, opts->qtaglist->entries[n], 'Z', len+1, qtag_data);
+                add_or_update(new_qtags, opts->qtaglist->entries[n], qtag_data);
+
             }
         }
+    }
+
+    // add new tags
+    for (int n=0; n < new_tags->end; n++) {
+        char *tag = new_tags->entries[n]; tag[2] = 0;
+        char *data = tag+3;
+        add_tag(rec, tag, data, opts);
+    }
+
+    // add new quality tags
+    for (int n=0; n < new_qtags->end; n++) {
+        char *tag = new_qtags->entries[n]; tag[2] = 0;
+        char *data = tag+3;
+        add_tag(rec, tag, data, opts);
     }
 
     /*
@@ -443,6 +591,7 @@ static bam1_t *process_record(bam1_t *rec, opts_t *opts)
     bam1_t *newrec = make_new_rec(rec, seq, quality);
 
     free(tag_data); free(qtag_data); free(quality); free(seq);
+    va_free(new_tags); va_free(new_qtags);
     return newrec;
 }
 
@@ -490,7 +639,7 @@ static int aux_type2size(char *s)
 /*
  * merge two read records, where one of them has no reads
  */
-static bam1_t *merge_records(bam1_t *r1, bam1_t *r2)
+static bam1_t *merge_records(bam1_t *r1, bam1_t *r2, opts_t *opts)
 {
     bam1_t *src, *dst;
 
@@ -513,11 +662,50 @@ static bam1_t *merge_records(bam1_t *r1, bam1_t *r2)
         tag[2] = 0;
         char type = *s;
         int len = aux_type2size(s++);
-        bam_aux_append(dst,tag,type,len,s);
+
+        // is the tag in our 'keep' list? (or taglist or qtaglist?)
+        if ( (va_contains(opts->keep_tags, tag) != -1) ||
+             (va_contains(opts->taglist, tag) != -1) ||
+             (va_contains(opts->qtaglist, tag) != -1) ) {
+
+            if (bam_aux_get(dst, tag) == 0) {   // not already there
+                bam_aux_append(dst,tag,type,len,s);
+            } else {
+                if (opts->merge) {
+                    // merge with existing tag
+                    if (type == 'Z' || type == 'H') {
+                        char *t = bam_aux_get(dst,tag);
+                        char *data = calloc(1, strlen(s) + strlen(t+1) + 1);
+                        strcat(data,t+1); strcat(data,s);
+                        bam_aux_del(dst,t);
+                        bam_aux_append(dst,tag,type,strlen(data)+1,data);
+                    }
+                }
+                if (opts->replace) {
+                    // replace existing tag
+                    char *t = bam_aux_get(dst,tag);
+                    bam_aux_del(dst,t);
+                    bam_aux_append(dst,tag,type,len,s);
+                }
+                if (!opts->merge && !opts->replace) {
+                    char *t = bam_aux_get(dst,tag);
+                    if (bam_aux_cmp(s-1,t)) {
+                        fprintf(stderr,"Tag [%s] already exists and is not the same value\n", tag);
+                        exit(1);
+                    }
+                }
+            }
+        } else {
+            if (va_contains(opts->discard_tags, tag) == -1) {
+                fprintf(stderr,"Tag %s is in neither keep nor discard list\n", tag);
+                exit(1);
+            }
+        }
+
         s += len;
     }
 
-    // turn of paired flags to make single read
+    // turn off paired flags to make single read
     dst->core.flag &= ~(BAM_FREAD1 | BAM_FREAD2 | BAM_FPAIRED | BAM_FPROPER_PAIR | BAM_FMUNMAP);
     return dst;
 }
@@ -543,7 +731,7 @@ static int write_record(BAMit_t *bam, bam1_t *rec)
  */
 int process(opts_t* opts)
 {
-    int retcode = 1;
+    int retcode = 0;
     int nrec = 0;
     int r;
 
@@ -570,7 +758,7 @@ int process(opts_t* opts)
             if (invalid_record(rec2,++nrec)) return -1;
             bam1_t *newrec2 = process_record(rec2,opts);
             if ((newrec->core.l_qseq == 0) || (newrec2->core.l_qseq == 0)) {
-                bam1_t *merged_rec = merge_records(newrec, newrec2);
+                bam1_t *merged_rec = merge_records(newrec, newrec2, opts);
                 if (write_record(bam_out, merged_rec)) return -1;
                 bam_destroy1(merged_rec);
             } else {

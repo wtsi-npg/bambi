@@ -123,6 +123,10 @@ void va_free(va_t *va)
     free(va);
 }
 
+/*
+ * join entries into a 'delim' separated list
+ * NB assumes that entries are strings
+ */
 char *va_join(va_t *va, char *delim)
 {
     int m = 64;
@@ -140,4 +144,15 @@ char *va_join(va_t *va, char *delim)
     return s;
 }
 
+/*
+ * return array number containing 's', or -1 if not found
+ * NB assumes all entries are strings
+ */
+int va_contains(va_t *va, char *s)
+{
+    for (int n=0; n < va->end; n++) {
+        if (strcmp(va->entries[n],s) == 0) return n;
+    }
+    return -1;
+}
 
