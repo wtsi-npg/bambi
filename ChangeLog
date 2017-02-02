@@ -1,3 +1,6 @@
+	[0.9.5]
+	Implemented 'bambi read2tags' for extracting sequence and quality ranges from reads and assigning them to auxiliary tags
+
 	[0.9.4]
 	Implemented 'bambi chrsplit' for SplitBamByChromosome
 	Implemented 'bambi select' for alignment filtering
