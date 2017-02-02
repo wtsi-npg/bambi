@@ -28,6 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define xMKNAME(d,f) #d f
 #define MKNAME(d,f) xMKNAME(d,f)
 
+int main_select(int argc, char *argv[]);
 
 const char * bambi_version(void)
 {

@@ -28,6 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define xMKNAME(d,f) #d f
 #define MKNAME(d,f) xMKNAME(d,f)
 
+int main_chrsplit(int argc, char *argv[]);
 
 const char * bambi_version(void)
 {
@@ -59,16 +60,7 @@ static bool va_compare(va_t *va1, va_t *va2)
     return true;
 }
 
-static bool va_contains(va_t *va, char *s)
-{
-    int n;
-    for (n=0; n<va->end; n++) {
-        if (strcmp(s,(char*)(va->entries[n]))==0) return true;
-    }
-    return false;
-}
-
-static char *va_dump(FILE *f, va_t *va)
+static void va_dump(FILE *f, va_t *va)
 {
     int n;
     for (n=0; n < va->end; n++) {
@@ -86,7 +78,7 @@ static void checkReadNames(va_t *expected, char *fname)
 
     while (sam_read1(f,h,rec) != -1) {
         char *qname = bam_get_qname(rec);
-        if (!va_contains(got,qname)) va_push(got,strdup(qname));
+        if (va_contains(got,qname)==-1) va_push(got,strdup(qname));
     }
     va_sort(expected); va_sort(got);
     if (!va_compare(expected,got)) {

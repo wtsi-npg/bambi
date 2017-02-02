@@ -39,13 +39,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 char *strptime(const char *s, const char *format, struct tm *tm);
 
-void closeSamFile(void *f) { hts_close((samFile *)f); }
-void freeBamHdr(void *h) { if (h) bam_hdr_destroy((bam_hdr_t *)h); h=NULL; }
-void freeRecord(void *r) { bam_destroy1((bam1_t *)r); }
-void freeRecordSet(void *s) { va_free((va_t *)s); }
-void freeChimera(void *s) { ia_free((ia_t *)s); }
-
-bool verbose;
+static void closeSamFile(void *f) { hts_close((samFile *)f); }
+static void freeBamHdr(void *h) { if (h) bam_hdr_destroy((bam_hdr_t *)h); h=NULL; }
+static void freeRecord(void *r) { bam_destroy1((bam1_t *)r); }
+static void freeRecordSet(void *s) { va_free((va_t *)s); }
+static void freeChimera(void *s) { ia_free((ia_t *)s); }
 
 /*
  * structure to hold options
@@ -82,7 +80,7 @@ typedef struct {
     ia_t *nAlignedReverse;
 } metrics_t;
 
-metrics_t *metrics_init(int sz)
+static metrics_t *metrics_init(int sz)
 {
     metrics_t *m = calloc(sizeof(metrics_t), 1);
     m->nReads = 0;
@@ -108,7 +106,7 @@ metrics_t *metrics_init(int sz)
     return m;
 }
 
-void metrics_free(metrics_t *m)
+static void metrics_free(metrics_t *m)
 {
     if (!m) return;
     ia_free(m->nReadsPerRef);
@@ -266,7 +264,7 @@ opts_t* select_parse_args(int argc, char *argv[])
 /*
  * convert SAM_hdr to bam_hdr
  */
-void sam_hdr_unparse2(SAM_hdr *sh, bam_hdr_t *h)
+static void sam_hdr_unparse2(SAM_hdr *sh, bam_hdr_t *h)
 {
     free(h->text);
     sam_hdr_rebuild(sh);
@@ -305,7 +303,7 @@ static samFile *openSamFile(char *fname, char *fmt, char compression, char rw)
 /*
  * add PG line to output BAM file
  */
-void addHeaderLines(BAMit_t *bit, opts_t *opts, bool u)
+static void addHeaderLines(BAMit_t *bit, opts_t *opts, bool u)
 {
     SAM_hdr *sh = sam_hdr_parse_(bit->h->text,bit->h->l_text);
 
@@ -329,7 +327,7 @@ void addHeaderLines(BAMit_t *bit, opts_t *opts, bool u)
 /*
  * Open ALL the files
  */
-int openSamFiles(va_t *in_file, va_t *out_file, va_t *in_bit, va_t *out_bit, opts_t *opts)
+static int openSamFiles(va_t *in_file, va_t *out_file, va_t *in_bit, va_t *out_bit, opts_t *opts)
 {
     int n;
     samFile *f;
@@ -397,7 +395,7 @@ static int firstAlignedIndex(va_t *recordSetList)
 /*
  * write a record set to an output BAM file
  */
-void writeRecordSet(BAMit_t *bit, va_t *recordSet)
+static void writeRecordSet(BAMit_t *bit, va_t *recordSet)
 {
     int n,r;
 
@@ -426,7 +424,7 @@ void writeRecordSet(BAMit_t *bit, va_t *recordSet)
 /*
  * write references to metrics file
  */
-void writeReferences(FILE *f, va_t *in_bit)
+static void writeReferences(FILE *f, va_t *in_bit)
 {
     int n, nSQ;
 
@@ -512,7 +510,7 @@ static void writeMetrics(va_t *in_bit, metrics_t *metrics, opts_t *opts)
     fclose(f);
 }
 
-ia_t *checkAlignmentsByRef(va_t *recordSetList, bool result)
+static ia_t *checkAlignmentsByRef(va_t *recordSetList, bool result)
 {
     ia_t *ia = ia_init(5);
     int i,j;
@@ -542,7 +540,7 @@ static int indexAlignment(ia_t *ia)
     return -1;
 }
 
-void checkNextReadsForChimera(va_t *recordSetList, metrics_t *metrics)
+static void checkNextReadsForChimera(va_t *recordSetList, metrics_t *metrics)
 {
     ia_t *alignmentByRef = checkAlignmentsByRef(recordSetList,false);
     ia_t *alignmentByRefPaired = checkAlignmentsByRef(recordSetList,true);
@@ -623,7 +621,7 @@ static int processFiles(va_t *in_bit, va_t *out_bit, BAMit_t *unaligned_bam, opt
  *
  * Open all the BAM files, then process them
  */
-int aln_select(opts_t* opts)
+static int aln_select(opts_t* opts)
 {
     int retcode = 1;
 

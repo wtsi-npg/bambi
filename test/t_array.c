@@ -88,6 +88,11 @@ int main(int argc, char**argv)
     char *s = ia_join(ia,"xyz");
     checkEqual("ia join", "1xyz2xyz3xyz5xyz9", s);
 
+    icheckEqual("va_contains(1)", 1, va_contains(va,"xyzzy"));
+    icheckEqual("va_contains(0)", 0, va_contains(va,"Hello world"));
+    icheckEqual("va_contains(4)", 4, va_contains(va,"plugh"));
+    icheckEqual("va_contains(-1)", -1, va_contains(va,"Garp"));
+
     ia_free(ia);
     va_free(va);
 
