@@ -27,7 +27,7 @@ t_bclfile_SOURCES = t_bclfile.c
 t_bclfile_CFLAGS = -DDATA_DIR=$(abs_srcdir)/data
 t_bclfile_LDADD = -lz -ldl -lxml2 -lpthread
 
-t_decode_SOURCES = t_decode.c
+t_decode_SOURCES = t_decode.c ../src/array.c ../src/bamit.c
 t_decode_CFLAGS = -I$(top_srcdir)/src -DDATA_DIR=$(abs_srcdir)/data
 t_decode_LDADD = $(HTSLIB_HOME)/lib/libhts.a -lz -ldl -lxml2 -lpthread -llzma -lbz2
 

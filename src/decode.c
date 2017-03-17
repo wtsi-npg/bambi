@@ -32,6 +32,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <htslib/khash.h>
 #include <cram/sam_header.h>
 
+#include "bamit.h"
+
+#define xstr(s) str(s)
+#define str(s) #s
+
 #define DEFAULT_MAX_LOW_QUALITY_TO_CONVERT 15
 #define DEFAULT_MAX_NO_CALLS 2
 #define DEFAULT_MAX_MISMATCHES 1
@@ -43,9 +48,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  * structure to hold options
  */
 typedef struct {
-    char* input_name;
-    char* output_name;
-    char* barcode_name;
+    char *input_name;
+    char *output_name;
+    char *barcode_name;
     char *metrics_name;
     char *barcode_tag_name;
     char *quality_tag_name;
@@ -60,6 +65,7 @@ typedef struct {
     char *input_fmt;
     char *output_fmt;
     char compression_level;
+    int tag_len;
 } opts_t;
 
 static void free_opts(opts_t* opts)
@@ -73,6 +79,7 @@ static void free_opts(opts_t* opts)
     free(opts->argv_list);
     free(opts->input_fmt);
     free(opts->output_fmt);
+    free(opts->metrics_name);
     free(opts);
 }
 
@@ -89,62 +96,18 @@ typedef struct {
     int reads, pf_reads, perfect, pf_perfect, one_mismatch, pf_one_mismatch;
 } bc_details_t;
 
-// Barcode array
-typedef struct {
-    int end;    // number of entries in the barcode entry
-    int max;    // how big the array is
-    int tag_len;    // convenient place to store this
-    bc_details_t **entries;    // array of barcodes
-} bc_array_t;
-
-/*
- * Barcode array functions
- */
-void bc_push(bc_array_t *bc, bc_details_t *bcd) 
+void free_bcd(void *entry)
 {
-    if (bc->end == bc->max) {
-        // expand the array
-        bc->max *= 2;
-        bc->entries = realloc(bc->entries, bc->max * sizeof(bc_details_t *));
-    }
-    bc->entries[bc->end] = bcd;
-    bc->end++;
+    bc_details_t *bcd = (bc_details_t *)entry;
+    free(bcd->seq);
+    free(bcd->name);
+    free(bcd->lib);
+    free(bcd->sample);
+    free(bcd->desc);
+    free(bcd);
 }
 
-void bc_free(bc_array_t *bc)
-{
-    int n;
-    for (n=0; n < bc->end; n++) {
-        bc_details_t *bcd = bc->entries[n];
-        free(bcd->seq);
-        free(bcd->name);
-        free(bcd->lib);
-        free(bcd->sample);
-        free(bcd->desc);
-        free(bcd);
-    }
-    free(bc->entries);
-    free(bc);
-}
-
-bc_array_t *bc_init(void)
-{
-    bc_array_t *bc = calloc(1,sizeof(bc_array_t));
-    bc->end = 0;
-    bc->max = 100;
-    bc->tag_len = 0;
-    bc->entries = calloc(bc->max, sizeof(bc_details_t *));
-
-    // initialise first entry for null metrics
-    bc_details_t *bcd = calloc(1, sizeof(bc_details_t));
-    bcd->seq = NULL;    // we can't initialise this until we know the tag_length
-    bcd->name = strdup("0");
-    bcd->lib = strdup("");
-    bcd->sample = strdup("");
-    bcd->desc = strdup("");
-    bc_push(bc,bcd);
-    return bc;
-}
+static void freeRecord(void *r) { bam_destroy1((bam1_t *)r); }
 
 /*
  * display usage information
@@ -159,11 +122,15 @@ static void usage(FILE *write_to)
 "  -v   --verbose                       verbose output\n"
 "  -b   --barcode-file                  file containing barcodes\n"
 "       --convert-low-quality           Convert low quality bases in barcode read to 'N'\n"
-"       --max-low-quality-to-convert    Max low quality phred value to convert bases in barcode read to 'N'\n"
-"       --max-no-calls                  Max allowable number of no-calls in a barcode read before it is considered unmatchable\n"
+"       --max-low-quality-to-convert    Max low quality phred value to convert bases in barcode\n"
+"                                       read to 'N' [default: " xstr(DEFAULT_MAX_LOW_QUALITY_TO_CONVERT) "]\n"
+"       --max-no-calls                  Max allowable number of no-calls in a barcode read before\n"
+"                                       it is considered unmatchable [default: " xstr(DEFAULT_MAX_NO_CALLS) "]\n"
 "       --max-mismatches                Maximum mismatches for a barcode to be considered a match\n"
-"       --min-mismatch-delta            Minimum difference between number of mismatches in the best and second best barcodes for\n"
-"                                       a barcode to be considered a match\n"
+"                                       [default: " xstr(DEFAULT_MAX_MISMATCHES) "]\n"
+"       --min-mismatch-delta            Minimum difference between number of mismatches in the best\n"
+"                                       and second best barcodes for a barcode to be considered a\n"
+"                                       match [default: " xstr(DEFAULT_MIN_MISMATCH_DELTA) "]\n"
 "       --change-read-name              Change the read name by adding #<barcode> suffix\n"
 "       --metrics-file                  Per-barcode and per-lane metrics written to this file\n"
 "       --barcode-tag-name              Barcode tag name [default: " DEFAULT_BARCODE_TAG "]\n"
@@ -217,9 +184,9 @@ static opts_t* parse_args(int argc, char *argv[])
     opts->verbose = false;
     opts->convert_low_quality = false;
     opts->change_read_name = false;
-    opts->barcode_tag_name = strdup(DEFAULT_BARCODE_TAG);
-    opts->quality_tag_name = strdup(DEFAULT_QUALITY_TAG);
-    
+    opts->barcode_tag_name = NULL;
+    opts->quality_tag_name = NULL;
+
     int opt;
     int option_index = 0;
     while ((opt = getopt_long(argc, argv, optstring, lopts, &option_index)) != -1) {
@@ -275,6 +242,10 @@ static opts_t* parse_args(int argc, char *argv[])
         usage(stderr); free_opts(opts);
         return NULL;
     }
+
+    if (!opts->barcode_tag_name) opts->barcode_tag_name = strdup(DEFAULT_BARCODE_TAG);
+    if (!opts->quality_tag_name) opts->quality_tag_name = strdup(DEFAULT_QUALITY_TAG);
+
     // output defaults to stdout
     if (!opts->output_name) opts->output_name = strdup("-");
 
@@ -286,26 +257,24 @@ static opts_t* parse_args(int argc, char *argv[])
 //
 // return a new barcode read string with low quality bases converted to 'N'
 //
-static char *checkBarcodeQuality(char * barcode, char *quality, int max_low_quality_to_convert)
+static char *checkBarcodeQuality(char *bc_tag, bam1_t *rec, opts_t *opts)
 {
-    if (!quality) return strdup(barcode);
 
-    if (!barcode || strlen(barcode) != strlen(quality)) {
+    char *newBarcode = strdup(bc_tag);
+    uint8_t *q = bam_aux_get(rec,opts->quality_tag_name);
+    if (!q) return newBarcode;
+    char *quality = bam_aux2Z(q);
+
+    if (!bc_tag || strlen(bc_tag) != strlen(quality)) {
         fprintf(stderr, "checkBarcodeQuality(): barcode and quality are different lengths\n");
         return NULL;
     }
 
-    int mlq = max_low_quality_to_convert ? max_low_quality_to_convert : DEFAULT_MAX_LOW_QUALITY_TO_CONVERT;
-    char *newBarcode = strdup(barcode);
-    int i;
-    for (i=0; i < strlen(quality); i++) {
+    int mlq = opts->max_low_quality_to_convert ? opts->max_low_quality_to_convert 
+                                               : DEFAULT_MAX_LOW_QUALITY_TO_CONVERT;
+    for (int i=0; i < strlen(quality); i++) {
         int qual = quality[i] - 33;
-
-        if (qual <= mlq) {
-            newBarcode[i] = 'N';
-        } else {
-            newBarcode[i] = barcode[i];
-        }
+        if (qual <= mlq) newBarcode[i] = 'N';
     }
 
     return newBarcode;
@@ -336,7 +305,7 @@ void writeMetricsLine(FILE *f, bc_details_t *bcd, opts_t *opts, int total_reads,
 /*
  *
  */
-int writeMetrics(bc_array_t *barcodeArray, opts_t *opts)
+int writeMetrics(va_t *barcodeArray, opts_t *opts)
 {
     bc_details_t *bcd = barcodeArray->entries[0];
     int total_reads = bcd->reads;
@@ -402,10 +371,11 @@ int writeMetrics(bc_array_t *barcodeArray, opts_t *opts)
         writeMetricsLine(f, bcd, opts, total_reads, max_reads, total_pf_reads, max_pf_reads, total_pf_reads_assigned, nReads);
     }
     // treat Tag 0 as a special case
-    barcodeArray->entries[0]->perfect = 0;
-    barcodeArray->entries[0]->pf_perfect = 0;
-    barcodeArray->entries[0]->name[0] = 0;
-    writeMetricsLine(f, barcodeArray->entries[0], opts, total_reads, max_reads, total_pf_reads, max_pf_reads, 0, nReads);
+    bcd = barcodeArray->entries[0];
+    bcd->perfect = 0;
+    bcd->pf_perfect = 0;
+    bcd->name[0] = 0;
+    writeMetricsLine(f, bcd, opts, total_reads, max_reads, total_pf_reads, max_pf_reads, 0, nReads);
 
     fclose(f);
     return 0;
@@ -414,12 +384,22 @@ int writeMetrics(bc_array_t *barcodeArray, opts_t *opts)
 /*
  * Read the barcode file into a hash
  */
-bc_array_t *loadBarcodeFile(char *barcode_name)
+va_t *loadBarcodeFile(opts_t *opts)
 {
-    bc_array_t *barcodeArray = bc_init();
-    FILE *fh = fopen(barcode_name,"r");
+    va_t *barcodeArray = va_init(100,free_bcd);
+
+    // initialise first entry for null metrics
+    bc_details_t *bcd = calloc(1, sizeof(bc_details_t));
+    bcd->seq = NULL;    // we can't initialise this until we know the tag_length
+    bcd->name = strdup("0");
+    bcd->lib = strdup("");
+    bcd->sample = strdup("");
+    bcd->desc = strdup("");
+    va_push(barcodeArray,bcd);
+
+    FILE *fh = fopen(opts->barcode_name,"r");
     if (!fh) {
-        fprintf(stderr,"ERROR: Can't open barcode file %s\n", barcode_name);
+        fprintf(stderr,"ERROR: Can't open barcode file %s\n", opts->barcode_name);
         return NULL;
     }
     
@@ -441,7 +421,7 @@ bc_array_t *loadBarcodeFile(char *barcode_name)
         s = strtok(NULL,"\t"); bcd->lib     = strdup(s);
         s = strtok(NULL,"\t"); bcd->sample  = strdup(s);
         s = strtok(NULL,"\t"); bcd->desc    = strdup(s);
-        bc_push(barcodeArray,bcd);
+        va_push(barcodeArray,bcd);
         free(buf); buf=NULL;
 
         if (tag_length == 0) {
@@ -454,9 +434,10 @@ bc_array_t *loadBarcodeFile(char *barcode_name)
         }
     }
 
-    barcodeArray->tag_len = tag_length;
-    barcodeArray->entries[0]->seq = calloc(1,tag_length+1);
-    memset(barcodeArray->entries[0]->seq, 'N', tag_length);
+    opts->tag_len = tag_length;
+    bcd = barcodeArray->entries[0];
+    bcd->seq = calloc(1,tag_length+1);
+    memset(bcd->seq, 'N', tag_length);
     free(buf);
     fclose(fh);
     return barcodeArray;
@@ -506,9 +487,9 @@ static int countMismatches(char *tag, char *barcode)
  * find the best match in the barcode (tag) file for a given barcode
  * return the tag, if a match found, else return NULL
  */
-bc_details_t *findBestMatch(char *barcode, bc_array_t *barcodeArray, opts_t *opts)
+bc_details_t *findBestMatch(char *barcode, va_t *barcodeArray, opts_t *opts)
 {
-    int bcLen = barcodeArray->tag_len;   // size of barcode sequence in barcode file
+    int bcLen = opts->tag_len;   // size of barcode sequence in barcode file
     bc_details_t *best_match = NULL;
     int nmBest = bcLen;             // number of mismatches (best)
     int nm2Best = bcLen;            // number of mismatches (second best)
@@ -565,7 +546,7 @@ void updateMetrics(bc_details_t *bcd, char *seq, bool isPf)
  * find the best match in the barcode (tag) file, and return the corresponding barcode name
  * return NULL if no match found
  */
-static char *findBarcodeName(char *barcode, bc_array_t *barcodeArray, opts_t *opts, bool isPf)
+static char *findBarcodeName(char *barcode, va_t *barcodeArray, opts_t *opts, bool isPf)
 {
     bc_details_t *bcd = findBestMatch(barcode, barcodeArray, opts);
     updateMetrics(bcd, barcode, isPf);
@@ -660,7 +641,7 @@ void addNewRG(SAM_hdr *sh, char *entry, char *bcname, char *lib, char *sample, c
  *
  * And don't forget to add a @PG header
  */ 
-void changeHeader(bc_array_t *barcodeArray, bam_hdr_t *h, char *argv_list)
+void changeHeader(va_t *barcodeArray, bam_hdr_t *h, char *argv_list)
 {
     SAM_hdr *sh = sam_hdr_parse_(h->text, h->l_text);
     char **rgArray = malloc(sizeof(char*) * sh->nrg);
@@ -698,10 +679,7 @@ void changeHeader(bc_array_t *barcodeArray, bam_hdr_t *h, char *argv_list)
         rgArray[n] = entry;
     }
 
-    // delete the old RG lines
-    sh = sam_hdr_del(sh, "RG", NULL, NULL);
-
-    // add the new ones
+    // add the new RG lines
     for (n=0; n<nrg; n++) {
         char *entry = strdup(rgArray[n]);
         addNewRG(sh, entry, "0", NULL, NULL, NULL);
@@ -732,67 +710,70 @@ void changeHeader(bc_array_t *barcodeArray, bam_hdr_t *h, char *argv_list)
 /*
  * Process one BAM record
  */
-int processRecord(samFile *input_file, bam_hdr_t *input_header, samFile *output_file, bam_hdr_t *output_header, bc_array_t *barcodeArray, opts_t *opts)
+int processGroup(va_t *group, BAMit_t *bam_out, va_t *barcodeArray, opts_t *opts)
 {
-    bam1_t* file_read = bam_init1();
-    bam1_t* paired_read = bam_init1();
     char *name = NULL;
-
-    int r = sam_read1(input_file, input_header, file_read);
-    if (r < 0) {    // end of file
-        bam_destroy1(paired_read);
-        bam_destroy1(file_read);
-        return 1;
-    }
+    char *bc_tag = NULL;
 
     // look for barcode tag
-    uint8_t *p = bam_aux_get(file_read,opts->barcode_tag_name);
-    if (p) {
-        char *seq = bam_aux2Z(p);
-        char *newseq = strdup(seq);
-        if (opts->convert_low_quality) {
-            uint8_t *q = bam_aux_get(file_read,opts->quality_tag_name);
-            if (q) {
-                char *qual = bam_aux2Z(q);
-                free(newseq);
-                newseq = checkBarcodeQuality(seq,qual,opts->max_low_quality_to_convert);
+    for (int n=0; n < group->end; n++) {
+        bam1_t *rec = group->entries[n];
+        uint8_t *p = bam_aux_get(rec,opts->barcode_tag_name);
+        if (p) {
+            if (bc_tag) { // have we already found a tag?
+                if (strcmp(bc_tag,bam_aux2Z(p)) != 0) {
+                    fprintf(stderr,"Record %s has two different barcode tags: %s and %s\n",
+                                   bam_get_qname(rec), bc_tag, bam_aux2Z(p));
+                    return -1;
+                }
+            } else {
+                bc_tag = strdup(bam_aux2Z(p));
             }
         }
-        if (strlen(seq) > barcodeArray->tag_len) {
-            newseq[barcodeArray->tag_len] = 0;  // truncate seq to barcode length
-        }
-        name = findBarcodeName(newseq,barcodeArray,opts,!(file_read->core.flag & BAM_FQCFAIL));
-        if (!name) name = "0";
-        char * newtag = makeNewTag(file_read,"RG",name);
-        bam_aux_update_str(file_read,"RG",strlen(newtag)+1, newtag);
-        free(newtag);
-        if (opts->change_read_name) add_suffix(file_read, name);
-        free(newseq);
     }
-    r = sam_write1(output_file, output_header, file_read);
-    if (r < 0) {
-        fprintf(stderr, "Could not write sequence\n");
-        return -1;
-    }
-        
-    if (file_read->core.flag & BAM_FPAIRED) {
-        r = sam_read1(input_file, input_header, paired_read);
-        if (p) {
-            char *newtag = makeNewTag(paired_read,"RG",name);
-            bam_aux_update_str(paired_read,"RG",strlen(newtag)+1,newtag);
+
+    for (int n=0; n < group->end; n++) {
+        bam1_t *rec = group->entries[n];
+        if (bc_tag) {
+            char *newtag = strdup(bc_tag);
+            if (opts->convert_low_quality) {
+                newtag = checkBarcodeQuality(bc_tag,rec,opts);
+            }
+            if (strlen(bc_tag) > opts->tag_len) {
+                newtag[opts->tag_len] = 0;  // truncate seq to barcode length
+            }
+            name = findBarcodeName(newtag,barcodeArray,opts,!(rec->core.flag & BAM_FQCFAIL));
+            if (!name) name = "0";
+            char * newrg = makeNewTag(rec,"RG",name);
+            bam_aux_update_str(rec,"RG",strlen(newrg)+1, newrg);
+            free(newrg);
+            if (opts->change_read_name) add_suffix(rec, name);
             free(newtag);
         }
-        if (opts->change_read_name) add_suffix(paired_read, name);
-        r = sam_write1(output_file, output_header, paired_read);
+        int r = sam_write1(bam_out->f, bam_out->h, rec);
         if (r < 0) {
             fprintf(stderr, "Could not write sequence\n");
             return -1;
         }
     }
-
-    bam_destroy1(paired_read);
-    bam_destroy1(file_read);
+    free(bc_tag);
     return 0;
+}
+
+/*
+ * Read records from a given iterator until the qname changes
+ */
+static va_t *read_record_set(BAMit_t *bit, char *qname)
+{
+    va_t *recordSet = va_init(5,freeRecord);
+
+    while (BAMit_hasnext(bit) && strcmp(bam_get_qname(BAMit_peek(bit)),qname) == 0) {
+        bam1_t *rec = bam_init1();
+        bam_copy1(rec,BAMit_next(bit));
+        va_push(recordSet,rec);
+    }
+
+    return recordSet;
 }
  
 /*
@@ -801,80 +782,45 @@ int processRecord(samFile *input_file, bam_hdr_t *input_header, samFile *output_
 static int decode(opts_t* opts)
 {
     int retcode = 1;
-    samFile *input_file = NULL;
-    bam_hdr_t *input_header = NULL;
-    samFile *output_file = NULL;
-    bam_hdr_t *output_header = NULL;
-    htsFormat *in_fmt = NULL;
-    htsFormat *out_fmt = NULL;
-    char mode[] = "wbC";
+    BAMit_t *bam_in = NULL;
+    BAMit_t *bam_out = NULL;
+    va_t *barcodeArray = NULL;
 
     while (1) {
         /*
          * Read the barcode (tags) file 
          */
-        bc_array_t *barcodeArray = loadBarcodeFile(opts->barcode_name);
+        barcodeArray = loadBarcodeFile(opts);
         if (!barcodeArray) break;
 
         /*
-         * Open input file and header
+         * Open input fnd output BAM files
          */
-        if (opts->input_fmt) {
-            in_fmt = calloc(1,sizeof(htsFormat));
-            if (hts_parse_format(in_fmt, opts->input_fmt) < 0) {
-                fprintf(stderr,"Unknown input format: %s\n", opts->input_fmt);
-                break;
-            }
-        }
-        input_file = hts_open_format(opts->input_name, "rb", in_fmt);
-        free(in_fmt);
-        if (!input_file) {
-            fprintf(stderr, "Could not open input file (%s)\n", opts->input_name);
-            break;
-        }
-
-        input_header = sam_hdr_read(input_file);
-        if (!input_header) {
-            fprintf(stderr, "Could not read header for file '%s'\n", opts->input_name);
-            break;
-        }
-
-        /*
-         * Open output file and header
-         */
-        if (opts->output_fmt) {
-            out_fmt = calloc(1,sizeof(htsFormat));
-            if (hts_parse_format(out_fmt, opts->output_fmt) < 0) {
-                fprintf(stderr,"Unknown output format: %s\n", opts->output_fmt);
-                break;
-            }
-        }
-        mode[2] = opts->compression_level ? opts->compression_level : '\0';
-        output_file = hts_open_format(opts->output_name, mode, out_fmt);
-        free(out_fmt);
-        if (!output_file) {
-            fprintf(stderr, "Could not open output file (%s)\n", opts->output_name);
-            break;
-        }
-
-        output_header = bam_hdr_dup(input_header);
-        if (!output_header) {
-            fprintf(stderr, "Failed to duplicate input header\n");
-            break;
-        }
+        bam_in = BAMit_open(opts->input_name, 'r', opts->input_fmt, 0);
+        if (!bam_in) break;
+        bam_out = BAMit_open(opts->output_name, 'w', opts->output_fmt, opts->compression_level);
+        if (!bam_out) break;
+        // copy input to output header
+        bam_hdr_destroy(bam_out->h); bam_out->h = bam_hdr_dup(bam_in->h);
 
         // Change header by adding PG and RG lines
-        changeHeader(barcodeArray, output_header, opts->argv_list);
-
-        if (sam_hdr_write(output_file, output_header) != 0) {
+        changeHeader(barcodeArray, bam_out->h, opts->argv_list);
+        if (sam_hdr_write(bam_out->f, bam_out->h) != 0) {
             fprintf(stderr, "Could not write output file header\n");
             break;
         }
 
-        /*
-         * Process each BAM record, collecting metrics as we go
-         */
-        while (0 == processRecord(input_file, input_header, output_file, output_header, barcodeArray, opts));
+        // Read and process each group in the input BAM
+        while (BAMit_hasnext(bam_in)) {
+            bam1_t *rec = BAMit_peek(bam_in);
+            char *qname = strdup(bam_get_qname(rec));
+            va_t *bam_group = read_record_set(bam_in, qname);
+            if (processGroup(bam_group, bam_out, barcodeArray, opts)) break;
+            va_free(bam_group);
+            free(qname);
+        }
+
+        if (BAMit_hasnext(bam_in)) break;   // we must has exited the above loop early
 
         /*
          * And finally.....the metrics
@@ -883,18 +829,16 @@ static int decode(opts_t* opts)
             if (writeMetrics(barcodeArray, opts) != 0) break;
         }
                 
-        bc_free(barcodeArray);
 
         retcode = 0;
         break;
     }
 
     // tidy up after us
-    if (input_header) bam_hdr_destroy(input_header);
-    if (output_header) bam_hdr_destroy(output_header);
-    if (input_file) sam_close(input_file);
-    if (output_file) sam_close(output_file);
-    
+    va_free(barcodeArray);
+    BAMit_free(bam_in);
+    BAMit_free(bam_out);
+
     return retcode;
 }
 
