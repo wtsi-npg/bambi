@@ -8,4 +8,4 @@ bambi_SOURCES = bambi.c bclfile.c  decode.c   filterfile.c  hts_addendum.c  i2b.
                 parse.h bamit.h
 nobase_include_HEADERS = cram/cram_samtools.h cram/pooled_alloc.h cram/sam_header.h cram/string_alloc.h
 bambi_CFLAGS = -I/usr/include/libxml2
-bambi_LDADD = $(HTSLIB_HOME)/lib/libhts.a -ldl -lxml2 -lz -llzma -lbz2 -lpthread
+bambi_LDADD = $(HTSLIB_HOME)/lib/libhts.a -ldl -lxml2 -lz -llzma -lbz2 -lpthread -lcurl -lcrypto
