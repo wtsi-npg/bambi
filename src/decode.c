@@ -135,9 +135,9 @@ static void usage(FILE *write_to)
 "       --metrics-file                  Per-barcode and per-lane metrics written to this file\n"
 "       --barcode-tag-name              Barcode tag name [default: " DEFAULT_BARCODE_TAG "]\n"
 "       --quality-tag-name              Quality tag name [default: " DEFAULT_QUALITY_TAG "]\n"
-"       --input_fmt                     format of input file [sam/bam/cram]\n"
-"       --output_fmt                    format of output file [sam/bam/cram]\n"
-"       --compression_level             Compression level of output file [0..9]\n"
+"       --input-fmt                     format of input file [sam/bam/cram]\n"
+"       --output-fmt                    format of output file [sam/bam/cram]\n"
+"       --compression-level             Compression level of output file [0..9]\n"
 );
 }
 
@@ -708,16 +708,16 @@ void changeHeader(va_t *barcodeArray, bam_hdr_t *h, char *argv_list)
 }
 
 /*
- * Process one BAM record
+ * Process one template
  */
-int processGroup(va_t *group, BAMit_t *bam_out, va_t *barcodeArray, opts_t *opts)
+int processTemplate(va_t *template, BAMit_t *bam_out, va_t *barcodeArray, opts_t *opts)
 {
     char *name = NULL;
     char *bc_tag = NULL;
 
     // look for barcode tag
-    for (int n=0; n < group->end; n++) {
-        bam1_t *rec = group->entries[n];
+    for (int n=0; n < template->end; n++) {
+        bam1_t *rec = template->entries[n];
         uint8_t *p = bam_aux_get(rec,opts->barcode_tag_name);
         if (p) {
             if (bc_tag) { // have we already found a tag?
@@ -732,8 +732,8 @@ int processGroup(va_t *group, BAMit_t *bam_out, va_t *barcodeArray, opts_t *opts
         }
     }
 
-    for (int n=0; n < group->end; n++) {
-        bam1_t *rec = group->entries[n];
+    for (int n=0; n < template->end; n++) {
+        bam1_t *rec = template->entries[n];
         if (bc_tag) {
             char *newtag = strdup(bc_tag);
             if (opts->convert_low_quality) {
@@ -763,7 +763,7 @@ int processGroup(va_t *group, BAMit_t *bam_out, va_t *barcodeArray, opts_t *opts
 /*
  * Read records from a given iterator until the qname changes
  */
-static va_t *read_record_set(BAMit_t *bit, char *qname)
+static va_t *loadTemplate(BAMit_t *bit, char *qname)
 {
     va_t *recordSet = va_init(5,freeRecord);
 
@@ -810,13 +810,13 @@ static int decode(opts_t* opts)
             break;
         }
 
-        // Read and process each group in the input BAM
+        // Read and process each template in the input BAM
         while (BAMit_hasnext(bam_in)) {
             bam1_t *rec = BAMit_peek(bam_in);
             char *qname = strdup(bam_get_qname(rec));
-            va_t *bam_group = read_record_set(bam_in, qname);
-            if (processGroup(bam_group, bam_out, barcodeArray, opts)) break;
-            va_free(bam_group);
+            va_t *template = loadTemplate(bam_in, qname);
+            if (processTemplate(template, bam_out, barcodeArray, opts)) break;
+            va_free(template);
             free(qname);
         }
 
