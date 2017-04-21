@@ -71,7 +71,7 @@ AC_DEFUN([AX_WITH_HTSLIB], [
                    LDFLAGS="-L$HTSLIB_HOME/lib $LDFLAGS"
                ])
 
-               LIBS="$HTSLIB_HOME/lib/libhts.a -lz -ldl -lbz2 -llzma -lpthread"
+               LIBS="$HTSLIB_HOME/lib/libhts.a -lz -ldl -lbz2 -llzma -lpthread -lcurl -lcrypto"
 
                AC_MSG_CHECKING([checking htslib version])
                AC_RUN_IFELSE([AC_LANG_PROGRAM([

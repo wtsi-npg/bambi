@@ -43,7 +43,7 @@ void setup_test_1(int* argc, char*** argv, char *outputfile)
     (*argv)[0] = strdup("bambi");
     (*argv)[1] = strdup("decode");
     (*argv)[2] = strdup("-i");
-    (*argv)[3] = strdup(MKNAME(DATA_DIR,"/6383_9.sam"));
+    (*argv)[3] = strdup(MKNAME(DATA_DIR,"/decode_1.sam"));
     (*argv)[4] = strdup("-o");
     (*argv)[5] = strdup(outputfile);
     (*argv)[6] = strdup("--output-fmt");
@@ -51,9 +51,9 @@ void setup_test_1(int* argc, char*** argv, char *outputfile)
     (*argv)[8] = strdup("--input-fmt");
     (*argv)[9] = strdup("sam");
     (*argv)[10] = strdup("--barcode-file");
-    (*argv)[11] = strdup(MKNAME(DATA_DIR,"/6383_8.tag"));
+    (*argv)[11] = strdup(MKNAME(DATA_DIR,"/decode_1.tag"));
     (*argv)[12] = strdup("--metrics-file");
-    (*argv)[13] = strdup(MKNAME(DATA_DIR,"/out/6383_9.metrics"));
+    (*argv)[13] = strdup(MKNAME(DATA_DIR,"/out/decode_1.metrics"));
     (*argv)[14] = strdup("--barcode-tag-name");
     (*argv)[15] = strdup("RT");
 }
@@ -65,7 +65,7 @@ void setup_test_2(int* argc, char*** argv, char *outputfile)
     (*argv)[0] = strdup("bambi");
     (*argv)[1] = strdup("decode");
     (*argv)[2] = strdup("-i");
-    (*argv)[3] = strdup(MKNAME(DATA_DIR,"/6383_8.sam"));
+    (*argv)[3] = strdup(MKNAME(DATA_DIR,"/decode_1.sam"));
     (*argv)[4] = strdup("-o");
     (*argv)[5] = strdup(outputfile);
     (*argv)[6] = strdup("--output-fmt");
@@ -73,11 +73,11 @@ void setup_test_2(int* argc, char*** argv, char *outputfile)
     (*argv)[8] = strdup("--input-fmt");
     (*argv)[9] = strdup("sam");
     (*argv)[10] = strdup("--barcode-file");
-    (*argv)[11] = strdup(MKNAME(DATA_DIR,"/6383_8.tag"));
+    (*argv)[11] = strdup(MKNAME(DATA_DIR,"/decode_1.tag"));
     (*argv)[12] = strdup("--convert-low-quality");
     (*argv)[13] = strdup("--change-read-name");
     (*argv)[14] = strdup("--metrics-file");
-    (*argv)[15] = strdup(MKNAME(DATA_DIR,"/out/6383_8.metrics"));
+    (*argv)[15] = strdup(MKNAME(DATA_DIR,"/out/decode_2.metrics"));
     (*argv)[16] = strdup("--barcode-tag-name");
     (*argv)[17] = strdup("RT");
 }
@@ -126,15 +126,6 @@ int main(int argc, char**argv)
         if (verbose) fprintf(stderr,"Created temporary directory: %s\n", TMPDIR);
     }
 
-    // test checkBarcodeQuality()
-    char *newBarcode = checkBarcodeQuality("CAGATCTG", "%#144=D@",0);
-    if (strcmp(newBarcode, "NNGATCTG") == 0) {
-        success++;
-    } else {
-        failure++;
-        fprintf(stderr, "checkBarcodeQuality() failed: expecting 'NNGATCTG',  got '%s'\n", newBarcode);
-    }
-
     // test isNoCall()
     if (!isNoCall('A')) success++;
     else { failure++; fprintf(stderr, "isNoCall('A') returned True\n"); }
@@ -167,7 +158,7 @@ int main(int argc, char**argv)
     int argc_1;
     char** argv_1;
     char *outputfile = calloc(1,strlen(TMPDIR)+64);
-    sprintf(outputfile,"%s/decode1.sam", TMPDIR);
+    sprintf(outputfile,"%s/decode_1.sam", TMPDIR);
 
     setup_test_1(&argc_1, &argv_1, outputfile);
     main_decode(argc_1-1, argv_1+1);
@@ -185,7 +176,7 @@ int main(int argc, char**argv)
     // --convert_low_quality option
     int argc_2;
     char** argv_2;
-    sprintf(outputfile,"%s/decode2.sam",TMPDIR);
+    sprintf(outputfile,"%s/decode_2.sam",TMPDIR);
     setup_test_2(&argc_2, &argv_2, outputfile);
     main_decode(argc_2-1, argv_2+1);
 
