@@ -680,6 +680,9 @@ void changeHeader(va_t *barcodeArray, bam_hdr_t *h, char *argv_list)
         rgArray[n] = entry;
     }
 
+    // Remove the existing RG lines
+    sh = sam_hdr_del(sh, "RG", NULL, NULL);
+
     // add the new RG lines
     for (n=0; n<nrg; n++) {
         char *entry = strdup(rgArray[n]);
