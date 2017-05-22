@@ -23,6 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <htslib/sam.h>
 #include <string.h>
 #include <getopt.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -274,7 +275,7 @@ static char *checkBarcodeQuality(char *bc_tag, bam1_t *rec, opts_t *opts)
                                                : DEFAULT_MAX_LOW_QUALITY_TO_CONVERT;
     for (int i=0; i < strlen(quality); i++) {
         int qual = quality[i] - 33;
-        if (qual <= mlq) newBarcode[i] = 'N';
+        if (isalpha(newBarcode[i]) && (qual <= mlq)) newBarcode[i] = 'N';
     }
 
     return newBarcode;
@@ -472,8 +473,8 @@ static int countMismatches(char *tag, char *barcode)
     char *t, *b;;
     int n = 0;
     for (t=tag, b=barcode; *t; t++, b++) {
-        if (!isNoCall(*t)) {
-            if (!isNoCall(*b)) {
+        if (!isNoCall(*t) && !isNoCall(*b)) {   // ignore noCalls
+            if (isalpha(*t) && isalpha(*b)) {   // also ignore separators
                 if (*t != *b) {
                     n++;
                 }
@@ -678,6 +679,9 @@ void changeHeader(va_t *barcodeArray, bam_hdr_t *h, char *argv_list)
         }
         rgArray[n] = entry;
     }
+
+    // Remove the existing RG lines
+    sh = sam_hdr_del(sh, "RG", NULL, NULL);
 
     // add the new RG lines
     for (n=0; n<nrg; n++) {

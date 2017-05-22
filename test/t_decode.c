@@ -140,6 +140,7 @@ int main(int argc, char**argv)
     test_noCalls("ABC",0);
     test_noCalls("ABCN",1);
     test_noCalls("NABCN",2);
+    test_noCalls("NA+CN",2);
 
     // test countMismatches()
     test_countMismatches("ABC","AXC",1);
