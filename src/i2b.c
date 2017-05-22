@@ -1246,14 +1246,14 @@ static int setFlag(bool second, bool filtered, bool ispaired)
  * Add an aux tag to a BAM record, if it doesn't already exist
  * If it does, concatenate it to the existing tag data
  */
-static void update_aux(bam1_t *bam, char *auxtag, char *data, opts_t *opts)
+static void update_aux(bam1_t *bam, char *auxtag, char *data, char *tag_separator)
 {
     uint8_t *s = bam_aux_get(bam,auxtag);
     if (s) {
         // update existing tag
-        char *new_data = calloc(1, strlen(bam_aux2Z(s)) + strlen(INDEX_SEPARATOR) + strlen(data) + 1);
+        char *new_data = calloc(1, strlen(bam_aux2Z(s)) + (tag_separator ? strlen(tag_separator) : 0) + strlen(data) + 1);
         strcpy(new_data, bam_aux2Z(s));
-        if (opts->separator) strcat(new_data, INDEX_SEPARATOR);
+        if (tag_separator) strcat(new_data, tag_separator);
         strcat(new_data, data);
         bam_aux_update_str(bam, auxtag, strlen(new_data)+1, new_data);
         free(new_data);
@@ -1289,8 +1289,8 @@ static void writeRecord(int flags, opts_t *opts, char *readName,
 
     // add index tags
     for (int n=0; n < ib->end; n++) {
-        update_aux(bam, opts->barcode_tag->entries[n], ib->entries[n], opts);
-        update_aux(bam, opts->quality_tag->entries[n], iq->entries[n], opts);
+        update_aux(bam, opts->barcode_tag->entries[n], ib->entries[n], opts->separator ? INDEX_SEPARATOR : NULL);
+        update_aux(bam, opts->quality_tag->entries[n], iq->entries[n], opts->separator ? QUAL_SEPARATOR : NULL);
     }
 
     r = sam_write1(output_file, output_header, bam);

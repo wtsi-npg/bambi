@@ -1,3 +1,7 @@
+	[0.9.7]
+	Bug fix: remove old RG lines before adding new ones (decode)
+	Handle separators in tag indexes
+
 	[0.9.6]
 	decode function refactored to work with read groups instead of individual read records
 
