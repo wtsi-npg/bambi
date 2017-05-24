@@ -321,10 +321,10 @@ static int processFiles(BAMit_t *in_bam, BAMit_t *target_bam, BAMit_t *exclude_b
     int n;
     bool all_unaligned;
 
-    if (sam_hdr_write(target_bam->f, target_bam->h)) { fprintf(stderr,"Failed to write target header\n"); exit(1); }
-    if (sam_hdr_write(exclude_bam->f, target_bam->h)) { fprintf(stderr,"Failed to write exclude header\n"); exit(1); }
     addPGLine(target_bam,opts,"TARGET");
     addPGLine(exclude_bam,opts,"EXCLUDED");
+    if (sam_hdr_write(target_bam->f, target_bam->h)) { fprintf(stderr,"Failed to write target header\n"); exit(1); }
+    if (sam_hdr_write(exclude_bam->f, target_bam->h)) { fprintf(stderr,"Failed to write exclude header\n"); exit(1); }
 
     while (BAMit_hasnext(in_bam)) {
         // for each record set
