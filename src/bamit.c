@@ -28,7 +28,10 @@ BAMit_t *BAMit_init(samFile *f, bam_hdr_t *h)
     bit->h = h;
     bit->rec = bam_init1();
     bit->nextRec = bam_init1();
-    if (f->is_write == 0) r = sam_read1(bit->f, bit->h, bit->nextRec);
+    if (f->is_write == 0) {
+        r = sam_read1(bit->f, bit->h, bit->nextRec);
+        if (r<0) { bam_destroy1(bit->nextRec); bit->nextRec = NULL; }
+    }
     return bit;
 }
 
