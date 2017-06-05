@@ -112,6 +112,11 @@ int main(int argc, char**argv)
     checkEqual("First name", "IL16_986:1:9:9:307", bam_get_qname(rec));
     BAMit_free(bit);
 
+    bit = BAMit_open(MKNAME(DATA_DIR,"/bamit_empty.bam"), 'r', NULL, 0);
+    icheckEqual("Empty bam file", false, BAMit_hasnext(bit));
+    BAMit_free(bit);
+
+
     printf("BAMit tests: %s\n", failure ? "FAILED" : "Passed");
     return failure ? EXIT_FAILURE : EXIT_SUCCESS;
 }
