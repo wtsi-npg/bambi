@@ -1,3 +1,6 @@
+	[0.9.9]
+	Bug fix: decode stats counts templates rather than reads
+
 	[0.9.8]
 	Bug fix: chrsplit function now adds PG lines to output BAM/CRAM header
 	Bug fix: Handle empty BAM files (bamit)
