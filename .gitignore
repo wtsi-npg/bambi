@@ -56,3 +56,7 @@ missing
 stamp-h1
 test-driver
 
+.project
+.cproject
+.autotools
+.settings/
