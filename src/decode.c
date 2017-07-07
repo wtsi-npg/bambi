@@ -67,6 +67,7 @@ typedef struct {
     char *output_fmt;
     char compression_level;
     int tag_len;
+    short ignore_pf;
 } opts_t;
 
 static void free_opts(opts_t* opts)
@@ -141,6 +142,7 @@ static void usage(FILE *write_to)
 "       --input-fmt                     format of input file [sam/bam/cram]\n"
 "       --output-fmt                    format of output file [sam/bam/cram]\n"
 "       --compression-level             Compression level of output file [0..9]\n"
+"       --ignore-pf                     Doesn't output PF statistics\n"
 );
 }
 
@@ -170,6 +172,7 @@ static opts_t* parse_args(int argc, char *argv[])
         { "input-fmt",                  1, 0, 0 },
         { "output-fmt",                 1, 0, 0 },
         { "compression-level",          1, 0, 0 },
+        { "ignore-pf",                  0, 0, 0 },
         { NULL, 0, NULL, 0 }
     };
 
@@ -189,6 +192,7 @@ static opts_t* parse_args(int argc, char *argv[])
     opts->change_read_name = false;
     opts->barcode_tag_name = NULL;
     opts->quality_tag_name = NULL;
+    opts->ignore_pf = 0;
 
     int opt;
     int option_index = 0;
@@ -216,6 +220,7 @@ static opts_t* parse_args(int argc, char *argv[])
                     else if (strcmp(arg, "input-fmt") == 0)                  opts->input_fmt = strdup(optarg);
                     else if (strcmp(arg, "output-fmt") == 0)                 opts->output_fmt = strdup(optarg);
                     else if (strcmp(arg, "compression-level") == 0)          opts->compression_level = *optarg;
+                    else if (strcmp(arg, "ignore_pf") == 0)                  opts->ignore_pf = 1;
                     else {
                         printf("\nUnknown option: %s\n\n", arg); 
                         usage(stdout); free_opts(opts);
@@ -291,17 +296,17 @@ void writeMetricsLine(FILE *f, bc_details_t *bcd, opts_t *opts, int total_reads,
     fprintf(f, "%s\t", bcd->sample);
     fprintf(f, "%s\t", bcd->desc);
     fprintf(f, "%d\t", bcd->reads);
-    fprintf(f, "%d\t", bcd->pf_reads);
+    if (!opts->ignore_pf) fprintf(f, "%d\t", bcd->pf_reads);
     fprintf(f, "%d\t", bcd->perfect);
-    fprintf(f, "%d\t", bcd->pf_perfect);
+    if (!opts->ignore_pf) fprintf(f, "%d\t", bcd->pf_perfect);
     fprintf(f, "%d\t", bcd->one_mismatch);
-    fprintf(f, "%d\t", bcd->pf_one_mismatch);
+    if (!opts->ignore_pf) fprintf(f, "%d\t", bcd->pf_one_mismatch);
     fprintf(f, "%d\t", bcd->first_tag_match);
     fprintf(f, "%f\t", total_reads ? bcd->reads / (double)total_reads : 0 );
     fprintf(f, "%f\t", max_reads ? bcd->reads / (double)max_reads : 0 );
-    fprintf(f, "%f\t", total_pf_reads ? bcd->pf_reads / (double)total_pf_reads : 0 );
-    fprintf(f, "%f\t", max_pf_reads ? bcd->pf_reads / (double)max_pf_reads : 0 );
-    fprintf(f, "%f", total_pf_reads_assigned ? bcd->pf_reads * nReads / (double)total_pf_reads_assigned : 0);
+    if (!opts->ignore_pf) fprintf(f, "%f\t", total_pf_reads ? bcd->pf_reads / (double)total_pf_reads : 0 );
+    if (!opts->ignore_pf) fprintf(f, "%f\t", max_pf_reads ? bcd->pf_reads / (double)max_pf_reads : 0 );
+    if (!opts->ignore_pf) fprintf(f, "%f", total_pf_reads_assigned ? bcd->pf_reads * nReads / (double)total_pf_reads_assigned : 0);
     fprintf(f, "\n");
 
 }
@@ -357,17 +362,17 @@ int writeMetrics(va_t *barcodeArray, opts_t *opts)
     fprintf(f, "SAMPLE_NAME\t");
     fprintf(f, "DESCRIPTION\t");
     fprintf(f, "READS\t");
-    fprintf(f, "PF_READS\t");
+    if (!opts->ignore_pf) fprintf(f, "PF_READS\t");
     fprintf(f, "PERFECT_MATCHES\t");
-    fprintf(f, "PF_PERFECT_MATCHES\t");
+    if (!opts->ignore_pf) fprintf(f, "PF_PERFECT_MATCHES\t");
     fprintf(f, "ONE_MISMATCH_MATCHES\t");
-    fprintf(f, "PF_ONE_MISMATCH_MATCHES\t");
+    if (!opts->ignore_pf) fprintf(f, "PF_ONE_MISMATCH_MATCHES\t");
     fprintf(f, "FIRST_TAG_MATCHES\t");
     fprintf(f, "PCT_MATCHES\t");
     fprintf(f, "RATIO_THIS_BARCODE_TO_BEST_BARCODE_PCT\t");
-    fprintf(f, "PF_PCT_MATCHES\t");
-    fprintf(f, "PF_RATIO_THIS_BARCODE_TO_BEST_BARCODE_PCT\t");
-    fprintf(f, "PF_NORMALIZED_MATCHES\n");
+    if (!opts->ignore_pf) fprintf(f, "PF_PCT_MATCHES\t");
+    if (!opts->ignore_pf) fprintf(f, "PF_RATIO_THIS_BARCODE_TO_BEST_BARCODE_PCT\t");
+    if (!opts->ignore_pf) fprintf(f, "PF_NORMALIZED_MATCHES\n");
 
 
     // second loop to print things
