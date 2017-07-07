@@ -96,7 +96,7 @@ typedef struct {
     char *desc;
     int reads, pf_reads, perfect, pf_perfect, one_mismatch, pf_one_mismatch;
     char *next_tag;
-    int one_tag_match;
+    int first_tag_match;
 } bc_details_t;
 
 void free_bcd(void *entry)
@@ -296,7 +296,7 @@ void writeMetricsLine(FILE *f, bc_details_t *bcd, opts_t *opts, int total_reads,
     fprintf(f, "%d\t", bcd->pf_perfect);
     fprintf(f, "%d\t", bcd->one_mismatch);
     fprintf(f, "%d\t", bcd->pf_one_mismatch);
-    fprintf(f, "%d\t", bcd->one_tag_match);
+    fprintf(f, "%d\t", bcd->first_tag_match);
     fprintf(f, "%f\t", total_reads ? bcd->reads / (double)total_reads : 0 );
     fprintf(f, "%f\t", max_reads ? bcd->reads / (double)max_reads : 0 );
     fprintf(f, "%f\t", total_pf_reads ? bcd->pf_reads / (double)total_pf_reads : 0 );
@@ -362,7 +362,7 @@ int writeMetrics(va_t *barcodeArray, opts_t *opts)
     fprintf(f, "PF_PERFECT_MATCHES\t");
     fprintf(f, "ONE_MISMATCH_MATCHES\t");
     fprintf(f, "PF_ONE_MISMATCH_MATCHES\t");
-    fprintf(f, "ONE_TAG_MATCHES\t");
+    fprintf(f, "FIRST_TAG_MATCHES\t");
     fprintf(f, "PCT_MATCHES\t");
     fprintf(f, "RATIO_THIS_BARCODE_TO_BEST_BARCODE_PCT\t");
     fprintf(f, "PF_PCT_MATCHES\t");
@@ -493,7 +493,7 @@ static int countMismatches(char *tag, char *barcode)
  * count number of mismatches between two sequences up to a maximum length
  * (ignoring noCalls)
  */
-static int countNMismatches(const char *tag, const char *barcode, unsigned int length)
+static int countNMismatches(char *tag, char *barcode, unsigned int length)
 {
     char *t, *b;;
     int n = 0, l;
@@ -582,13 +582,13 @@ bc_details_t *findBestMatch(char *barcode, va_t *barcodeArray, opts_t *opts, boo
                 if (isPf) best_match->pf_perfect++;
             }
 
-            if (nmBest1==1 || (nmBest1==0&&nmBest2==1)) {     // count out-by-one matches
+            if ((nmBest1 + nmBest2)==1) {     // count out-by-one matches
                 best_match->one_mismatch++;
                 if (isPf) best_match->pf_one_mismatch++;
             }
 
-            if (nmBest1 < 2 && nmBest2 > 1) {
-                best_match->one_tag_match++;
+            if (nmBest1==0 && nmBest2 > 1) {
+                best_match->first_tag_match++;
             }
         } else {
             if (nmBest==0) {     // count perfect matches
@@ -804,6 +804,7 @@ int processTemplate(va_t *template, BAMit_t *bam_out, va_t *barcodeArray, opts_t
 {
     char *name = NULL;
     char *bc_tag = NULL;
+    short error_code = 0;
 
     // look for barcode tag
     for (int n=0; n < template->end; n++) {
@@ -844,11 +845,13 @@ int processTemplate(va_t *template, BAMit_t *bam_out, va_t *barcodeArray, opts_t
         int r = sam_write1(bam_out->f, bam_out->h, rec);
         if (r < 0) {
             fprintf(stderr, "Could not write sequence\n");
-            return -1;
+            error_code = -1;
+            break;
         }
     }
+
     free(bc_tag);
-    return 0;
+    return error_code;
 }
 
 /*
