@@ -536,6 +536,8 @@ bc_details_t *findBestMatch(char *barcode, va_t *barcodeArray, opts_t *opts, boo
     int nmBest2 = bcLen/2;
     int nm2Best2 = bcLen/2;
     unsigned short match_case = 0;
+    int d1 = nmBest1;
+    int d2 = nmBest2;
 
     int nCalls = noCalls(barcode);
     bool dual_tag = (strstr(barcode," ") != NULL);
@@ -551,6 +553,7 @@ bc_details_t *findBestMatch(char *barcode, va_t *barcodeArray, opts_t *opts, boo
 
                     int nMismatches1 = countNMismatches(bcd->seq, barcode, bcLen/2);
                     int nMismatches2 = countNMismatches(bcd->seq + bcLen/2 + 1, barcode + bcLen/2 + 1, bcLen/2);
+                    int nMismatches = nMismatches1 + nMismatches2; 
 
                     //match the first tag
                     if (nMismatches1 < nmBest1) {
@@ -579,39 +582,60 @@ bc_details_t *findBestMatch(char *barcode, va_t *barcodeArray, opts_t *opts, boo
                             nm2Best2 = nMismatches2;
                         }
                     }
+
+                    //match both
+                    if (nMismatches < nmBest) {
+                        if (best_match) {
+                            nm2Best = nmBest;
+                        }
+                        nmBest = nMismatches;
+
+                        best_match = bcd;
+                        d1 = nMismatches1;
+                        d2 = nMismatches2;
+                    } else {
+                        if (nMismatches < nm2Best) {
+                            nm2Best = nMismatches;
+                        }
+                    }
                 }
             }
 
             bool matched1 = best_match1 && nmBest1 <= opts->max_mismatches && nm2Best1 - nmBest1 >= opts->min_mismatch_delta;
             bool matched2 = best_match2 && nmBest2 <= opts->max_mismatches && nm2Best2 - nmBest2 >= opts->min_mismatch_delta;
+            bool matched = best_match && d1 <= opts->max_mismatches && d2 <= opts->max_mismatches && nm2Best - nmBest >= opts->min_mismatch_delta;
 
-            if (matched1) {
-                if (!matched2) {
-                    best_match = best_match1;
-                    match_case = 1;
-                } else if (best_match1 == best_match2) {
-                    best_match = best_match1;
-                    match_case = 3;
-                } else {
-                    bc_details_t *new_bcd = calloc(1, sizeof(bc_details_t)); //create a new entry with the two tags
-                    new_bcd->seq = malloc(bcLen+1);
-                    strncpy(new_bcd->seq, best_match1->seq, bcLen/2+1); //copy the first tag, including the space
-                    strncpy(new_bcd->seq + bcLen/2 + 1, best_match2->seq, bcLen/2); //copy the second tag, after the space
-                    new_bcd->name = strdup("0");
-                    new_bcd->lib = strdup("");
-                    new_bcd->sample = strdup("");
-                    new_bcd->desc = strdup("Tag hop");  //the combination is registered as a tag hop
-
-                    va_push(barcodeArray,new_bcd);
-                    best_match = new_bcd;   //the best match is the new entry
-                    match_case = 4;
-                }
+            if (matched) {
+                match_case = 3;
             } else {
-                if (best_match2) {
-                    best_match = best_match2;
-                    match_case = 2;
+                if (matched1) {
+                    if (!matched2) {
+                        best_match = best_match1;
+                        match_case = 1;
+                    } else {
+                        if (best_match1 != best_match2) {
+                           bc_details_t *new_bcd = calloc(1, sizeof(bc_details_t)); //create a new entry with the two tags
+                           new_bcd->seq = malloc(bcLen+1);
+                           strncpy(new_bcd->seq, best_match1->seq, bcLen/2+1); //copy the first tag, including the space
+                           strncpy(new_bcd->seq + bcLen/2 + 1, best_match2->seq + bcLen/2 + 1, bcLen/2); //copy the second tag, after the space
+                           new_bcd->seq[bcLen] = 0;
+                           new_bcd->name = strdup("0");
+                           new_bcd->lib = strdup("");
+                           new_bcd->sample = strdup("");
+                           new_bcd->desc = strdup("Tag hop");  //the combination is registered as a tag hop
+                           new_bcd->next_tag = new_bcd->seq + bcLen/2;
+                           va_push(barcodeArray,new_bcd);
+                           best_match = new_bcd;   //the best match is the new entry
+                           match_case = 4;
+                        }
+                    }
                 } else {
-                    best_match = barcodeArray->entries[0];
+                    if (best_match2) {
+                        best_match = best_match2;
+                        match_case = 2;
+                    } else {
+                        best_match = barcodeArray->entries[0];
+                    }
                 }
             }
         } else {    //one tag case
@@ -637,7 +661,7 @@ bc_details_t *findBestMatch(char *barcode, va_t *barcodeArray, opts_t *opts, boo
         best_match = barcodeArray->entries[0];
     }
 
-    if (isUpdateMetrics) {
+    if (isUpdateMetrics && best_match) {
         best_match->reads++;
         if (isPf) best_match->pf_reads++;
 
@@ -658,6 +682,14 @@ bc_details_t *findBestMatch(char *barcode, va_t *barcodeArray, opts_t *opts, boo
                 }
                 break;
             case 3:
+                if (d1==0 && d2==0){
+                    best_match->perfect++;
+                    if (isPf) best_match->pf_perfect++;
+                } else {
+                    best_match->one_mismatch++;
+                    if (isPf) best_match->pf_one_mismatch++;
+                }
+                break;
             case 4:
                 if (nmBest1==0 && nmBest2==0){
                     best_match->perfect++;
