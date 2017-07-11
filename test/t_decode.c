@@ -82,6 +82,12 @@ void setup_test_2(int* argc, char*** argv, char *outputfile)
     (*argv)[17] = strdup("RT");
 }
 
+void free_argv(int argc, char *argv[])
+{
+    for (int n=0; n < argc; free(argv[n++]));
+    free(argv);
+}
+
 void test_noCalls(char *s, int e)
 {
     int n;
@@ -163,6 +169,7 @@ int main(int argc, char**argv)
 
     setup_test_1(&argc_1, &argv_1, outputfile);
     main_decode(argc_1-1, argv_1+1);
+    free_argv(argc_1,argv_1);
 
     char *cmd = calloc(1,1024);
     sprintf(cmd,"diff -I ID:bambi %s %s", outputfile, MKNAME(DATA_DIR,"/out/6383_9_nosplit_nochange.sam"));
@@ -180,6 +187,7 @@ int main(int argc, char**argv)
     sprintf(outputfile,"%s/decode_2.sam",TMPDIR);
     setup_test_2(&argc_2, &argv_2, outputfile);
     main_decode(argc_2-1, argv_2+1);
+    free_argv(argc_2,argv_2);
 
     sprintf(cmd,"diff -I ID:bambi %s %s", outputfile, MKNAME(DATA_DIR,"/out/6383_8_nosplitN.sam"));
     result = system(cmd);
@@ -189,6 +197,9 @@ int main(int argc, char**argv)
     } else {
         success++;
     }
+
+    free(outputfile);
+    free(cmd);
 
     printf("decode tests: %s\n", failure ? "FAILED" : "Passed");
     return failure ? EXIT_FAILURE : EXIT_SUCCESS;
