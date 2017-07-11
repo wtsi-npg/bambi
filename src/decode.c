@@ -739,9 +739,11 @@ int processTemplate(va_t *template, BAMit_t *bam_out, va_t *barcodeArray, opts_t
     for (int n=0; n < template->end; n++) {
         bam1_t *rec = template->entries[n];
         if (bc_tag) {
-            char *newtag = strdup(bc_tag);
+            char *newtag;
             if (opts->convert_low_quality) {
                 newtag = checkBarcodeQuality(bc_tag,rec,opts);
+            } else {
+                newtag = strdup(bc_tag);
             }
             if (strlen(bc_tag) > opts->tag_len) {
                 newtag[opts->tag_len] = 0;  // truncate seq to barcode length
