@@ -1,3 +1,6 @@
+	[0.9.10]
+	Bug fix: decode memory leak fix
+
 	[0.9.9]
 	Bug fix: decode stats counts templates rather than reads
 
