@@ -45,6 +45,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define DEFAULT_BARCODE_TAG "BC"
 #define DEFAULT_QUALITY_TAG "QT"
 
+
+enum match {
+    MATCHED_FIRST=1,
+    MATCHED_SECOND,
+    MATCHED_BOTH,
+    MATCHED_NEW
+};
+
+
 /*
  * structure to hold options
  */
@@ -601,17 +610,17 @@ bc_details_t *findBestMatch(char *barcode, va_t *barcodeArray, opts_t *opts, boo
                 }
             }
 
-            bool matched1 = best_match1 && nmBest1 <= opts->max_mismatches && nm2Best1 - nmBest1 >= opts->min_mismatch_delta;
-            bool matched2 = best_match2 && nmBest2 <= opts->max_mismatches && nm2Best2 - nmBest2 >= opts->min_mismatch_delta;
-            bool matched = best_match && d1 <= opts->max_mismatches && d2 <= opts->max_mismatches && nm2Best - nmBest >= opts->min_mismatch_delta;
+            bool matched_both = best_match && d1 <= opts->max_mismatches && d2 <= opts->max_mismatches && nm2Best - nmBest >= opts->min_mismatch_delta;
+            bool matched_first = best_match1 && nmBest1 <= opts->max_mismatches && nm2Best1 - nmBest1 >= opts->min_mismatch_delta;
+            bool matched_second = best_match2 && nmBest2 <= opts->max_mismatches && nm2Best2 - nmBest2 >= opts->min_mismatch_delta;
 
-            if (matched) {
-                match_case = 3;
+            if (matched_both) {
+                match_case = MATCHED_BOTH;
             } else {
-                if (matched1) {
-                    if (!matched2) {
+                if (matched_first) {
+                    if (!matched_second) {
                         best_match = best_match1;
-                        match_case = 1;
+                        match_case = MATCHED_FIRST;
                     } else {
                         if (best_match1 != best_match2) {
                            bc_details_t *new_bcd = calloc(1, sizeof(bc_details_t)); //create a new entry with the two tags
@@ -619,20 +628,20 @@ bc_details_t *findBestMatch(char *barcode, va_t *barcodeArray, opts_t *opts, boo
                            strncpy(new_bcd->seq, best_match1->seq, bcLen/2+1); //copy the first tag, including the space
                            strncpy(new_bcd->seq + bcLen/2 + 1, best_match2->seq + bcLen/2 + 1, bcLen/2); //copy the second tag, after the space
                            new_bcd->seq[bcLen] = 0;
-                           new_bcd->name = strdup("0");
-                           new_bcd->lib = strdup("");
-                           new_bcd->sample = strdup("");
-                           new_bcd->desc = strdup("Tag hop");  //the combination is registered as a tag hop
+                           new_bcd->name = strdup("DUMMY NAME");
+                           new_bcd->lib = strdup("DUMMY LIB");
+                           new_bcd->sample = strdup("DUMMY SAMPLE");
+                           new_bcd->desc = strdup("TAG HOP");  //the combination is registered as a tag hop
                            new_bcd->next_tag = new_bcd->seq + bcLen/2;
                            va_push(barcodeArray,new_bcd);
                            best_match = new_bcd;   //the best match is the new entry
-                           match_case = 4;
+                           match_case = MATCHED_NEW;
                         }
                     }
                 } else {
                     if (best_match2) {
                         best_match = best_match2;
-                        match_case = 2;
+                        match_case = MATCHED_SECOND;
                     } else {
                         best_match = barcodeArray->entries[0];
                     }
@@ -667,21 +676,21 @@ bc_details_t *findBestMatch(char *barcode, va_t *barcodeArray, opts_t *opts, boo
 
         if (dual_tag) {
             switch (match_case) {
-            case 1:
+            case MATCHED_FIRST:
                 best_match->first_tag_match++;
                 if (nmBest1 == 1) {
                     best_match->one_mismatch++;
                     if (isPf) best_match->pf_one_mismatch++;
                 }
                 break;
-            case 2:
+            case MATCHED_SECOND:
                 best_match->second_tag_match++;
                 if (nmBest2 == 1) {
                     best_match->one_mismatch++;
                     if (isPf) best_match->pf_one_mismatch++;
                 }
                 break;
-            case 3:
+            case MATCHED_BOTH:
                 if (d1==0 && d2==0){
                     best_match->perfect++;
                     if (isPf) best_match->pf_perfect++;
@@ -690,7 +699,7 @@ bc_details_t *findBestMatch(char *barcode, va_t *barcodeArray, opts_t *opts, boo
                     if (isPf) best_match->pf_one_mismatch++;
                 }
                 break;
-            case 4:
+            case MATCHED_NEW:
                 if (nmBest1==0 && nmBest2==0){
                     best_match->perfect++;
                     if (isPf) best_match->pf_perfect++;
