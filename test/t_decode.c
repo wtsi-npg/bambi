@@ -82,6 +82,27 @@ void setup_test_2(int* argc, char*** argv, char *outputfile)
     (*argv)[17] = strdup("RT");
 }
 
+void setup_test_3(int* argc, char*** argv, char *outputfile)
+{
+    *argc = 15;
+    *argv = (char**)calloc(sizeof(char*), *argc);
+    (*argv)[0] = strdup("bambi");
+    (*argv)[1] = strdup("decode");
+    (*argv)[2] = strdup("-i");
+    (*argv)[3] = strdup(MKNAME(DATA_DIR,"/decode_3.sam"));
+    (*argv)[4] = strdup("-o");
+    (*argv)[5] = strdup(outputfile);
+    (*argv)[6] = strdup("--output-fmt");
+    (*argv)[7] = strdup("sam");
+    (*argv)[8] = strdup("--input-fmt");
+    (*argv)[9] = strdup("sam");
+    (*argv)[10] = strdup("--barcode-file");
+    (*argv)[11] = strdup(MKNAME(DATA_DIR,"/decode_3.tag"));
+    (*argv)[12] = strdup("--convert-low-quality");
+    (*argv)[13] = strdup("--max-no-calls");
+    (*argv)[14] = strdup("6");
+}
+
 void free_argv(int argc, char *argv[])
 {
     for (int n=0; n < argc; free(argv[n++]));
@@ -193,6 +214,23 @@ int main(int argc, char**argv)
     result = system(cmd);
     if (result) {
         fprintf(stderr, "test 2 failed\n");
+        failure++;
+    } else {
+        success++;
+    }
+
+    // check for handling low quality paired reads
+    int argc_3;
+    char** argv_3;
+    sprintf(outputfile,"%s/decode_3.sam",TMPDIR);
+    setup_test_3(&argc_3, &argv_3, outputfile);
+    main_decode(argc_3-1, argv_3+1);
+    free_argv(argc_3,argv_3);
+
+    sprintf(cmd,"diff -I ID:bambi %s %s", outputfile, MKNAME(DATA_DIR,"/out/decode_3.sam"));
+    result = system(cmd);
+    if (result) {
+        fprintf(stderr, "test 3 failed\n");
         failure++;
     } else {
         success++;

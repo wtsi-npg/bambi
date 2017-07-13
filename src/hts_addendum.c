@@ -60,7 +60,7 @@ int bam_aux_update_str(bam1_t *b, const char tag[2], int len, const char *data)
 SAM_hdr *sam_hdr_del(SAM_hdr *hdr, char *type, char *ID_key, char *ID_value) {
     int i,n;
     int *lines;
-    char *newtext = malloc(sam_hdr_length(hdr)+1);
+    char *newtext = malloc(sam_hdr_length(hdr)+15);
 
     lines = ksplit(&hdr->text,'\n',&n);
     *newtext = 0;
