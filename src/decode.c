@@ -545,10 +545,10 @@ void updateMetrics(bc_details_t *bcd, char *seq, bool isPf)
  * find the best match in the barcode (tag) file, and return the corresponding barcode name
  * return NULL if no match found
  */
-static char *findBarcodeName(char *barcode, va_t *barcodeArray, opts_t *opts, bool isPf)
+static char *findBarcodeName(char *barcode, va_t *barcodeArray, opts_t *opts, bool isPf, bool isUpdateMetrics)
 {
     bc_details_t *bcd = findBestMatch(barcode, barcodeArray, opts);
-    updateMetrics(bcd, barcode, isPf);
+    if (isUpdateMetrics) updateMetrics(bcd, barcode, isPf);
     return bcd->name;
 }
 
@@ -753,7 +753,7 @@ int processTemplate(va_t *template, BAMit_t *bam_out, va_t *barcodeArray, opts_t
     for (int n=0; n < template->end; n++) {
         bam1_t *rec = template->entries[n];
         if (newtag) {
-            name = findBarcodeName(newtag,barcodeArray,opts,!(rec->core.flag & BAM_FQCFAIL));
+            name = findBarcodeName(newtag,barcodeArray,opts,!(rec->core.flag & BAM_FQCFAIL), n==0);
             if (!name) name = "0";
             char * newrg = makeNewTag(rec,"RG",name);
             bam_aux_update_str(rec,"RG",strlen(newrg)+1, newrg);
