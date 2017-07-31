@@ -38,6 +38,12 @@ const char * bambi_version(void)
 int success = 0;
 int failure = 0;
 
+void free_argv(int argc, char *argv[])
+{
+    for (int n=0; n < argc; free(argv[n++]));
+    free(argv);
+}
+
 void setup_param_test(int* argc, char*** argv)
 {
     *argc = 0;
@@ -369,7 +375,8 @@ void no_separator_test(int* argc, char*** argv, char *outputfile, bool verbose)
     (*argv)[(*argc)++] = strdup("bambi");
     (*argv)[(*argc)++] = strdup("i2b");
     (*argv)[(*argc)++] = strdup("-i");
-    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/160919_hiseq2500_4966_FC/Data/Intensities"));
+//    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/160919_hiseq2500_4966_FC/Data/Intensities"));
+    (*argv)[(*argc)++] = strdup("/nfs/sf28/ILorHSany_sf28/analysis/170407_A00103_0049_AH2CLFDMXX/Data/Intensities");
     (*argv)[(*argc)++] = strdup("-o");
     (*argv)[(*argc)++] = strdup(outputfile);
     (*argv)[(*argc)++] = strdup("--lane");
@@ -384,9 +391,10 @@ void no_separator_test(int* argc, char*** argv, char *outputfile, bool verbose)
     (*argv)[(*argc)++] = strdup("TestSample");
     (*argv)[(*argc)++] = strdup("--study-name");
     (*argv)[(*argc)++] = strdup("Study TestStudy");
+    if (verbose) (*argv)[(*argc)++] = strdup("--verbose");
+#if 0
     (*argv)[(*argc)++] = strdup("--run-start-date");
     (*argv)[(*argc)++] = strdup("2011-03-23T00:00:00+0000");
-    if (verbose) (*argv)[(*argc)++] = strdup("--verbose");
     (*argv)[(*argc)++] = strdup("--first-cycle");
     (*argv)[(*argc)++] = strdup("1,30");
     (*argv)[(*argc)++] = strdup("--final-cycle");
@@ -399,6 +407,7 @@ void no_separator_test(int* argc, char*** argv, char *outputfile, bool verbose)
     (*argv)[(*argc)++] = strdup("b1,b2,b1");
     (*argv)[(*argc)++] = strdup("--quality-tag");
     (*argv)[(*argc)++] = strdup("q1,q2,q1");
+#endif
 
     assert(*argc<100);
 }
@@ -436,6 +445,7 @@ void test_paramaters(void)
     char** argv_1;
     setup_param_test(&argc_1, &argv_1);
     opts_t *opts = i2b_parse_args(argc_1-1, argv_1+1);
+    free_argv(argc_1, argv_1);
 
     if (verbose) printf("Testing paramaters\n");
 
@@ -471,6 +481,7 @@ void test_paramaters(void)
     icheckEqual("options: final-index-cycle", 1, opts->final_index_cycle->end);
     icheckEqual("options: final-cycle[0]", 16, opts->final_cycle->entries[0]);
     icheckEqual("options: index-separator", 1, opts->separator);
+    free_opts(opts);
 }
 
 void checkFiles(char *name, char *outputfile, char *fname)
@@ -567,6 +578,7 @@ int main(int argc, char**argv)
     sprintf(outputfile,"%s/i2b_1.bam",TMPDIR);
     setup_simple_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1, argv_1+1);
+    free_argv(argc_1, argv_1);
     checkFiles("Simple test", outputfile, MKNAME(DATA_DIR,"/out/test1.bam"));
 
 
@@ -578,6 +590,7 @@ int main(int argc, char**argv)
     sprintf(outputfile,"%s/i2b_2.bam",TMPDIR);
     setup_readgroup_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
+    free_argv(argc_1, argv_1);
     checkFiles("Read Group ID test", outputfile, MKNAME(DATA_DIR,"/out/test2.bam"));
 
     //
@@ -587,6 +600,7 @@ int main(int argc, char**argv)
     sprintf(outputfile,"%s/i2b_4.bam",TMPDIR);
     setup_cyclerange_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
+    free_argv(argc_1, argv_1);
     checkFiles("Cycle Range test", outputfile, MKNAME(DATA_DIR,"/out/test4.bam"));
 
     //
@@ -596,6 +610,7 @@ int main(int argc, char**argv)
     sprintf(outputfile,"%s/i2b_5.bam",TMPDIR);
     setup_bcread_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
+    free_argv(argc_1, argv_1);
     checkFiles("BC_READ test", outputfile, MKNAME(DATA_DIR,"/out/test5.bam"));
 
     //
@@ -605,6 +620,7 @@ int main(int argc, char**argv)
     sprintf(outputfile,"%s/i2b_6.bam",TMPDIR);
     setup_dualindex_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
+    free_argv(argc_1, argv_1);
     checkFiles("Dual Index test", outputfile, MKNAME(DATA_DIR,"/out/test6.bam"));
 
     //
@@ -614,6 +630,7 @@ int main(int argc, char**argv)
     sprintf(outputfile,"%s/i2b_7.bam",TMPDIR);
     setup_tags_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
+    free_argv(argc_1, argv_1);
     checkFiles("Multiple barcode tags test", outputfile, MKNAME(DATA_DIR,"/out/test7.bam"));
 
     //
@@ -623,6 +640,7 @@ int main(int argc, char**argv)
     sprintf(outputfile,"%s/i2b_8.bam",TMPDIR);
     separator_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
+    free_argv(argc_1, argv_1);
     checkFiles("separator test", outputfile, MKNAME(DATA_DIR,"/out/test8.bam"));
 
     //
@@ -632,6 +650,7 @@ int main(int argc, char**argv)
     sprintf(outputfile,"%s/i2b_9.bam",TMPDIR);
     no_separator_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
+    free_argv(argc_1, argv_1);
     checkFiles("no separator test", outputfile, MKNAME(DATA_DIR,"/out/test9.bam"));
 
     printf("i2b tests: %s\n", failure ? "FAILED" : "Passed");

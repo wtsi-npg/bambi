@@ -23,7 +23,7 @@ t_array_SOURCES = t_array.c $(top_srcdir)/src/array.c
 t_array_CFLAGS = -I$(top_srcdir)/src -DDATA_DIR=$(abs_srcdir)/data
 t_array_LDADD = $(HTSLIB_HOME)/lib/libhts.a -lz -ldl -lxml2 -lpthread -llzma -lbz2 -lcurl -lcrypto
 
-t_bclfile_SOURCES = t_bclfile.c
+t_bclfile_SOURCES = t_bclfile.c ../src/array.c
 t_bclfile_CFLAGS = -DDATA_DIR=$(abs_srcdir)/data
 t_bclfile_LDADD = -lz -ldl -lxml2 -lpthread -lcurl -lcrypto
 
