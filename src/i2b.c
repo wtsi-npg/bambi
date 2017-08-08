@@ -760,6 +760,10 @@ static ia_t *getTileList(opts_t *opts)
     } else {
         // Maybe this is a NewSeq run?
         ptr = getnodeset(opts->parametersConfig, "//SelectedTiles/Tile");
+        if (!ptr) {
+            // or maybe novaseq...
+            ptr = getnodeset(opts->runinfoConfig, "//FlowcellLayout/TileSet/Tiles/Tile");
+        }
         if (ptr && ptr->nodesetval) {
             for (int n=0; n < ptr->nodesetval->nodeNr; n++) {
                 char *t = (char *)ptr->nodesetval->nodeTab[n]->children->content;
@@ -1137,6 +1141,7 @@ static bclfile_t *openBclFile(char *basecalls, int lane, int tile, int cycle, in
         bcl->surface = surface;
         if (tileIndex) bclfile_seek(bcl, findClusterNumber(tile,tileIndex));
         if (bcl->file_type == BCL_CBCL) bclfile_seek_tile(bcl, tile);
+//fprintf(stderr,"Opened [%d] %s\n", tile, bcl->filename);
     }
     return bcl;
 }

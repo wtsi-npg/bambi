@@ -57,12 +57,15 @@ static int uncompressBlock(char* abSrc, int nLenSrc, char* abDst, int nLenDst )
     if (nErr != Z_OK) fprintf(stderr,"inflateInit() failed: %d\n", nErr);
     if ( nErr == Z_OK ) {
         nErr= inflate( &zInfo, Z_FINISH );     // zlib function
-        if ( nErr == Z_STREAM_END ) {
+        if ( (nErr == Z_STREAM_END) || (nErr == Z_BUF_ERROR) ) {
             nRet= zInfo.total_out;
             if (nRet != nLenDst) fprintf(stderr,"inflate() returned %d: expected %d\n",nErr,nLenDst);
             nErr = Z_OK;
         }
-        if (nErr != Z_OK) fprintf(stderr,"inflate() failed: %d\n", nErr);
+        if (nErr != Z_OK) {
+            fprintf(stderr,"inflate() returned: %d\n", nErr);
+            fprintf(stderr,"avail_in=%d  avail_out=%d  total_out=%ld\n", zInfo.avail_in, zInfo.avail_out, zInfo.total_out);
+        }
     }
     inflateEnd( &zInfo );   // zlib function
     return( nRet ); // -1 or len of output
@@ -247,7 +250,9 @@ int bclfile_seek_tile(bclfile_t *bcl, int tile)
     r=uncompressBlock(compressed_block, ti->compressed_blocksize, bcl->current_block, ti->uncompressed_blocksize);
     free(compressed_block);
     if (r<0) {
-        fprintf(stderr,"uncompressBlock() somehow failed\n");
+        fprintf(stderr,"uncompressBlock() somehow failed in bclfile_seek_tile(%d)\n", tile);
+        fprintf(stderr,"compressed_blocksize %d   uncompressed_blocksize %d\n", ti->compressed_blocksize, ti->uncompressed_blocksize);
+        fprintf(stderr,"file: %s\nsurface %d\n", bcl->filename, bcl->surface);
     }
     return r;
 }
@@ -314,9 +319,14 @@ int bclfile_next(bclfile_t *bcl)
         bcl->base = BCL_BASE_ARRAY[baseIndex];
         // convert quality bin number to quality score
         for (int n=0; n < bcl->qbin->end; n++) {
-            if (bcl->quality == bcl->qbin->entries[n]) bcl->quality = bcl->qscore->entries[n];
+            if (bcl->quality == bcl->qbin->entries[n]) {
+                bcl->quality = bcl->qscore->entries[n];
+                break;
+            }
         }
-        if (!bcl->quality) bcl->base = BCL_UNKNOWN_BASE;
+        if (!bcl->quality) {
+            bcl->base = BCL_UNKNOWN_BASE;
+        }
         bcl->current_base++;
         if (bcl->current_base > 1) bcl->current_base = 0;
     }
