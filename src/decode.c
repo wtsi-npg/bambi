@@ -77,7 +77,8 @@ typedef struct {
     char *output_fmt;
     char compression_level;
     int tag_len;
-    short ignore_pf;
+    bool ignore_pf;
+    unsigned short dual_tag;
 } opts_t;
 
 static void free_opts(opts_t* opts)
@@ -153,6 +154,7 @@ static void usage(FILE *write_to)
 "       --output-fmt                    format of output file [sam/bam/cram]\n"
 "       --compression-level             Compression level of output file [0..9]\n"
 "       --ignore-pf                     Doesn't output PF statistics\n"
+"       --dual-tag                      Dual tag barcode file\n"
 );
 }
 
@@ -183,6 +185,7 @@ static opts_t* parse_args(int argc, char *argv[])
         { "output-fmt",                 1, 0, 0 },
         { "compression-level",          1, 0, 0 },
         { "ignore-pf",                  0, 0, 0 },
+        { "dual-tag",                   1, 0, 0 },
         { NULL, 0, NULL, 0 }
     };
 
@@ -203,6 +206,7 @@ static opts_t* parse_args(int argc, char *argv[])
     opts->barcode_tag_name = NULL;
     opts->quality_tag_name = NULL;
     opts->ignore_pf = 0;
+    opts->dual_tag = 0;
 
     int opt;
     int option_index = 0;
@@ -230,7 +234,8 @@ static opts_t* parse_args(int argc, char *argv[])
                     else if (strcmp(arg, "input-fmt") == 0)                  opts->input_fmt = strdup(optarg);
                     else if (strcmp(arg, "output-fmt") == 0)                 opts->output_fmt = strdup(optarg);
                     else if (strcmp(arg, "compression-level") == 0)          opts->compression_level = *optarg;
-                    else if (strcmp(arg, "ignore-pf") == 0)                  opts->ignore_pf = 1;
+                    else if (strcmp(arg, "ignore-pf") == 0)                  opts->ignore_pf = true;
+                    else if (strcmp(arg, "dual-tag") == 0)                   opts->dual_tag = (short)atoi(optarg);
                     else {
                         printf("\nUnknown option: %s\n\n", arg); 
                         usage(stdout); free_opts(opts);
@@ -440,11 +445,15 @@ va_t *loadBarcodeFile(opts_t *opts)
         if (buf[strlen(buf)-1] == '\n') buf[strlen(buf)-1]=0;   // remove trailing lf
         bc_details_t *bcd = calloc(1,sizeof(bc_details_t));
         s = strtok(buf,"\t");  bcd->seq     = strdup(s);
-        bcd->next_tag = strstr(bcd->seq," ");
         s = strtok(NULL,"\t"); bcd->name    = strdup(s);
         s = strtok(NULL,"\t"); bcd->lib     = strdup(s);
         s = strtok(NULL,"\t"); bcd->sample  = strdup(s);
         s = strtok(NULL,"\t"); bcd->desc    = strdup(s);
+
+        bcd->next_tag = strstr(bcd->seq," ");
+        if (!bcd->next_tag && opts->dual_tag > 0 )
+            bcd->next_tag = bcd->seq + opts->dual_tag - 1;
+
         va_push(barcodeArray,bcd);
         free(buf); buf=NULL;
 
@@ -546,7 +555,7 @@ bc_details_t *findBestMatch(char *barcode, va_t *barcodeArray, opts_t *opts, boo
     int d2 = nmBest2;
 
     int nCalls = noCalls(barcode);
-    bool dual_tag = (strstr(barcode," ") != NULL);
+    bool dual_tag = (strstr(barcode," ") != NULL || opts->dual_tag > 0);
 
     if (nCalls <= opts->max_no_calls) {
         if (dual_tag) {
@@ -557,8 +566,12 @@ bc_details_t *findBestMatch(char *barcode, va_t *barcodeArray, opts_t *opts, boo
 
                 if(bcd->next_tag) {
 
-                    int nMismatches1 = countNMismatches(bcd->seq, barcode, bcLen/2);
-                    int nMismatches2 = countNMismatches(bcd->seq + bcLen/2 + 1, barcode + bcLen/2 + 1, bcLen/2);
+                    unsigned short isSpace = (bcd->next_tag[0] == ' '? 1 : 0);
+                    unsigned short len1 = (unsigned short)(bcd->next_tag - bcd->seq);
+                    unsigned short len2 = bcLen - len1 - isSpace;
+
+                    int nMismatches1 = countNMismatches(bcd->seq, barcode, len1);
+                    int nMismatches2 = countNMismatches(bcd->seq + len1 + isSpace, barcode + len1 + isSpace, len2);
                     int nMismatches = nMismatches1 + nMismatches2; 
 
                     //match the first tag
@@ -622,17 +635,20 @@ bc_details_t *findBestMatch(char *barcode, va_t *barcodeArray, opts_t *opts, boo
                     } else {
                         if (best_match1 != best_match2) {
 
+                           unsigned short isSpace = (best_match1->next_tag[0] == ' '? 1 : 0);
+                           unsigned short len1 = (unsigned short)(best_match1->next_tag - best_match1->seq);
+                           unsigned short len2 = bcLen - len1 - isSpace;
 
                            bc_details_t *new_bcd = calloc(1, sizeof(bc_details_t)); //create a new entry with the two tags
-                           new_bcd->seq = malloc(bcLen+1);
-                           strncpy(new_bcd->seq, best_match1->seq, bcLen/2+1); //copy the first tag, including the space
-                           strncpy(new_bcd->seq + bcLen/2 + 1, best_match2->seq + bcLen/2 + 1, bcLen/2); //copy the second tag, after the space
-                           new_bcd->seq[bcLen] = 0;
+                           new_bcd->seq = malloc(len1 + isSpace + len2 + 1);
+                           strncpy(new_bcd->seq, best_match1->seq, len1 + isSpace); //copy the first tag, including the space
+                           strncpy(new_bcd->seq + len1 + isSpace, best_match2->seq + len1 + isSpace, len2); //copy the second tag, after the space
+                           new_bcd->seq[len1 + isSpace + len2] = 0;
                            new_bcd->name = strdup("0");
                            new_bcd->lib = strdup("DUMMY_LIB");
                            new_bcd->sample = strdup("DUMMY_SAMPLE");
                            new_bcd->desc = strdup("TAG_HOP");  //the combination is registered as a tag hop
-                           new_bcd->next_tag = new_bcd->seq + bcLen/2;
+                           new_bcd->next_tag = new_bcd->seq + len1;
                            va_push(barcodeArray,new_bcd);
                            best_match = new_bcd;   //the best match is the new entry
                            match_case = MATCHED_NEW;
