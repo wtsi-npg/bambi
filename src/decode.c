@@ -235,6 +235,25 @@ void free_bcd(void *entry)
     free(bcd);
 }
 
+static int compareTagHops(const void *th1, const void *th2) {
+    return -(((bc_details_t *)th1)->reads - ((bc_details_t *)th2)->reads);
+}
+
+static void sortTagHops(va_t *barcodeArray, bc_details_t *tagHopDetailsArray) {
+
+    if (barcodeArray && tagHopDetailsArray) {
+        int i, j;
+
+        for (i=1, j=0; i < barcodeArray->end && j < count_taghops; i++) {
+            bc_details_t *bcd = barcodeArray->entries[i];
+            if (bcd->tag_hop)
+                memcpy(tagHopDetailsArray + j++, bcd, sizeof(bc_details_t));
+        }
+
+        qsort(tagHopDetailsArray, count_taghops, sizeof(bc_details_t), compareTagHops);
+    }
+}
+
 static void freeRecord(void *r) { bam_destroy1((bam1_t *)r); }
 
 /*
@@ -418,7 +437,6 @@ static char *checkBarcodeQuality(char *bc_tag, bam1_t *rec, opts_t *opts)
 
 void writeMetricsLine(FILE *f, bc_details_t *bcd, opts_t *opts, int total_reads, int max_reads, int total_pf_reads, int max_pf_reads, int total_pf_reads_assigned, int nReads)
 {
-
     fprintf(f, "%s", bcd->seq);
     print_tabs(f, bcd->seq, 0);
     fprintf(f, "%s", bcd->name);
@@ -450,7 +468,6 @@ void writeMetricsLine(FILE *f, bc_details_t *bcd, opts_t *opts, int total_reads,
     if (!opts->ignore_pf) {fprintf(f, "%.3f", max_pf_reads ? bcd->pf_reads / (double)max_pf_reads : 0 ); print_tabs(f, NULL, 16);}
     if (!opts->ignore_pf) {fprintf(f, "%.3f", total_pf_reads_assigned ? bcd->pf_reads * nReads / (double)total_pf_reads_assigned : 0);}
     fprintf(f, "\n");
-
 }
 
 
@@ -503,24 +520,19 @@ int writeMetrics(va_t *barcodeArray, opts_t *opts)
     writeMetricsLine(f, bcd, opts, total_reads, max_reads, total_pf_reads, max_pf_reads, 0, nReads);
 
     if (count_taghops) {
+
         FILE *g = fopen(strcat(opts->metrics_name, ".hops"), "w");
         if (!g) {
             fprintf(stderr,"Can't open tag hops file %s\n", strcat(opts->metrics_name, ".hops"));
         } else {
-            va_t *sortedTagArray = sortTagHops(barcodeArray);
+            bc_details_t sortedTagArray[count_taghops];
+            sortTagHops(barcodeArray, sortedTagArray); 
 
-            if (!sortedTagArray) {
-                fprintf(stderr,"Error when sorting tag hop array!\n");
-            } else {
-                print_header(g, opts);
-                for (n=1; n < sortedTagArray->end; n++) {
-                    bc_details_t *bcd = sortedTagArray->entries[n];
-                    writeMetricsLine(g, bcd, opts, total_reads, max_reads, total_pf_reads, max_pf_reads, total_pf_reads_assigned, nReads);
-                }
-
-                va_destroy(sortedTagArray);
+            print_header(g, opts);
+            for (n=0; n < count_taghops; n++) {
+                bc_details_t *bcd = &sortedTagArray[n];
+                writeMetricsLine(g, bcd, opts, total_reads, max_reads, total_pf_reads, max_pf_reads, total_pf_reads_assigned, nReads);
             }
-
             fclose(g);
         }
     }
@@ -1106,27 +1118,7 @@ static va_t *loadTemplate(BAMit_t *bit, char *qname)
     return recordSet;
 }
 
-static int compareTagHops(const void *th1, const void *th2) {
-    return ((bc_details_t *)th1)->reads - ((bc_details_t *)th2)->reads;
-}
 
-va_t *sortTagHops(va_t *barcodeArray) {
-
-    va_t *tagHopArray = va_init(count_taghops, free_bcd);
-    if (tagHopArray) {
-        int i;
-
-        for (i = 1; i < barcodeArray->end; i++) {
-            bc_details_t *bcd = barcodeArray->entries[i];
-            if (bcd->tag_hop)
-                va_push(tagHopArray, bcd);
-        }
-
-        qsort(tagHopArray->entries, tagHopArray->end, sizeof(bc_details_t), compareTagHops);
-    }
-
-    return tagHopArray;
-}
  
 /*
  * Main code
