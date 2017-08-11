@@ -161,7 +161,7 @@ static void print_tabs(FILE *f, char *s, int pos) {
         fprintf(f, "\t");
 }
 
-void print_header(FILE* f, opts_t* opts) {
+void print_header(FILE* f, opts_t* opts, bool metrics) {
     // print header
     fprintf(f, "##\n");
     fprintf(f, "# ");
@@ -176,12 +176,14 @@ void print_header(FILE* f, opts_t* opts) {
     fprintf(f, "##\n");
     fprintf(f, "BARCODE");
     print_tabs(f, "BARCODE", 0);
-    fprintf(f, "BARCODE_NAME");
-    print_tabs(f, "BARCODE_NAME", 1);
-    fprintf(f, "LIBRARY_NAME");
-    print_tabs(f, "LIBRARY_NAME", 2);
-    fprintf(f, "SAMPLE_NAME");
-    print_tabs(f, "SAMPLE_NAME", 3);
+    if (metrics) {
+        fprintf(f, "BARCODE_NAME");
+        print_tabs(f, "BARCODE_NAME", 1);
+        fprintf(f, "LIBRARY_NAME");
+        print_tabs(f, "LIBRARY_NAME", 2);
+        fprintf(f, "SAMPLE_NAME");
+        print_tabs(f, "SAMPLE_NAME", 3);
+    }
     fprintf(f, "DESCRIPTION");
     print_tabs(f, "DESCRIPTION", 4);
     fprintf(f, "READS");
@@ -202,10 +204,12 @@ void print_header(FILE* f, opts_t* opts) {
         fprintf(f, "PF_ONE_MISMATCH_MATCHES");
         print_tabs(f, "PF_ONE_MISMATCH_MATCHES", 10);
     }
-    fprintf(f, "FIRST_TAG_MATCHES");
-    print_tabs(f, "FIRST_TAG_MATCHES", 11);
-    fprintf(f, "SECOND_TAG_MATCHES");
-    print_tabs(f, "SECOND_TAG_MATCHES", 12);
+    if (metrics) {
+        fprintf(f, "FIRST_TAG_MATCHES");
+        print_tabs(f, "FIRST_TAG_MATCHES", 11);
+        fprintf(f, "SECOND_TAG_MATCHES");
+        print_tabs(f, "SECOND_TAG_MATCHES", 12);
+    }
     fprintf(f, "PCT_MATCHES");
     print_tabs(f, "PCT_MATCHES", 13);
     fprintf(f, "RATIO_THIS_BARCODE_TO_BEST_BARCODE_PCT");
@@ -367,7 +371,8 @@ static opts_t* parse_args(int argc, char *argv[])
                     else if (strcmp(arg, "output-fmt") == 0)                 opts->output_fmt = strdup(optarg);
                     else if (strcmp(arg, "compression-level") == 0)          opts->compression_level = *optarg;
                     else if (strcmp(arg, "ignore-pf") == 0)                  opts->ignore_pf = true;
-                    else if (strcmp(arg, "dual-tag") == 0)                   opts->dual_tag = (short)atoi(optarg);
+                    else if (strcmp(arg, "dual-tag") == 0)                  {opts->dual_tag = (short)atoi(optarg);
+                                                                             opts->max_no_calls = 0;}  
                     else {
                         printf("\nUnknown option: %s\n\n", arg); 
                         usage(stdout); free_opts(opts);
@@ -435,38 +440,59 @@ static char *checkBarcodeQuality(char *bc_tag, bam1_t *rec, opts_t *opts)
     return newBarcode;
 }
 
-void writeMetricsLine(FILE *f, bc_details_t *bcd, opts_t *opts, int total_reads, int max_reads, int total_pf_reads, int max_pf_reads, int total_pf_reads_assigned, int nReads)
+void writeMetricsLine(FILE *f, bc_details_t *bcd, opts_t *opts, int total_reads, int max_reads, int total_pf_reads, int max_pf_reads, int total_pf_reads_assigned, int nReads, bool metrics)
 {
     fprintf(f, "%s", bcd->seq);
     print_tabs(f, bcd->seq, 0);
-    fprintf(f, "%s", bcd->name);
-    print_tabs(f, bcd->name, 1);
-    fprintf(f, "%s", bcd->lib);
-    print_tabs(f, bcd->lib, 2);
-    fprintf(f, "%s", bcd->sample);
-    print_tabs(f, bcd->sample, 3);
+    if (metrics) {
+        fprintf(f, "%s", bcd->name);
+        print_tabs(f, bcd->name, 1);
+        fprintf(f, "%s", bcd->lib);
+        print_tabs(f, bcd->lib, 2);
+        fprintf(f, "%s", bcd->sample);
+        print_tabs(f, bcd->sample, 3);
+    }
     fprintf(f, "%s", bcd->desc);
     print_tabs(f, bcd->desc, 4);
     fprintf(f, "%d", bcd->reads);
     print_tabs(f, NULL, 5);
-    if (!opts->ignore_pf) {fprintf(f, "%d", bcd->pf_reads); print_tabs(f, NULL, 6);}
+    if (!opts->ignore_pf) {
+        fprintf(f, "%d", bcd->pf_reads); 
+        print_tabs(f, NULL, 6);
+    }
     fprintf(f, "%d", bcd->perfect);
     print_tabs(f, NULL, 7);
-    if (!opts->ignore_pf) {fprintf(f, "%d", bcd->pf_perfect); print_tabs(f, NULL, 8);}
+    if (!opts->ignore_pf) {
+        fprintf(f, "%d", bcd->pf_perfect); 
+        print_tabs(f, NULL, 8);
+    }
     fprintf(f, "%d", bcd->one_mismatch);
     print_tabs(f, NULL, 9);
-    if (!opts->ignore_pf) {fprintf(f, "%d", bcd->pf_one_mismatch); print_tabs(f, NULL, 10);}
-    fprintf(f, "%d", bcd->first_tag_match);
-    print_tabs(f, NULL, 11);
-    fprintf(f, "%d", bcd->second_tag_match);
-    print_tabs(f, NULL, 12);
-    fprintf(f, "%.3f", total_reads ? bcd->reads / (double)total_reads : 0 );
+    if (!opts->ignore_pf) {
+        fprintf(f, "%d", bcd->pf_one_mismatch); 
+        print_tabs(f, NULL, 10);
+    }
+    if (metrics) {
+        fprintf(f, "%d", bcd->first_tag_match);
+        print_tabs(f, NULL, 11);
+        fprintf(f, "%d", bcd->second_tag_match);
+        print_tabs(f, NULL, 12);
+    }
+    fprintf(f, "%.3f", total_reads ? bcd->reads / (double)total_reads * 100 : 0 );
     print_tabs(f, NULL, 13);
-    fprintf(f, "%.3f", max_reads ? bcd->reads / (double)max_reads : 0 );
+    fprintf(f, "%.3f", max_reads ? bcd->reads / (double)max_reads * 100 : 0 );
     //print_tabs(f, NULL, 14);
-    if (!opts->ignore_pf) {fprintf(f, "%.3f", total_pf_reads ? bcd->pf_reads / (double)total_pf_reads : 0 ); print_tabs(f, NULL, 15);}
-    if (!opts->ignore_pf) {fprintf(f, "%.3f", max_pf_reads ? bcd->pf_reads / (double)max_pf_reads : 0 ); print_tabs(f, NULL, 16);}
-    if (!opts->ignore_pf) {fprintf(f, "%.3f", total_pf_reads_assigned ? bcd->pf_reads * nReads / (double)total_pf_reads_assigned : 0);}
+    if (!opts->ignore_pf) {
+        fprintf(f, "%.3f", total_pf_reads ? bcd->pf_reads / (double)total_pf_reads * 100 : 0 ); 
+        print_tabs(f, NULL, 15);
+    }
+    if (!opts->ignore_pf) {
+        fprintf(f, "%.3f", max_pf_reads ? bcd->pf_reads / (double)max_pf_reads *100 : 0 ); 
+        print_tabs(f, NULL, 16);
+    }
+    if (!opts->ignore_pf) {
+        fprintf(f, "%.3f", total_pf_reads_assigned ? bcd->pf_reads * nReads / (double)total_pf_reads_assigned * 100 : 0);
+    }
     fprintf(f, "\n");
 }
 
@@ -481,6 +507,8 @@ int writeMetrics(va_t *barcodeArray, opts_t *opts)
     int total_pf_reads = bcd->pf_reads;
     int total_pf_reads_assigned = 0;
     int max_reads = 0;
+    int total_original_reads = 0;
+    int total_hop_reads = 0;
     int max_pf_reads = 0;
     int nReads = 0;
     int n;
@@ -496,6 +524,8 @@ int writeMetrics(va_t *barcodeArray, opts_t *opts)
     for (n=1; n < barcodeArray->end; n++) {
         bc_details_t *bcd = barcodeArray->entries[n];;
         total_reads += bcd->reads;
+        if (bcd->tag_hop) total_hop_reads += bcd->reads;
+        else total_original_reads += bcd->reads;
         total_pf_reads += bcd->pf_reads;
         total_pf_reads_assigned += bcd->pf_reads;
         if (max_reads < bcd->reads) max_reads = bcd->reads;
@@ -504,20 +534,20 @@ int writeMetrics(va_t *barcodeArray, opts_t *opts)
     }
 
     // print header
-    print_header(f, opts);
+    print_header(f, opts, true);
 
     // second loop to print things
     for (n=1; n < barcodeArray->end; n++) {
         bc_details_t *bcd = barcodeArray->entries[n];
         if (!bcd->tag_hop)
-            writeMetricsLine(f, bcd, opts, total_reads, max_reads, total_pf_reads, max_pf_reads, total_pf_reads_assigned, nReads);
+            writeMetricsLine(f, bcd, opts, total_reads, max_reads, total_pf_reads, max_pf_reads, total_pf_reads_assigned, nReads, true);
     }
     // treat Tag 0 as a special case
     bcd = barcodeArray->entries[0];
     bcd->perfect = 0;
     bcd->pf_perfect = 0;
     bcd->name[0] = 0;
-    writeMetricsLine(f, bcd, opts, total_reads, max_reads, total_pf_reads, max_pf_reads, 0, nReads);
+    writeMetricsLine(f, bcd, opts, total_reads, max_reads, total_pf_reads, max_pf_reads, 0, nReads, true);
 
     if (count_taghops) {
 
@@ -528,10 +558,12 @@ int writeMetrics(va_t *barcodeArray, opts_t *opts)
             bc_details_t sortedTagArray[count_taghops];
             sortTagHops(barcodeArray, sortedTagArray); 
 
-            print_header(g, opts);
+            fprintf(g, "##\n# TOTAL_READS=%d, TOTAL_ORIGINAL_TAG_READS=%d, TOTAL_TAG_HOP_READS=%d, MAX_READ_ON_A_TAG=%d, TOTAL_TAG_HOPS=%d, PCT_TAG_HOPS=%f\n",total_reads, total_original_reads, total_hop_reads, max_reads, count_taghops, (float)total_hop_reads / total_original_reads * 100);
+            print_header(g, opts, false);
+
             for (n=0; n < count_taghops; n++) {
                 bc_details_t *bcd = &sortedTagArray[n];
-                writeMetricsLine(g, bcd, opts, total_reads, max_reads, total_pf_reads, max_pf_reads, total_pf_reads_assigned, nReads);
+                writeMetricsLine(g, bcd, opts, total_reads, max_reads, total_pf_reads, max_pf_reads, total_pf_reads_assigned, nReads, false);
             }
             fclose(g);
         }
