@@ -240,7 +240,9 @@ void free_bcd(void *entry)
 }
 
 static int compareTagHops(const void *th1, const void *th2) {
-    return -(((bc_details_t *)th1)->reads - ((bc_details_t *)th2)->reads);
+    int read_diff = ((bc_details_t *)th1)->reads - ((bc_details_t *)th2)->reads;
+    //if read count is equal, sort by number of perfect matches
+    return read_diff ? -read_diff : -(((bc_details_t *)th1)->perfect - ((bc_details_t *)th2)->perfect);
 }
 
 static void sortTagHops(va_t *barcodeArray, bc_details_t *tagHopDetailsArray) {
