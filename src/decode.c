@@ -292,7 +292,7 @@ static void usage(FILE *write_to)
 "       --output-fmt                    format of output file [sam/bam/cram]\n"
 "       --compression-level             Compression level of output file [0..9]\n"
 "       --ignore-pf                     Doesn't output PF statistics\n"
-"       --dual-tag                      Dual tag barcode file\n"
+"       --dual-tag                      Dual tag position in the barcode string (between 2 and barcode length - 1)\n"
 );
 }
 
@@ -401,6 +401,11 @@ static opts_t* parse_args(int argc, char *argv[])
     }
     if (!opts->barcode_name) {
         fprintf(stderr,"You must specify a barcode (tags) file (-b or --barcode-file)\n");
+        usage(stderr); free_opts(opts);
+        return NULL;
+    }
+    if (opts->dual_tag < 2) {
+        fprintf(stderr,"Specified value for dual-tag index is lower than 2\n");
         usage(stderr); free_opts(opts);
         return NULL;
     }
@@ -629,6 +634,10 @@ va_t *loadBarcodeFile(opts_t *opts)
 
         if (tag_length == 0) {
             tag_length = strlen(bcd->seq);
+            if (tag_length < opts->dual_tag + 1) {
+                fprintf(stderr,"ERROR: TAG2 start=%d is larger or equal to the barcode length=%d\n", opts->dual_tag, tag_length);
+                return NULL;
+            }
         } else {
             if (tag_length != strlen(bcd->seq)) {
                 fprintf(stderr,"ERROR: Tag '%s' is a different length to the previous tag\n", bcd->seq);
