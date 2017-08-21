@@ -1,3 +1,9 @@
+	[0.9.11]
+	Bug fix: decode assigned different read groups to reads in a pair with low quality when --convert-low-quality flag was used
+
+	[0.9.10]
+	Bug fix: decode memory leak fix
+
 	[0.9.9]
 	Bug fix: decode stats counts templates rather than reads
 

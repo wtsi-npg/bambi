@@ -1,6 +1,6 @@
 /*  test/decode/decode.c -- decode test cases.
 
-    Copyright (C) 2016 Genome Research Ltd.
+    Copyright (C) 2017 Genome Research Ltd.
 
     Author: Jennifer Liddle <js10@sanger.ac.uk>
 
@@ -82,6 +82,27 @@ void setup_test_2(int* argc, char*** argv, char *outputfile)
     (*argv)[17] = strdup("RT");
 }
 
+void setup_test_3(int* argc, char*** argv, char *outputfile)
+{
+    *argc = 15;
+    *argv = (char**)calloc(sizeof(char*), *argc);
+    (*argv)[0] = strdup("bambi");
+    (*argv)[1] = strdup("decode");
+    (*argv)[2] = strdup("-i");
+    (*argv)[3] = strdup(MKNAME(DATA_DIR,"/decode_3.sam"));
+    (*argv)[4] = strdup("-o");
+    (*argv)[5] = strdup(outputfile);
+    (*argv)[6] = strdup("--output-fmt");
+    (*argv)[7] = strdup("sam");
+    (*argv)[8] = strdup("--input-fmt");
+    (*argv)[9] = strdup("sam");
+    (*argv)[10] = strdup("--barcode-file");
+    (*argv)[11] = strdup(MKNAME(DATA_DIR,"/decode_3.tag"));
+    (*argv)[12] = strdup("--convert-low-quality");
+    (*argv)[13] = strdup("--max-no-calls");
+    (*argv)[14] = strdup("6");
+}
+
 void setup_test_4(int* argc, char*** argv, char *outputfile)
 {
     *argc = 17;
@@ -103,6 +124,12 @@ void setup_test_4(int* argc, char*** argv, char *outputfile)
     (*argv)[14] = strdup("--ignore-pf");
     (*argv)[15] = strdup("--dual-tag");
     (*argv)[16] = strdup("9");
+}
+
+void free_argv(int argc, char *argv[])
+{
+    for (int n=0; n < argc; free(argv[n++]));
+    free(argv);
 }
 
 void test_noCalls(char *s, int e)
@@ -199,6 +226,7 @@ int main(int argc, char**argv)
 
     setup_test_1(&argc_1, &argv_1, outputfile);
     main_decode(argc_1-1, argv_1+1);
+    free_argv(argc_1,argv_1);
 
     char *cmd = calloc(1,1024);
     sprintf(cmd,"diff -I ID:bambi %s %s", outputfile, MKNAME(DATA_DIR,"/out/6383_9_nosplit_nochange.sam"));
@@ -216,6 +244,7 @@ int main(int argc, char**argv)
     sprintf(outputfile,"%s/decode_2.sam",TMPDIR);
     setup_test_2(&argc_2, &argv_2, outputfile);
     main_decode(argc_2-1, argv_2+1);
+    free_argv(argc_2,argv_2);
 
     sprintf(cmd,"diff -I ID:bambi %s %s", outputfile, MKNAME(DATA_DIR,"/out/6383_8_nosplitN.sam"));
     result = system(cmd);
@@ -226,12 +255,30 @@ int main(int argc, char**argv)
         success++;
     }
 
+    // check for handling low quality paired reads
+    int argc_3;
+    char** argv_3;
+    sprintf(outputfile,"%s/decode_3.sam",TMPDIR);
+    setup_test_3(&argc_3, &argv_3, outputfile);
+    main_decode(argc_3-1, argv_3+1);
+    free_argv(argc_3,argv_3);
+
+    sprintf(cmd,"diff -I ID:bambi %s %s", outputfile, MKNAME(DATA_DIR,"/out/decode_3.sam"));
+    result = system(cmd);
+    if (result) {
+        fprintf(stderr, "test 3 failed\n");
+        failure++;
+    } else {
+        success++;
+    }
+
     // --dual-tag option
     int argc_4;
     char** argv_4;
     sprintf(outputfile,"%s/decode_4o.sam",TMPDIR);
-    setup_test_3(&argc_4, &argv_4, outputfile);
+    setup_test_4(&argc_4, &argv_4, outputfile);
     main_decode(argc_4-1, argv_4+1);
+    free_argv(argc_4,argv_4);
 
     sprintf(cmd,"diff -I ID:bambi %s %s", outputfile, MKNAME(DATA_DIR,"/out/decode_4o_ref.sam"));
     result = system(cmd);
@@ -259,6 +306,9 @@ int main(int argc, char**argv)
     } else {
         success++;
     }
+
+    free(outputfile);
+    free(cmd);
 
     printf("decode tests: %s\n", failure ? "FAILED" : "Passed");
     return failure ? EXIT_FAILURE : EXIT_SUCCESS;

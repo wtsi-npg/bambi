@@ -419,23 +419,21 @@ static opts_t* parse_args(int argc, char *argv[])
 //
 // return a new barcode read string with low quality bases converted to 'N'
 //
-static char *checkBarcodeQuality(char *bc_tag, bam1_t *rec, opts_t *opts)
+static char *checkBarcodeQuality(char *bc_tag, char *qt_tag, opts_t *opts)
 {
 
     char *newBarcode = strdup(bc_tag);
-    uint8_t *q = bam_aux_get(rec,opts->quality_tag_name);
-    if (!q) return newBarcode;
-    char *quality = bam_aux2Z(q);
+    if (!qt_tag) return newBarcode;
 
-    if (!bc_tag || strlen(bc_tag) != strlen(quality)) {
+    if (!bc_tag || strlen(bc_tag) != strlen(qt_tag)) {
         fprintf(stderr, "checkBarcodeQuality(): barcode and quality are different lengths\n");
         return NULL;
     }
 
     int mlq = opts->max_low_quality_to_convert ? opts->max_low_quality_to_convert 
                                                : DEFAULT_MAX_LOW_QUALITY_TO_CONVERT;
-    for (int i=0; i < strlen(quality); i++) {
-        int qual = quality[i] - 33;
+    for (int i=0; i < strlen(qt_tag); i++) {
+        int qual = qt_tag[i] - 33;
         if (isalpha(newBarcode[i]) && (qual <= mlq)) newBarcode[i] = 'N';
     }
 
@@ -1090,6 +1088,7 @@ int processTemplate(va_t *template, BAMit_t *bam_out, va_t *barcodeArray, opts_t
 {
     char *name = NULL;
     char *bc_tag = NULL;
+    char *qt_tag = NULL;
     short error_code = 0;
 
     // look for barcode tag
@@ -1105,28 +1104,34 @@ int processTemplate(va_t *template, BAMit_t *bam_out, va_t *barcodeArray, opts_t
                 }
             } else {
                 bc_tag = strdup(bam_aux2Z(p));
+                p = bam_aux_get(rec,opts->quality_tag_name);
+                if (p) qt_tag = strdup(bam_aux2Z(p));
             }
+        }
+    }
+
+    // if the convert_low_quality flag is set, then (potentially) change the tag
+    char *newtag = NULL;
+    if (bc_tag) {
+        if (opts->convert_low_quality) {
+            newtag = checkBarcodeQuality(bc_tag,qt_tag,opts);
+        } else {
+            newtag = strdup(bc_tag);
+        }
+        if (strlen(bc_tag) > opts->tag_len) {
+            newtag[opts->tag_len] = 0;  // truncate seq to barcode length
         }
     }
 
     for (int n=0; n < template->end; n++) {
         bam1_t *rec = template->entries[n];
-        if (bc_tag) {
-            char *newtag = strdup(bc_tag);
-            if (opts->convert_low_quality) {
-                newtag = checkBarcodeQuality(bc_tag,rec,opts);
-            }
-            if (strlen(bc_tag) > opts->tag_len) {
-                newtag[opts->tag_len] = 0;  // truncate seq to barcode length
-            }
-            // only update metrics *once* per template
+        if (newtag) {
             name = findBarcodeName(newtag,barcodeArray,opts,!(rec->core.flag & BAM_FQCFAIL), n==0);
             if (!name) name = "0";
             char * newrg = makeNewTag(rec,"RG",name);
             bam_aux_update_str(rec,"RG",strlen(newrg)+1, newrg);
             free(newrg);
             if (opts->change_read_name) add_suffix(rec, name);
-            free(newtag);
         }
         int r = sam_write1(bam_out->f, bam_out->h, rec);
         if (r < 0) {
@@ -1136,6 +1141,8 @@ int processTemplate(va_t *template, BAMit_t *bam_out, va_t *barcodeArray, opts_t
         }
     }
 
+    free(newtag);
+    free(qt_tag);
     free(bc_tag);
     return error_code;
 }
