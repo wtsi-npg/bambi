@@ -558,7 +558,6 @@ static void checkNextReadsForChimera(va_t *recordSetList, metrics_t *metrics)
             ia->entries[indexRefPaired]++;
         }
 
-        assert(indexRef == indexRefPaired);
     }
 
     metrics->nAlignedForward->entries[sumAlignments]++;
