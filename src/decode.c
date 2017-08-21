@@ -404,11 +404,6 @@ static opts_t* parse_args(int argc, char *argv[])
         usage(stderr); free_opts(opts);
         return NULL;
     }
-    if (opts->dual_tag < 2) {
-        fprintf(stderr,"Specified value for dual-tag index is lower than 2\n");
-        usage(stderr); free_opts(opts);
-        return NULL;
-    }
 
     if (!opts->barcode_tag_name) opts->barcode_tag_name = strdup(DEFAULT_BARCODE_TAG);
     if (!opts->quality_tag_name) opts->quality_tag_name = strdup(DEFAULT_QUALITY_TAG);
@@ -623,7 +618,7 @@ va_t *loadBarcodeFile(opts_t *opts)
         s = strtok(NULL,"\t"); bcd->desc    = strdup(s);
 
         bcd->next_tag = strstr(bcd->seq," ");
-        if (!bcd->next_tag && opts->dual_tag > 0 )
+        if (!bcd->next_tag && opts->dual_tag > 1 )
             bcd->next_tag = bcd->seq + opts->dual_tag - 1;
         bcd->tag_hop = false;
 
@@ -734,7 +729,7 @@ bc_details_t *findBestMatch(char *barcode, va_t *barcodeArray, opts_t *opts, boo
     int d2 = nmBest2;
 
     int nCalls = noCalls(barcode);
-    bool dual_tag = (strstr(barcode," ") != NULL || opts->dual_tag > 0);
+    bool dual_tag = (strstr(barcode," ") != NULL || opts->dual_tag > 1);
 
     if (nCalls <= opts->max_no_calls) {
         if (dual_tag) {

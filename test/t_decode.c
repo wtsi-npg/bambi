@@ -82,6 +82,29 @@ void setup_test_2(int* argc, char*** argv, char *outputfile)
     (*argv)[17] = strdup("RT");
 }
 
+void setup_test_3(int* argc, char*** argv, char *outputfile)
+{
+    *argc = 17;
+    *argv = (char**)calloc(sizeof(char*), *argc);
+    (*argv)[0] = strdup("bambi");
+    (*argv)[1] = strdup("decode");
+    (*argv)[2] = strdup("-i");
+    (*argv)[3] = strdup(MKNAME(DATA_DIR,"/decode_3i.sam"));
+    (*argv)[4] = strdup("-o");
+    (*argv)[5] = strdup(outputfile);
+    (*argv)[6] = strdup("--output-fmt");
+    (*argv)[7] = strdup("sam");
+    (*argv)[8] = strdup("--input-fmt");
+    (*argv)[9] = strdup("sam");
+    (*argv)[10] = strdup("--barcode-file");
+    (*argv)[11] = strdup(MKNAME(DATA_DIR,"/decode_3.tag"));
+    (*argv)[12] = strdup("--metrics-file");
+    (*argv)[13] = strdup(MKNAME(DATA_DIR,"/out/decode_3.metrics"));
+    (*argv)[14] = strdup("--ignore-pf");
+    (*argv)[15] = strdup("--dual-tag");
+    (*argv)[16] = strdup("9");
+}
+
 void test_noCalls(char *s, int e)
 {
     int n;
@@ -94,6 +117,13 @@ void test_countMismatches(char *a, char *b, int e)
     int n;
     if ((n=countMismatches(a,b)) == e) success++;
     else { failure++; fprintf(stderr, "countMismatches(%s,%s) returned %d: expected %d\n", a,b,n,e); }
+}
+
+void test_countNMismatches(char *a, char *b, unsigned int l, int e)
+{
+    int n;
+    if ((n=countNMismatches(a,b,l)) == e) success++;
+    else { failure++; fprintf(stderr, "countNMismatches(%s,%s) returned %d: expected %d\n", a,b,n,e); }
 }
 
 int main(int argc, char**argv)
@@ -151,6 +181,12 @@ int main(int argc, char**argv)
     test_countMismatches("NBCiXYZ",".BCNXYz",1);
     test_countMismatches("AGCACGTT","AxCACGTTXXXXXX",1);
 
+    // test countNMismatches()
+    test_countNMismatches("ACTGGTAA","ACTGCTAA",4,0);
+    test_countNMismatches("ACTGGTAA","ACTGCTAA",8,1);
+    test_countNMismatches("ACTGGTAA","ACTGGTAA",8,0);
+    test_countNMismatches("ACTGGTAA","ACTGGTAAG",8,0);
+
     //
     // Now test the actual decoding
     //
@@ -185,6 +221,40 @@ int main(int argc, char**argv)
     result = system(cmd);
     if (result) {
         fprintf(stderr, "test 2 failed\n");
+        failure++;
+    } else {
+        success++;
+    }
+
+    // --dual-tag option
+    int argc_3;
+    char** argv_3;
+    sprintf(outputfile,"%s/decode_3o.sam",TMPDIR);
+    setup_test_3(&argc_3, &argv_3, outputfile);
+    main_decode(argc_3-1, argv_3+1);
+
+    sprintf(cmd,"diff -I ID:bambi %s %s", outputfile, MKNAME(DATA_DIR,"/out/decode_3o_ref.sam"));
+    result = system(cmd);
+    if (result) {
+        fprintf(stderr, "test 3 failed at SAM file diff\n");
+        failure++;
+    } else {
+        success++;
+    }
+
+    sprintf(cmd,"diff -I ID:bambi %s %s", MKNAME(DATA_DIR,"/out/decode_3.metrics"), MKNAME(DATA_DIR,"/out/decode_3_ref.metrics"));
+    result = system(cmd);
+    if (result) {
+        fprintf(stderr, "test 3 failed at metrics file diff\n");
+        failure++;
+    } else {
+        success++;
+    }
+
+    sprintf(cmd,"diff -I ID:bambi %s %s", MKNAME(DATA_DIR,"/out/decode_3.metrics.hops"), MKNAME(DATA_DIR,"/out/decode_3_ref.metrics.hops"));
+    result = system(cmd);
+    if (result) {
+        fprintf(stderr, "test 3 failed at tag hops file diff\n");
         failure++;
     } else {
         success++;
