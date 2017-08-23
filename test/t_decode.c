@@ -36,7 +36,7 @@ const char * bambi_version(void)
 int success = 0;
 int failure = 0;
 
-void setup_test_1(int* argc, char*** argv, char *outputfile)
+void setup_test_1(int* argc, char*** argv, char *outputfile, char *metricsfile)
 {
     *argc = 16;
     *argv = (char**)calloc(sizeof(char*), *argc);
@@ -53,12 +53,12 @@ void setup_test_1(int* argc, char*** argv, char *outputfile)
     (*argv)[10] = strdup("--barcode-file");
     (*argv)[11] = strdup(MKNAME(DATA_DIR,"/decode_1.tag"));
     (*argv)[12] = strdup("--metrics-file");
-    (*argv)[13] = strdup(MKNAME(DATA_DIR,"/out/decode_1.metrics"));
+    (*argv)[13] = strdup(metricsfile);
     (*argv)[14] = strdup("--barcode-tag-name");
     (*argv)[15] = strdup("RT");
 }
 
-void setup_test_2(int* argc, char*** argv, char *outputfile)
+void setup_test_2(int* argc, char*** argv, char *outputfile, char *metricsfile)
 {
     *argc = 18;
     *argv = (char**)calloc(sizeof(char*), *argc);
@@ -77,12 +77,12 @@ void setup_test_2(int* argc, char*** argv, char *outputfile)
     (*argv)[12] = strdup("--convert-low-quality");
     (*argv)[13] = strdup("--change-read-name");
     (*argv)[14] = strdup("--metrics-file");
-    (*argv)[15] = strdup(MKNAME(DATA_DIR,"/out/decode_2.metrics"));
+    (*argv)[15] = strdup(metricsfile);
     (*argv)[16] = strdup("--barcode-tag-name");
     (*argv)[17] = strdup("RT");
 }
 
-void setup_test_3(int* argc, char*** argv, char *outputfile)
+void setup_test_3(int* argc, char*** argv, char *outputfile, char *metricsfile)
 {
     *argc = 15;
     *argv = (char**)calloc(sizeof(char*), *argc);
@@ -103,7 +103,7 @@ void setup_test_3(int* argc, char*** argv, char *outputfile)
     (*argv)[14] = strdup("6");
 }
 
-void setup_test_4(int* argc, char*** argv, char *outputfile)
+void setup_test_4(int* argc, char*** argv, char *outputfile, char* metricsfile)
 {
     *argc = 17;
     *argv = (char**)calloc(sizeof(char*), *argc);
@@ -120,7 +120,7 @@ void setup_test_4(int* argc, char*** argv, char *outputfile)
     (*argv)[10] = strdup("--barcode-file");
     (*argv)[11] = strdup(MKNAME(DATA_DIR,"/decode_4.tag"));
     (*argv)[12] = strdup("--metrics-file");
-    (*argv)[13] = strdup(MKNAME(DATA_DIR,"/out/decode_4.metrics"));
+    (*argv)[13] = strdup(metricsfile);
     (*argv)[14] = strdup("--ignore-pf");
     (*argv)[15] = strdup("--dual-tag");
     (*argv)[16] = strdup("9");
@@ -218,13 +218,17 @@ int main(int argc, char**argv)
     // Now test the actual decoding
     //
 
+    unsigned int max_path_length = strlen(TMPDIR) + 100;
+    char *outputfile = calloc(1,max_path_length);
+    char *metricsfile = calloc(1,max_path_length);
+    char *hopsfile = calloc(1,max_path_length);
+    
     // minimal options
     int argc_1;
     char** argv_1;
-    char *outputfile = calloc(1,strlen(TMPDIR)+64);
     sprintf(outputfile,"%s/decode_1.sam", TMPDIR);
-
-    setup_test_1(&argc_1, &argv_1, outputfile);
+    snprintf(metricsfile, max_path_length, "%s/decode_1.metrics", TMPDIR);
+    setup_test_1(&argc_1, &argv_1, outputfile, metricsfile);
     main_decode(argc_1-1, argv_1+1);
     free_argv(argc_1,argv_1);
 
@@ -242,7 +246,8 @@ int main(int argc, char**argv)
     int argc_2;
     char** argv_2;
     sprintf(outputfile,"%s/decode_2.sam",TMPDIR);
-    setup_test_2(&argc_2, &argv_2, outputfile);
+    snprintf(metricsfile, max_path_length, "%s/decode_2.metrics", TMPDIR);
+    setup_test_2(&argc_2, &argv_2, outputfile, metricsfile);
     main_decode(argc_2-1, argv_2+1);
     free_argv(argc_2,argv_2);
 
@@ -259,7 +264,8 @@ int main(int argc, char**argv)
     int argc_3;
     char** argv_3;
     sprintf(outputfile,"%s/decode_3.sam",TMPDIR);
-    setup_test_3(&argc_3, &argv_3, outputfile);
+    snprintf(metricsfile, max_path_length, "%s/decode_3.metrics", TMPDIR);
+    setup_test_3(&argc_3, &argv_3, outputfile, metricsfile);
     main_decode(argc_3-1, argv_3+1);
     free_argv(argc_3,argv_3);
 
@@ -276,7 +282,9 @@ int main(int argc, char**argv)
     int argc_4;
     char** argv_4;
     sprintf(outputfile,"%s/decode_4o.sam",TMPDIR);
-    setup_test_4(&argc_4, &argv_4, outputfile);
+    snprintf(metricsfile, max_path_length, "%s/decode_4.metrics", TMPDIR);
+    snprintf(hopsfile, max_path_length, "%s/decode_4.metrics.hops", TMPDIR);
+    setup_test_4(&argc_4, &argv_4, outputfile, metricsfile);
     main_decode(argc_4-1, argv_4+1);
     free_argv(argc_4,argv_4);
 
@@ -289,7 +297,7 @@ int main(int argc, char**argv)
         success++;
     }
 
-    sprintf(cmd,"diff -I ID:bambi %s %s", MKNAME(DATA_DIR,"/out/decode_4.metrics"), MKNAME(DATA_DIR,"/out/decode_4_ref.metrics"));
+    sprintf(cmd,"diff -I ID:bambi %s %s", metricsfile, MKNAME(DATA_DIR,"/out/decode_4_ref.metrics"));
     result = system(cmd);
     if (result) {
         fprintf(stderr, "test 4 failed at metrics file diff\n");
@@ -298,7 +306,7 @@ int main(int argc, char**argv)
         success++;
     }
 
-    sprintf(cmd,"diff -I ID:bambi %s %s", MKNAME(DATA_DIR,"/out/decode_4.metrics.hops"), MKNAME(DATA_DIR,"/out/decode_4_ref.metrics.hops"));
+    sprintf(cmd,"diff -I ID:bambi %s %s", hopsfile, MKNAME(DATA_DIR,"/out/decode_4_ref.metrics.hops"));
     result = system(cmd);
     if (result) {
         fprintf(stderr, "test 4 failed at tag hops file diff\n");
@@ -307,6 +315,8 @@ int main(int argc, char**argv)
         success++;
     }
 
+    free(hopsfile);
+    free(metricsfile);
     free(outputfile);
     free(cmd);
 
