@@ -221,7 +221,6 @@ int main(int argc, char**argv)
     unsigned int max_path_length = strlen(TMPDIR) + 100;
     char *outputfile = calloc(1,max_path_length);
     char *metricsfile = calloc(1,max_path_length);
-    char *hopsfile = calloc(1,max_path_length);
     
     // minimal options
     int argc_1;
@@ -283,7 +282,6 @@ int main(int argc, char**argv)
     char** argv_4;
     sprintf(outputfile,"%s/decode_4o.sam",TMPDIR);
     snprintf(metricsfile, max_path_length, "%s/decode_4.metrics", TMPDIR);
-    snprintf(hopsfile, max_path_length, "%s/decode_4.metrics.hops", TMPDIR);
     setup_test_4(&argc_4, &argv_4, outputfile, metricsfile);
     main_decode(argc_4-1, argv_4+1);
     free_argv(argc_4,argv_4);
@@ -306,7 +304,7 @@ int main(int argc, char**argv)
         success++;
     }
 
-    sprintf(cmd,"diff -I ID:bambi %s %s", hopsfile, MKNAME(DATA_DIR,"/out/decode_4_ref.metrics.hops"));
+    sprintf(cmd,"diff -I ID:bambi %s %s", strcat(metricsfile, ".hops"), MKNAME(DATA_DIR,"/out/decode_4_ref.metrics.hops"));
     result = system(cmd);
     if (result) {
         fprintf(stderr, "test 4 failed at tag hops file diff\n");
@@ -315,7 +313,6 @@ int main(int argc, char**argv)
         success++;
     }
 
-    free(hopsfile);
     free(metricsfile);
     free(outputfile);
     free(cmd);
