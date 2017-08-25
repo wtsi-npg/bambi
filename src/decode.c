@@ -605,8 +605,7 @@ va_t *loadBarcodeFile(opts_t *opts)
         s = strtok(NULL,"\t"); bcd->sample  = strdup(s);
         s = strtok(NULL,"\t"); bcd->desc    = strdup(s);
 
-        bcd->next_tag = strstr(bcd->seq," ");
-        if (!bcd->next_tag && opts->dual_tag > 1 )
+        if (!(bcd->next_tag = strstr(bcd->seq," ")) && !(bcd->next_tag = strstr(bcd->seq,"-")) && opts->dual_tag > 1)
             bcd->next_tag = bcd->seq + opts->dual_tag - 1;
         bcd->tag_hop = false;
 
@@ -717,25 +716,33 @@ bc_details_t *findBestMatch(char *barcode, va_t *barcodeArray, va_t *tagHopArray
     int d2 = nmBest2;
 
     int nCalls = noCalls(barcode);
-    bool dual_tag = (strstr(barcode," ") != NULL || opts->dual_tag > 1);
+    char *next_tag = NULL;
+    bool dual_tag = (((next_tag = strstr(barcode," ")) != NULL) || ((next_tag = strstr(barcode,"-")) != NULL) || (opts->dual_tag > 1));
 
     if (nCalls <= opts->max_no_calls) {
         if (dual_tag) {
 
             unsigned int arrayIndex1, arrayIndex2;
+            unsigned short barcode_sep = 0;
+            if (!next_tag)
+                next_tag = barcode + opts->dual_tag - 1;
+            else
+                barcode_sep = 1;
 
             // for each tag in barcodeArray
             for (int n=1; n < barcodeArray->end; n++) {
                 bc_details_t *bcd = barcodeArray->entries[n];
-
                 if(bcd->next_tag) {
 
-                    unsigned short isSpace = (bcd->next_tag[0] == ' '? 1 : 0);
+                    unsigned short tag_sep = ((bcd->next_tag[0] == ' ' || bcd->next_tag[0] == '-') ? 1 : 0);
+                    if((strlen(bcd->seq) - tag_sep) != (strlen(barcode) - barcode_sep)) 
+                        break; 
+
                     unsigned short len1 = (unsigned short)(bcd->next_tag - bcd->seq);
-                    unsigned short len2 = bcLen - len1 - isSpace;
+                    unsigned short len2 = bcLen - len1 - tag_sep;
 
                     int nMismatches1 = countNMismatches(bcd->seq, barcode, len1);
-                    int nMismatches2 = countNMismatches(bcd->seq + len1 + isSpace, barcode + len1 + isSpace, len2);
+                    int nMismatches2 = countNMismatches(bcd->next_tag + tag_sep, next_tag + barcode_sep, len2);
                     int nMismatches = nMismatches1 + nMismatches2; 
 
                     //match the first tag
@@ -799,23 +806,23 @@ bc_details_t *findBestMatch(char *barcode, va_t *barcodeArray, va_t *tagHopArray
                     } else {
                         if (best_match1 != best_match2) {
 
-                           unsigned short isSpace = (best_match1->next_tag[0] == ' '? 1 : 0);
+                           unsigned short tag_sep = ((best_match1->next_tag[0] == ' ' || best_match1->next_tag[0] == '-') ? 1 : 0);
                            unsigned short len1 = (unsigned short)(best_match1->next_tag - best_match1->seq);
-                           unsigned short len2 = bcLen - len1 - isSpace;
+                           unsigned short len2 = bcLen - len1 - tag_sep;
 
                            char tag_name[40];
 
                            bc_details_t *new_bcd = calloc(1, sizeof(bc_details_t)); //create a new entry with the two tags
-                           new_bcd->seq = malloc(len1 + isSpace + len2 + 1);
-                           strncpy(new_bcd->seq, best_match1->seq, len1 + isSpace); //copy the first tag, including the space
-                           strncpy(new_bcd->seq + len1 + isSpace, best_match2->seq + len1 + isSpace, len2); //copy the second tag, after the space
-                           new_bcd->seq[len1 + isSpace + len2] = 0;
+                           new_bcd->seq = malloc(len1 + tag_sep + len2 + 1);
+                           new_bcd->next_tag = new_bcd->seq + len1;
+                           strncpy(new_bcd->seq, best_match1->seq, len1 + tag_sep); //copy the first tag, including the space
+                           strncpy(new_bcd->next_tag + tag_sep, best_match2->next_tag + tag_sep, len2); //copy the second tag, after the space
+                           new_bcd->seq[len1 + tag_sep + len2] = 0;
                            new_bcd->name = strdup("0");
                            new_bcd->lib = strdup("DUMMY_LIB");
                            new_bcd->sample = strdup("DUMMY_SAMPLE");
                            snprintf(tag_name,40,"TAG_HOP (%d AND %d)", arrayIndex1, arrayIndex2);
                            new_bcd->desc = strdup(tag_name);  //the combination is registered as a tag hop
-                           new_bcd->next_tag = new_bcd->seq + len1;
                            new_bcd->tag_hop = true;
                            va_push(barcodeArray,new_bcd);
                            va_push(tagHopArray,new_bcd);
