@@ -144,7 +144,7 @@ typedef struct {
  * Release all the options
  */
 
-static void free_opts(opts_t* opts)
+void i2b_free_opts(opts_t* opts)
 {
     if (!opts) return;
     free(opts->run_folder);
@@ -432,13 +432,13 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
                     else if (strcmp(arg, "final-index-cycle") == 0)            parse_int(opts->final_index_cycle,optarg);
                     else {
                         fprintf(stderr,"\nUnknown option: %s\n\n", arg); 
-                        usage(stdout); free_opts(opts);
+                        usage(stdout); i2b_free_opts(opts);
                         return NULL;
                     }
                     break;
         default:    fprintf(stderr,"Unknown option: '%c'\n", opt);
             /* else fall-through */
-        case '?':   usage(stdout); free_opts(opts); return NULL;
+        case '?':   usage(stdout); i2b_free_opts(opts); return NULL;
         }
     }
 
@@ -776,6 +776,7 @@ static ia_t *getTileList(opts_t *opts)
                     }
                 }
             }
+            xmlXPathFreeObject(ptr);
         }
     }
 
@@ -1505,6 +1506,6 @@ int main_i2b(int argc, char *argv[])
     int ret = 1;
     opts_t* opts = i2b_parse_args(argc, argv);
     if (opts) ret = i2b(opts);
-    free_opts(opts);
+    i2b_free_opts(opts);
     return ret;
 }

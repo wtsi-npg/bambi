@@ -128,43 +128,31 @@ int main(int argc, char**argv)
 
     // CBCL tests
 
-//    bclfile = bclfile_open("/nfs/sf28/ILorHSany_sf28/analysis/170407_A00103_0049_AH2CLFDMXX/Data/Intensities/BaseCalls/L001/C26.1/L001_1.cbcl");
-    bclfile = bclfile_open("/nfs/users/nfs_j/js10/tmp/picard/testdata/picard/illumina/readerTests/cbcls/C1.1/L001_1.cbcl");
+    bclfile = bclfile_open(MKNAME(DATA_DIR,"/novaseq/Data/Intensities/BaseCalls/L001/C1.1/L001_1.cbcl"));
     if (bclfile->errmsg) {
         fprintf(stderr,"Error opening file: %s\n", bclfile->errmsg);
         failure++;
     }
     icheckEqual("CBCL file type", BCL_CBCL, bclfile->file_type);
     icheckEqual("version", 1, bclfile->version);
-    icheckEqual("header_size", 2, bclfile->header_size);
+    icheckEqual("header_size", 65, bclfile->header_size);
     icheckEqual("bits_per_base", 2, bclfile->bits_per_base);
     icheckEqual("bits_per_qual", 2, bclfile->bits_per_qual);
     icheckEqual("number of bins", 4, bclfile->nbins);
-    for (n=0; n < bclfile->nbins; n++) {
-        fprintf(stderr,"bin[%d]: %d\n", bclfile->qbin->entries[n], bclfile->qscore->entries[n]);
-    }
-    icheckEqual("number of tiles", 352, bclfile->ntiles);
+    icheckEqual("number of tiles", 1, bclfile->ntiles);
 
     for (n=0; n < bclfile->ntiles; n++) {
         tilerec_t *t = bclfile->tiles->entries[n];
         fprintf(stderr,"%d\t%d\t%d\t%d\t%d\n", t->tilenum, t->nclusters, t->uncompressed_blocksize, t->compressed_blocksize, bclfile->pfFlag);
     }
 
-    //bclfile_next(bclfile);
-    //ccheckEqual("CBCL First Base", 'A', bclfile->base);
-
-    //for (n=0; n<306; n++) {
-    for (n=0; n<4; n++) {
-        bclfile_next(bclfile); fprintf(stderr,"%c",bclfile->base);
-    }
-    fprintf(stderr,"\n");
-
-    ccheckEqual("CBCL 307 Base", 'T', bclfile->base);
-
+    bclfile_next(bclfile); ccheckEqual("CBCL First Base", 'T', bclfile->base);
+    bclfile_next(bclfile); ccheckEqual("CBCL Second Base", 'G', bclfile->base);
+    bclfile_next(bclfile); ccheckEqual("CBCL Third Base", 'N', bclfile->base);
     while (bclfile_next(bclfile) == 0);
     ccheckEqual("CBCL Last Base", 'G', bclfile->base);
 
-    icheckEqual("CBCL current_block_size", 1533757, bclfile->current_block_size);
+    icheckEqual("CBCL current_block_size", 14, bclfile->current_block_size);
 
     printf("bclfile tests: %s\n", failure ? "FAILED" : "Passed");
     return failure ? EXIT_FAILURE : EXIT_SUCCESS;

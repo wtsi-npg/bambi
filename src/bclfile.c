@@ -59,7 +59,7 @@ static int uncompressBlock(char* abSrc, int nLenSrc, char* abDst, int nLenDst )
         nErr= inflate( &zInfo, Z_FINISH );     // zlib function
         if ( (nErr == Z_STREAM_END) || (nErr == Z_BUF_ERROR) ) {
             nRet= zInfo.total_out;
-            if (nRet != nLenDst) fprintf(stderr,"inflate() returned %d: expected %d\n",nErr,nLenDst);
+            if (nRet != nLenDst) fprintf(stderr,"inflate() returned %d: expected %d\n",nRet,nLenDst);
             nErr = Z_OK;
         }
         if (nErr != Z_OK) {
@@ -91,6 +91,7 @@ bclfile_t *bclfile_open(char *fname)
     bclfile->tiles = va_init(500,free);
     bclfile->current_block = NULL;
     bclfile->current_block_size = 0;
+    bclfile->surface = 1;
     char *gzfname = NULL;
     int r, n;
 
@@ -294,7 +295,6 @@ int bclfile_next(bclfile_t *bcl)
         } else {
             if (bcl->file_type == BCL_CBCL) {
                 if (bcl->block_index >= bcl->current_block_size) {
-                    fprintf(stderr,"bclfile_next(): block_index: %d   current_block_size: %d\n", bcl->block_index, bcl->current_block_size);
                     return -1;
                 }
                 bcl->current_byte = bcl->current_block[bcl->block_index++];

@@ -415,12 +415,6 @@ void novaseq_test(int* argc, char*** argv, char *outputfile, bool verbose)
     (*argv)[(*argc)++] = strdup(outputfile);
     (*argv)[(*argc)++] = strdup("--lane");
     (*argv)[(*argc)++] = strdup("1");
-#if 0
-    (*argv)[(*argc)++] = strdup("--first-tile");
-    (*argv)[(*argc)++] = strdup("1101");
-    (*argv)[(*argc)++] = strdup("--tile-limit");
-    (*argv)[(*argc)++] = strdup("1");
-#endif
     (*argv)[(*argc)++] = strdup("--no-filter");
     (*argv)[(*argc)++] = strdup("--library-name");
     (*argv)[(*argc)++] = strdup("TestLibrary");
@@ -431,22 +425,14 @@ void novaseq_test(int* argc, char*** argv, char *outputfile, bool verbose)
     (*argv)[(*argc)++] = strdup("--run-start-date");
     (*argv)[(*argc)++] = strdup("2011-03-23T00:00:00+0000");
     if (verbose) (*argv)[(*argc)++] = strdup("--verbose");
-#if 0
-    (*argv)[(*argc)++] = strdup("--first-cycle");
-    (*argv)[(*argc)++] = strdup("34");
-    (*argv)[(*argc)++] = strdup("--final-cycle");
-    (*argv)[(*argc)++] = strdup("58");
-    (*argv)[(*argc)++] = strdup("--first-index-cycle");
-    (*argv)[(*argc)++] = strdup("3,6,11");
-    (*argv)[(*argc)++] = strdup("--final-index-cycle");
-    (*argv)[(*argc)++] = strdup("4,9,12");
-    (*argv)[(*argc)++] = strdup("--barcode-tag");
-    (*argv)[(*argc)++] = strdup("b1,b2,b1");
-    (*argv)[(*argc)++] = strdup("--quality-tag");
-    (*argv)[(*argc)++] = strdup("q1,q2,q1");
-#endif
 
     assert(*argc<100);
+}
+
+void free_args(char **argv)
+{
+    for (int n=0; n<100; n++) free(argv[n]);
+    free(argv);
 }
 
 void checkLike(char *name, char *expected, char *actual)
@@ -517,6 +503,8 @@ void test_paramaters(void)
     icheckEqual("options: final-index-cycle", 1, opts->final_index_cycle->end);
     icheckEqual("options: final-cycle[0]", 16, opts->final_cycle->entries[0]);
     icheckEqual("options: index-separator", 1, opts->separator);
+    free_args(argv_1);
+    i2b_free_opts(opts);
 }
 
 void checkFiles(char *name, char *outputfile, char *fname)
@@ -614,7 +602,7 @@ int main(int argc, char**argv)
     setup_simple_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1, argv_1+1);
     checkFiles("Simple test", outputfile, MKNAME(DATA_DIR,"/out/test1.bam"));
-
+    free_args(argv_1);
 
     //
     // Test with non-standard read group ID
@@ -625,6 +613,7 @@ int main(int argc, char**argv)
     setup_readgroup_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
     checkFiles("Read Group ID test", outputfile, MKNAME(DATA_DIR,"/out/test2.bam"));
+    free_args(argv_1);
 
     //
     // cycle range test
@@ -634,6 +623,7 @@ int main(int argc, char**argv)
     setup_cyclerange_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
     checkFiles("Cycle Range test", outputfile, MKNAME(DATA_DIR,"/out/test4.bam"));
+    free_args(argv_1);
 
     //
     // bc-read test
@@ -643,6 +633,7 @@ int main(int argc, char**argv)
     setup_bcread_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
     checkFiles("BC_READ test", outputfile, MKNAME(DATA_DIR,"/out/test5.bam"));
+    free_args(argv_1);
 
     //
     // dual index run
@@ -652,6 +643,7 @@ int main(int argc, char**argv)
     setup_dualindex_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
     checkFiles("Dual Index test", outputfile, MKNAME(DATA_DIR,"/out/test6.bam"));
+    free_args(argv_1);
 
     //
     // multiple barcode tags run
@@ -661,6 +653,7 @@ int main(int argc, char**argv)
     setup_tags_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
     checkFiles("Multiple barcode tags test", outputfile, MKNAME(DATA_DIR,"/out/test7.bam"));
+    free_args(argv_1);
 
     //
     // separator test
@@ -670,6 +663,7 @@ int main(int argc, char**argv)
     separator_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
     checkFiles("separator test", outputfile, MKNAME(DATA_DIR,"/out/test8.bam"));
+    free_args(argv_1);
 
     //
     // no separator test
@@ -679,6 +673,7 @@ int main(int argc, char**argv)
     no_separator_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
     checkFiles("no separator test", outputfile, MKNAME(DATA_DIR,"/out/test9.bam"));
+    free_args(argv_1);
 
     //
     // novaseq test
@@ -688,6 +683,9 @@ int main(int argc, char**argv)
     novaseq_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
     checkFiles("NovaSeq test", outputfile, MKNAME(DATA_DIR,"/out/novaseq_1.sam"));
+    free_args(argv_1);
+
+    free(outputfile);
 
     printf("i2b tests: %s\n", failure ? "FAILED" : "Passed");
     return failure ? EXIT_FAILURE : EXIT_SUCCESS;
