@@ -21,10 +21,6 @@ AC_CHECK_LIB([hts], [sam_hdr_del], [AC_DEFINE([HAVE_SAM_HDR_DEL],[1],[Does htsli
 CPPFLAGS="$saved_CPPFLAGS"
 LDFLAGS="$saved_LDFLAGS"
 
-AC_CONFIG_FILES([
- Makefile
- src/Makefile
- test/Makefile
-])
+AC_CONFIG_FILES([ Makefile ])
 AC_OUTPUT
 
