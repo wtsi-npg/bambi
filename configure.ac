@@ -1,6 +1,6 @@
 AC_INIT([bambi], m4_esyscmd_s([git describe --dirty --always --tags]), [js10@sanger.ac.uk])
 AC_ARG_VAR(HTSDIR,Directory to look for hts)
-AM_INIT_AUTOMAKE([-Wall -Werror foreign tar-pax no-dependencies])
+AM_INIT_AUTOMAKE([subdir-objects -Wall -Werror foreign tar-pax no-dependencies])
 AC_PROG_CC
 
 LT_INIT
@@ -21,10 +21,6 @@ AC_CHECK_LIB([hts], [sam_hdr_del], [AC_DEFINE([HAVE_SAM_HDR_DEL],[1],[Does htsli
 CPPFLAGS="$saved_CPPFLAGS"
 LDFLAGS="$saved_LDFLAGS"
 
-AC_CONFIG_FILES([
- Makefile
- src/Makefile
- test/Makefile
-])
+AC_CONFIG_FILES([ Makefile ])
 AC_OUTPUT
 

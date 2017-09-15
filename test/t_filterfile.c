@@ -64,7 +64,6 @@ int main(int argc, char**argv)
     int n, f;
 
     filter_t *filter;
-
     filter = filter_open(MKNAME(DATA_DIR,"/s_1_1101.filter"));
     if (filter->errmsg) {
         fprintf(stderr,"Error opening file '%s':  %s\n", MKNAME(DATA_DIR,"/s_1_1101.filter"), filter->errmsg);
@@ -91,6 +90,16 @@ int main(int argc, char**argv)
     icheckEqual("Last Current cluster", 2000, filter->current_cluster);
     icheckEqual("Last Current PF clusters", 977, filter->current_pf_cluster);
     icheckEqual("Last Total clusters", 2000, filter->total_clusters);
+    filter_close(filter);
+
+    // 10X filter file
+    filter = filter_open(MKNAME(DATA_DIR,"/novaseq/Data/Intensities/BaseCalls/L001/s_1_1101.filter"));
+    if (filter->errmsg) {
+        fprintf(stderr,"Error opening 10X file:  %s\n", filter->errmsg);
+        failure++;
+    }
+    icheckEqual("novaseq Total clusters", 28, filter->total_clusters);
+    filter_close(filter);
 
     printf("filter tests: %s\n", failure ? "FAILED" : "Passed");
     return failure ? EXIT_FAILURE : EXIT_SUCCESS;

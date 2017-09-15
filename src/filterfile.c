@@ -44,6 +44,7 @@ filter_t *filter_open(char *fname)
         filter->errmsg = strdup(strerror(errno));
     } else {
         int n;
+        filter->errmsg=NULL;
         n = read(filter->fhandle,(void *)&empty,4);
         n = read(filter->fhandle,(void *)&filter->version,4);
         n = read(filter->fhandle,(void *)&filter->total_clusters,4);
@@ -58,6 +59,7 @@ filter_t *filter_open(char *fname)
 void filter_close(filter_t *filter)
 {
     close(filter->fhandle);
+    free(filter->errmsg);
     free(filter);
 }
 

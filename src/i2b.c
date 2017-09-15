@@ -144,7 +144,7 @@ typedef struct {
  * Release all the options
  */
 
-static void free_opts(opts_t* opts)
+void i2b_free_opts(opts_t* opts)
 {
     if (!opts) return;
     free(opts->run_folder);
@@ -432,13 +432,13 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
                     else if (strcmp(arg, "final-index-cycle") == 0)            parse_int(opts->final_index_cycle,optarg);
                     else {
                         fprintf(stderr,"\nUnknown option: %s\n\n", arg); 
-                        usage(stdout); free_opts(opts);
+                        usage(stdout); i2b_free_opts(opts);
                         return NULL;
                     }
                     break;
         default:    fprintf(stderr,"Unknown option: '%c'\n", opt);
             /* else fall-through */
-        case '?':   usage(stdout); free_opts(opts); return NULL;
+        case '?':   usage(stdout); i2b_free_opts(opts); return NULL;
         }
     }
 
@@ -606,6 +606,7 @@ static int addHeader(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
     pname = getXMLAttr(opts->parametersConfig, "/ImageAnalysis/Run/Software", "Name");
     if (!pname) pname = getXMLAttr(opts->intensityConfig, "/ImageAnalysis/Run/Software", "Name");
     if (!pname) pname = getXMLVal(opts->parametersConfig, "//ApplicationName");
+    if (!pname) pname = getXMLVal(opts->parametersConfig, "//Application");
     if (!pname) { fprintf(stderr,"Can't find program name anywhere\n"); return 1; }
 
     version = getXMLAttr(opts->parametersConfig, "/ImageAnalysis/Run/Software", "Version");
@@ -629,14 +630,6 @@ static int addHeader(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
                     NULL, NULL);
 
     // Add PG lines
-    version = getXMLAttr(opts->parametersConfig, "/ImageAnalysis/Run/Software", "Version");
-    if (!version) version = getXMLAttr(opts->intensityConfig, "/ImageAnalysis/Run/Software", "Version");
-    if (!version) version = getXMLVal(opts->parametersConfig, "//Setup/ApplicationVersion");
-    if (!version) { fprintf(stderr, "Can't find program version\n"); exit(1); }
-    pname = getXMLAttr(opts->parametersConfig, "/ImageAnalysis/Run/Software", "Name");
-    if (!pname) pname = getXMLAttr(opts->intensityConfig, "/ImageAnalysis/Run/Software", "Name");
-    if (!pname) pname = getXMLVal(opts->parametersConfig, "//Setup/ApplicationName");
-    if (!pname) { fprintf(stderr, "Can't find program name\n"); exit(1); }
     sam_hdr_add(sh, "PG",
                     "ID", "SCS",
                     "VN", version,
@@ -731,10 +724,13 @@ static va_t *getTileIndex(opts_t *opts)
             n = read(fhandle, &ti->clusters, 4);
             if (n == 4) {
                 va_push(tileIndex,ti);
+            } else {
+                free(ti);
             }
         } while (n == 4);
         close(fhandle);
     }
+    free(fname);
     return tileIndex;
 }
 
@@ -764,6 +760,10 @@ static ia_t *getTileList(opts_t *opts)
     } else {
         // Maybe this is a NewSeq run?
         ptr = getnodeset(opts->parametersConfig, "//SelectedTiles/Tile");
+        if (!ptr) {
+            // or maybe novaseq...
+            ptr = getnodeset(opts->runinfoConfig, "//FlowcellLayout/TileSet/Tiles/Tile");
+        }
         if (ptr && ptr->nodesetval) {
             for (int n=0; n < ptr->nodesetval->nodeNr; n++) {
                 char *t = (char *)ptr->nodesetval->nodeTab[n]->children->content;
@@ -776,6 +776,7 @@ static ia_t *getTileList(opts_t *opts)
                     }
                 }
             }
+            xmlXPathFreeObject(ptr);
         }
     }
 
@@ -888,6 +889,7 @@ static void getCycleRangeFromFile(va_t *cycleRange, xmlDocPtr doc)
         va_push(cycleRange,cr);
         cycleCount += numCycles;
     }
+    xmlXPathFreeObject(ptr);
 }
 
 /*
@@ -1031,47 +1033,31 @@ static posfile_t *openPositionFile(int tile, va_t *tileIndex, opts_t *opts)
 
     char *fname = calloc(1, strlen(opts->intensity_dir)+64);
 
-    sprintf(fname, "%s/s_%d_%04d_pos.txt", opts->intensity_dir, opts->lane, tile);
+    sprintf(fname, "%s/L%03d/s_%d_%04d.clocs", opts->intensity_dir, opts->lane, opts->lane, tile);
     posfile = posfile_open(fname);
-    if (opts->verbose && !posfile->errmsg) fprintf(stderr,"Opened %s\n", fname);
 
     if (posfile->errmsg) {
-        sprintf(fname, "%s/L%03d/s_%d_%04d.clocs", opts->intensity_dir, opts->lane, opts->lane, tile);
-        free(posfile->errmsg); free(posfile);
-        posfile = posfile_open(fname);
-        if (opts->verbose && !posfile->errmsg) fprintf(stderr,"Opened %s\n", fname);
-    }
-
-    if (posfile->errmsg) {
+        posfile_close(posfile);
         sprintf(fname, "%s/L%03d/s_%d_%04d.locs", opts->intensity_dir, opts->lane, opts->lane, tile);
-        free(posfile->errmsg); free(posfile);
         posfile = posfile_open(fname);
-        if (opts->verbose && !posfile->errmsg) fprintf(stderr,"Opened %s\n", fname);
     }
 
     if (posfile->errmsg) {
+        posfile_close(posfile);
         sprintf(fname, "%s/s.locs", opts->intensity_dir);
-        free(posfile->errmsg); free(posfile);
         posfile = posfile_open(fname);
-        if (opts->verbose && !posfile->errmsg) fprintf(stderr,"Opened %s\n", fname);
     }
 
     // if still not found, try NewSeq format files
     if (posfile->errmsg) {
-        sprintf(fname, "%s/s_%d_pos.txt", opts->intensity_dir, opts->lane);
+        posfile_close(posfile);
+        sprintf(fname, "%s/L%03d/s_%d.clocs", opts->intensity_dir, opts->lane, opts->lane);
         posfile = posfile_open(fname);
-        if (opts->verbose && !posfile->errmsg) fprintf(stderr,"Opened %s\n", fname);
 
         if (posfile->errmsg) {
-            sprintf(fname, "%s/L%03d/s_%d.clocs", opts->intensity_dir, opts->lane, opts->lane);
-            posfile = posfile_open(fname);
-            if (opts->verbose && !posfile->errmsg) fprintf(stderr,"Opened %s\n", fname);
-        }
-
-        if (posfile->errmsg) {
+            posfile_close(posfile);
             sprintf(fname, "%s/L%03d/s_%d.locs", opts->intensity_dir, opts->lane, opts->lane);
             posfile = posfile_open(fname);
-            if (opts->verbose && !posfile->errmsg) fprintf(stderr,"Opened %s\n", fname);
         }
 
         if (!posfile->errmsg) {
@@ -1082,6 +1068,10 @@ static posfile_t *openPositionFile(int tile, va_t *tileIndex, opts_t *opts)
                 posfile->errmsg = strdup("Trying to open position file with no tile index");
             }
         }
+    }
+
+    if (opts->verbose && !posfile->errmsg) {
+        fprintf(stderr,"Opened %s (%d blocks)\n", fname, posfile->total_blocks);
     }
 
     free(fname);
@@ -1100,10 +1090,12 @@ static filter_t *openFilterFile(int tile, va_t *tileIndex, opts_t *opts)
     sprintf(fname, "%s/L%03d/s_%d_%04d.filter", opts->basecalls_dir, opts->lane, opts->lane, tile);
     filter = filter_open(fname);
     if (filter->errmsg) {
+        filter_close(filter);
         sprintf(fname, "%s/s_%d_%04d.filter", opts->basecalls_dir, opts->lane, tile);
         filter = filter_open(fname);
     }
     if (filter->errmsg) {
+        filter_close(filter);
         sprintf(fname, "%s/L%03d/s_%d.filter", opts->basecalls_dir, opts->lane, opts->lane);
         filter = filter_open(fname);
     }
@@ -1119,33 +1111,50 @@ static filter_t *openFilterFile(int tile, va_t *tileIndex, opts_t *opts)
 /*
  * Open a single bcl (or scl) file
  */
-static bclfile_t *openBclFile(char *basecalls, int lane, int tile, int cycle, char *ext, va_t *tileIndex)
+static bclfile_t *openBclFile(char *basecalls, int lane, int tile, int cycle, int surface, char *ext, va_t *tileIndex)
 {
+    bclfile_t *bcl;
     char *fname = calloc(1, strlen(basecalls)+128);
-    if (tileIndex) {    // NextSeq format
-        sprintf(fname, "%s/L%03d/%04d.%s", basecalls, lane, cycle, ext);
-    } else {
-        sprintf(fname, "%s/L%03d/C%d.1/s_%d_%04d.%s", basecalls, lane, cycle, lane, tile, ext);
-    }
-    bclfile_t *bcl = bclfile_open(fname);
+
+    // NextSeq format
+    sprintf(fname, "%s/L%03d/%04d.%s", basecalls, lane, cycle, ext);
+    bcl = bclfile_open(fname);
     if (bcl->errmsg) {
-        fprintf(stderr,"Can't open %s\n%s\n", fname, bcl->errmsg);
-        return NULL;
+        bclfile_close(bcl);
+        // NovaSeq format
+        sprintf(fname, "%s/L%03d/C%d.1/L%03d_%d.cbcl", basecalls, lane, cycle, lane, surface);
+        bcl = bclfile_open(fname);
+        if (bcl->errmsg) {
+            bclfile_close(bcl);
+            // other formats
+            sprintf(fname, "%s/L%03d/C%d.1/s_%d_%04d.%s", basecalls, lane, cycle, lane, tile, ext);
+            bcl = bclfile_open(fname);
+            if (bcl->errmsg) {
+                fprintf(stderr,"Can't open %s\n%s\n", fname, bcl->errmsg);
+                bclfile_close(bcl); bcl = NULL;
+            }
+        }
     }
 
     free(fname);
 
-    if (tileIndex) bclfile_seek(bcl, findClusterNumber(tile,tileIndex));
-
+    if (bcl) {
+        bcl->surface = surface;
+        if (tileIndex) bclfile_seek(bcl, findClusterNumber(tile,tileIndex));
+        if (bcl->file_type == BCL_CBCL) bclfile_seek_tile(bcl, tile);
+//fprintf(stderr,"Opened [%d] %s\n", tile, bcl->filename);
+    }
     return bcl;
 }
 
 /*
  * Find and open all the relevant bcl and scl files
+ * Looking at the file type is also the only way to find out if we are on a NovaSeq system
  */
-static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, va_t *tileIndex)
+static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, va_t *tileIndex, bool *novaSeq, filter_t *filter)
 {
     va_t *bclReadArray = va_init(5,freeBCLReadArray);
+    *novaSeq = false;
 
     for (int n=0; n < cycleRange->end; n++) {
         cycleRangeEntry_t *cr = cycleRange->entries[n];
@@ -1156,11 +1165,17 @@ static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, va_t *tileIn
         ra->sclFileArray = va_init(nCycles, freeBCLFileArray);
 
         for (int cycle = cr->first; cycle <= cr->last; cycle++) {
-            bclfile_t *bcl = openBclFile(opts->basecalls_dir, opts->lane, tile, cycle, "bcl", tileIndex);
+            bclfile_t *bcl = openBclFile(opts->basecalls_dir, opts->lane, tile, cycle, 1, "bcl", tileIndex);
+            if (bcl->file_type == BCL_CBCL) *novaSeq = true;
             va_push(ra->bclFileArray, bcl);
 
+            if (novaSeq) {
+                bclfile_t *bcl = openBclFile(opts->basecalls_dir, opts->lane, tile, cycle, 2, "bcl", tileIndex);
+                va_push(ra->bclFileArray, bcl);
+            }
+
             if (opts->generate_secondary_basecalls) {
-                bclfile_t *bcl = openBclFile(opts->basecalls_dir, opts->lane, tile, cycle, "scl", tileIndex);
+                bclfile_t *bcl = openBclFile(opts->basecalls_dir, opts->lane, tile, cycle, 1, "scl", tileIndex);
                 va_push(ra->sclFileArray, bcl);
             }
         }
@@ -1201,21 +1216,27 @@ static bool readArrayContains(va_t *bclReadArray, char *readname)
 /*
  * read all the bases and qualities for a given read name ("read1" or "read2")
  */
-static void getBases(va_t *bclReadArray, char *readname, va_t *bases, va_t *qualities, bool convert_qual)
+static void getBases(va_t *bclReadArray, char *readname, va_t *bases, va_t *qualities, bool convert_qual, bool filtered, int surface)
 {
+    int cycle=0;
     for (int n=0; n < bclReadArray->end; n++) {
         bclReadArrayEntry_t *ra = bclReadArray->entries[n];
         if (strcmp(ra->readname, readname) == 0) {
             char *b = calloc(1, ra->bclFileArray->end+1);
             char *q = calloc(1, ra->bclFileArray->end+1);
+            cycle = 0;
             for (int i=0; i < ra->bclFileArray->end; i++) {
                 bclfile_t *bcl = ra->bclFileArray->entries[i];
-                if (bclfile_next(bcl) < 0) {
-                    fprintf(stderr,"Failed to read bcl file\n");
-                    exit(1);
+                if (bcl->surface == surface) {    // ignore if this tile is not in this bcl file
+                    if (filtered && (bcl->file_type == BCL_CBCL) && bcl->pfFlag) continue;
+                    if (bclfile_next(bcl) < 0) {
+                        fprintf(stderr,"Failed to read bcl file %s : cluster %d\n", bcl->filename, bcl->current_cluster);
+                        exit(1);
+                    }
+                    b[cycle] = bcl->base;
+                    q[cycle] = bcl->quality + (convert_qual ? 33 : 0);
+                    cycle++;
                 }
-                b[i] = bcl->base;
-                q[i] = bcl->quality + (convert_qual ? 33 : 0);
             }
             va_push(bases,b);
             va_push(qualities,q);
@@ -1251,7 +1272,7 @@ static void update_aux(bam1_t *bam, char *auxtag, char *data, char *tag_separato
     uint8_t *s = bam_aux_get(bam,auxtag);
     if (s) {
         // update existing tag
-        char *new_data = calloc(1, strlen(bam_aux2Z(s)) + (tag_separator ? strlen(tag_separator) : 0) + strlen(data) + 1);
+        char *new_data = calloc(1, strlen(bam_aux2Z(s)) + (tag_separator ? strlen(tag_separator) : 0) + strlen(data) + 4);
         strcpy(new_data, bam_aux2Z(s));
         if (tag_separator) strcat(new_data, tag_separator);
         strcat(new_data, data);
@@ -1310,6 +1331,8 @@ static int processTile(int tile, samFile *output_file, bam_hdr_t *output_header,
     int filtered;
     int max_cluster = 0;
     int nRecords = 0;
+    bool novaSeq;
+    int surface = bcl_tile2surface(tile);
 
     if (opts->verbose) fprintf(stderr,"Processing Tile %d\n", tile);
     posfile_t *posfile = openPositionFile(tile, tileIndex, opts);
@@ -1326,7 +1349,7 @@ static int processTile(int tile, samFile *output_file, bam_hdr_t *output_header,
 
     if (tileIndex) max_cluster = findClusters(tile, tileIndex);
 
-    bclReadArray = openBclFiles(cycleRange, opts, tile, tileIndex);
+    bclReadArray = openBclFiles(cycleRange, opts, tile, tileIndex, &novaSeq, filter);
     char *id = getId(opts);
 
     bool ispaired = readArrayContains(bclReadArray, "read2");
@@ -1336,23 +1359,24 @@ static int processTile(int tile, samFile *output_file, bam_hdr_t *output_header,
     //
     while ( (filtered = filter_next(filter)) >= 0) {
         if (tileIndex && filter->current_cluster > max_cluster) break;
-        filtered = !filtered;   // don't ask
+        filtered = !filtered;   // actual flag is 'passed', but we want 'filtered out'
         posfile_next(posfile);
+
         char *readName = getReadName(id, opts->lane, tile, posfile->x, posfile->y);
         va_t *bases, *qualities, *bases_index, *qualities_index, *bases_index2, *qualities_index2;
         bases = va_init(2,free); qualities = va_init(2,free);
         bases_index = va_init(5,free); qualities_index = va_init(5,free); bases_index2 = va_init(5,free); qualities_index2 = va_init(5,free);
 
-        getBases(bclReadArray, "read1", bases, qualities, false);
-        if (ispaired) getBases(bclReadArray, "read2", bases, qualities, false);
+        getBases(bclReadArray, "read1", bases, qualities, false, filtered, surface);
+        if (ispaired) getBases(bclReadArray, "read2", bases, qualities, false, filtered, surface);
 
         // read each index and put into first or second read
         for (int c=0; c < cycleRange->end; c++) {
             char *cname = getCycleName(c+1,true);
             if (readArrayContains(bclReadArray,cname)) {
                 if (c >= opts->bc_read->end) ia_push(opts->bc_read,1);   // supply a default
-                if (opts->bc_read->entries[c] == 2) getBases(bclReadArray, cname, bases_index2, qualities_index2, true);
-                else                                getBases(bclReadArray, cname, bases_index, qualities_index, true);
+                if (opts->bc_read->entries[c] == 2) getBases(bclReadArray, cname, bases_index2, qualities_index2, true, filtered, surface);
+                else                                getBases(bclReadArray, cname, bases_index, qualities_index, true, filtered, surface);
             }
             free(cname);
         }
@@ -1410,6 +1434,7 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
     }
 
     va_free(cycleRange);
+    va_free(tileIndex);
     ia_free(tiles);
     return retcode;
 }
@@ -1481,6 +1506,6 @@ int main_i2b(int argc, char *argv[])
     int ret = 1;
     opts_t* opts = i2b_parse_args(argc, argv);
     if (opts) ret = i2b(opts);
-    free_opts(opts);
+    i2b_free_opts(opts);
     return ret;
 }
