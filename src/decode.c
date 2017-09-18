@@ -391,16 +391,16 @@ void writeMetricsLine(FILE *f, bc_details_t *bcd, opts_t *opts, int total_reads,
         fprintf(f, "%d\t", bcd->first_tag_match);
         fprintf(f, "%d\t", bcd->second_tag_match);
     }
-    fprintf(f, "%.3f\t", total_reads ? bcd->reads / (double)total_reads * 100 : 0 );
-    fprintf(f, "%.3f", max_reads ? bcd->reads / (double)max_reads * 100 : 0 );
+    fprintf(f, "%.3f\t", total_reads ? bcd->reads / (double)total_reads : 0 );
+    fprintf(f, "%.3f", max_reads ? bcd->reads / (double)max_reads  : 0 );
     if (!opts->ignore_pf) {
-        fprintf(f, "\t%.3f", total_pf_reads ? bcd->pf_reads / (double)total_pf_reads * 100 : 0 ); 
+        fprintf(f, "\t%.3f", total_pf_reads ? bcd->pf_reads / (double)total_pf_reads  : 0 ); 
     }
     if (!opts->ignore_pf) {
-        fprintf(f, "\t%.3f", max_pf_reads ? bcd->pf_reads / (double)max_pf_reads *100 : 0 ); 
+        fprintf(f, "\t%.3f", max_pf_reads ? bcd->pf_reads / (double)max_pf_reads  : 0 ); 
     }
     if (!opts->ignore_pf) {
-        fprintf(f, "\t%.3f", total_pf_reads_assigned ? bcd->pf_reads * nReads / (double)total_pf_reads_assigned * 100 : 0);
+        fprintf(f, "\t%.3f", total_pf_reads_assigned ? bcd->pf_reads * nReads / (double)total_pf_reads_assigned  : 0);
     }
     fprintf(f, "\n");
 }
