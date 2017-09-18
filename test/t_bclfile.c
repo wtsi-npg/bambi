@@ -111,7 +111,7 @@ int main(int argc, char**argv)
         fprintf(stderr,"Error opening file: %s\n", bclfile->errmsg);
         failure++;
     }
-    icheckEqual("SCL File Type", SCL, bclfile->file_type);
+    icheckEqual("SCL File Type", BCL_SCL, bclfile->file_type);
     icheckEqual("SCL Total clusters", 2609912, bclfile->total_clusters);
     icheckEqual("SCL Current cluster", 0, bclfile->current_cluster);
 
@@ -125,6 +125,34 @@ int main(int argc, char**argv)
 
     while (bclfile_next(bclfile) == 0);
     ccheckEqual("SCL Last Base", 'C', bclfile->base);
+
+    // CBCL tests
+
+    bclfile = bclfile_open(MKNAME(DATA_DIR,"/novaseq/Data/Intensities/BaseCalls/L001/C1.1/L001_1.cbcl"));
+    if (bclfile->errmsg) {
+        fprintf(stderr,"Error opening file: %s\n", bclfile->errmsg);
+        failure++;
+    }
+    icheckEqual("CBCL file type", BCL_CBCL, bclfile->file_type);
+    icheckEqual("version", 1, bclfile->version);
+    icheckEqual("header_size", 65, bclfile->header_size);
+    icheckEqual("bits_per_base", 2, bclfile->bits_per_base);
+    icheckEqual("bits_per_qual", 2, bclfile->bits_per_qual);
+    icheckEqual("number of bins", 4, bclfile->nbins);
+    icheckEqual("number of tiles", 1, bclfile->ntiles);
+
+    for (n=0; n < bclfile->ntiles; n++) {
+        tilerec_t *t = bclfile->tiles->entries[n];
+        fprintf(stderr,"%d\t%d\t%d\t%d\t%d\n", t->tilenum, t->nclusters, t->uncompressed_blocksize, t->compressed_blocksize, bclfile->pfFlag);
+    }
+
+    bclfile_next(bclfile); ccheckEqual("CBCL First Base", 'T', bclfile->base);
+    bclfile_next(bclfile); ccheckEqual("CBCL Second Base", 'G', bclfile->base);
+    bclfile_next(bclfile); ccheckEqual("CBCL Third Base", 'N', bclfile->base);
+    while (bclfile_next(bclfile) == 0);
+    ccheckEqual("CBCL Last Base", 'G', bclfile->base);
+
+    icheckEqual("CBCL current_block_size", 14, bclfile->current_block_size);
 
     printf("bclfile tests: %s\n", failure ? "FAILED" : "Passed");
     return failure ? EXIT_FAILURE : EXIT_SUCCESS;

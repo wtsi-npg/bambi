@@ -38,6 +38,7 @@ posfile_t *posfile_open(char *fname)
     posfile->current_block = 0;
     posfile->errmsg = NULL;
     posfile->file_type = UNKNOWN_POS;
+    posfile->fhandle = -1;
 
     // Should we handle compressed (.gz) files?
 
@@ -47,6 +48,7 @@ posfile_t *posfile_open(char *fname)
     if (ext) {
         if (strcmp(ext,"clocs")==0) posfile->file_type = CLOCS;
         if (strcmp(ext,"locs")==0) posfile->file_type = LOCS;
+        if (strcmp(ext,"txt")==0) posfile->file_type = POS;
     }
     if (posfile->file_type == UNKNOWN_POS) {
         posfile->errmsg = strdup("posfile_open(): Unknown file type\n");

@@ -17,9 +17,10 @@ matrix:
 
 env:
   global:
-  - HTSLIB=`pwd`/htslib
+  - P=`pwd`
+  - HTSLIB=$P/htslib
   - HTSDIR=$HTSLIB/b
-  - SAMTOOLSDIR=`pwd`/samtools
+  - SAMTOOLSDIR=$P/samtools
   - PATH=$SAMTOOLSDIR:$PATH
   - DISTCHECK_CONFIGURE_FLAGS=--with-htslib=$HTSDIR
 

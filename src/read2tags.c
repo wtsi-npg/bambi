@@ -31,6 +31,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <libgen.h>
 #include <time.h>
 #include <fcntl.h>
+#include <math.h>
 
 #include <cram/sam_header.h>
 
@@ -114,9 +115,9 @@ static int bam_aux_cmp(const uint8_t *s, const uint8_t *d)
                       break;
             case 'A': if (*(char*)s == *(char*)d) return 0;
                       break;
-            case 'd': if (abs(*(double*)s - *(double*)d) < .0001) return 0;
+            case 'd': if (fabs(*(double*)s - *(double*)d) < .0001) return 0;
                       break;
-            case 'f': if (abs(*(float*)s - *(float*)d) < .0001) return 0;
+            case 'f': if (fabsf(*(float*)s - *(float*)d) < .0001) return 0;
                       break;
             case 'Z':
             case 'H': if (strcmp((char*)s, (char *)d) == 0) return 0;

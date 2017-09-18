@@ -32,6 +32,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <regex.h>
 #include <htslib/khash.h>
 #include <cram/sam_header.h>
+#include <inttypes.h>
 
 #include "bamit.h"
 
@@ -106,7 +107,7 @@ typedef struct {
     char *lib;
     char *sample;
     char *desc;
-    int reads, pf_reads, perfect, pf_perfect, one_mismatch, pf_one_mismatch;
+    uint64_t reads, pf_reads, perfect, pf_perfect, one_mismatch, pf_one_mismatch;
     char *next_tag;
     int first_tag_match, second_tag_match;
     bool tag_hop;
@@ -366,7 +367,7 @@ static char *checkBarcodeQuality(char *bc_tag, char *qt_tag, opts_t *opts)
     return newBarcode;
 }
 
-void writeMetricsLine(FILE *f, bc_details_t *bcd, opts_t *opts, int total_reads, int max_reads, int total_pf_reads, int max_pf_reads, int total_pf_reads_assigned, int nReads, bool metrics)
+void writeMetricsLine(FILE *f, bc_details_t *bcd, opts_t *opts, uint64_t total_reads, uint64_t max_reads, uint64_t total_pf_reads, uint64_t max_pf_reads, uint64_t total_pf_reads_assigned, uint64_t nReads, bool metrics)
 {
     fprintf(f, "%s\t", bcd->seq);
     if (metrics) {
@@ -375,17 +376,17 @@ void writeMetricsLine(FILE *f, bc_details_t *bcd, opts_t *opts, int total_reads,
         fprintf(f, "%s\t", bcd->sample);
     }
     fprintf(f, "%s\t", bcd->desc);
-    fprintf(f, "%d\t", bcd->reads);
+    fprintf(f, "%"PRIu64"\t", bcd->reads);
     if (!opts->ignore_pf) {
-        fprintf(f, "%d\t", bcd->pf_reads); 
+        fprintf(f, "%"PRIu64"\t", bcd->pf_reads); 
     }
-    fprintf(f, "%d\t", bcd->perfect);
+    fprintf(f, "%"PRIu64"\t", bcd->perfect);
     if (!opts->ignore_pf) {
-        fprintf(f, "%d\t", bcd->pf_perfect); 
+        fprintf(f, "%"PRIu64"\t", bcd->pf_perfect); 
     }
-    fprintf(f, "%d\t", bcd->one_mismatch);
+    fprintf(f, "%"PRIu64"\t", bcd->one_mismatch);
     if (!opts->ignore_pf) {
-        fprintf(f, "%d\t", bcd->pf_one_mismatch); 
+        fprintf(f, "%"PRIu64"\t", bcd->pf_one_mismatch); 
     }
     if (metrics) {
         fprintf(f, "%d\t", bcd->first_tag_match);
@@ -412,14 +413,14 @@ void writeMetricsLine(FILE *f, bc_details_t *bcd, opts_t *opts, int total_reads,
 int writeMetrics(va_t *barcodeArray, va_t *tagHopArray, opts_t *opts)
 {
     bc_details_t *bcd = barcodeArray->entries[0];
-    int total_reads = bcd->reads;
-    int total_pf_reads = bcd->pf_reads;
-    int total_pf_reads_assigned = 0;
-    int max_reads = 0;
-    int total_original_reads = 0;
-    int total_hop_reads = 0;
-    int max_pf_reads = 0;
-    int nReads = 0;
+    uint64_t total_reads = bcd->reads;
+    uint64_t total_pf_reads = bcd->pf_reads;
+    uint64_t total_pf_reads_assigned = 0;
+    uint64_t max_reads = 0;
+    uint64_t total_original_reads = 0;
+    uint64_t total_hop_reads = 0;
+    uint64_t max_pf_reads = 0;
+    uint64_t nReads = 0;
     int n;
 
     // Open the metrics file
@@ -466,7 +467,7 @@ int writeMetrics(va_t *barcodeArray, va_t *tagHopArray, opts_t *opts)
         } else {
             sortTagHops(tagHopArray);
 
-            fprintf(g, "##\n# TOTAL_READS=%d, TOTAL_ORIGINAL_TAG_READS=%d, TOTAL_TAG_HOP_READS=%d, MAX_READ_ON_A_TAG=%d, TOTAL_TAG_HOPS=%d, PCT_TAG_HOPS=%f\n",total_reads, total_original_reads, total_hop_reads, max_reads, tagHopArray->end, (float)total_hop_reads / total_original_reads * 100);
+            fprintf(g, "##\n# TOTAL_READS=%"PRIu64", TOTAL_ORIGINAL_TAG_READS=%"PRIu64", TOTAL_TAG_HOP_READS=%"PRIu64", MAX_READ_ON_A_TAG=%"PRIu64", TOTAL_TAG_HOPS=%d, PCT_TAG_HOPS=%f\n",total_reads, total_original_reads, total_hop_reads, max_reads, tagHopArray->end, (float)total_hop_reads / total_original_reads * 100);
             print_header(g, opts, false);
 
             for (n=0; n < tagHopArray->end; n++) {

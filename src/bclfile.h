@@ -23,9 +23,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <stdint.h>
 #include <zlib.h>
+#include "array.h"
 
-typedef enum { BCL, SCL } BCL_FILE_TYPE;
+typedef enum { BCL_UNKNOWN, BCL_BCL, BCL_SCL, BCL_CBCL } BCL_FILE_TYPE;
 
+typedef struct {
+    uint32_t  tilenum;
+    uint32_t  nclusters;
+    uint32_t  uncompressed_blocksize;
+    uint32_t  compressed_blocksize;
+} tilerec_t;
+    
 typedef struct {
     BCL_FILE_TYPE file_type;
     int fhandle;
@@ -36,13 +44,31 @@ typedef struct {
     int current_base;
     char base;
     int quality;
-char *filename;
+    char *filename;
+    char current_byte;
+    int block_index;
+    // CBCL specific fields
+    uint16_t version;
+    uint32_t header_size;
+    unsigned char bits_per_base;
+    unsigned char bits_per_qual;
+    uint32_t nbins;
+    ia_t *qbin;
+    ia_t *qscore;
+    uint32_t ntiles;
+    tilerec_t *current_tile;
+    va_t *tiles;
+    char *current_block;
+    uint32_t current_block_size;
+    char pfFlag;
+    int surface;
 } bclfile_t;
 
+int bcl_tile2surface(int tile);
 bclfile_t *bclfile_open(char *fname);
 int bclfile_next(bclfile_t *bclfile);
 void bclfile_close(bclfile_t *bclfile);
 void bclfile_seek(bclfile_t *bclfile, int cluster);
-
+int bclfile_seek_tile(bclfile_t *bclfile, int tile);
 #endif
 
