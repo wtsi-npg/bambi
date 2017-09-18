@@ -1,6 +1,6 @@
 /*  decode.c -- index decoder subcommand.
 
-    Copyright (C) 2016 Genome Research Ltd.
+    Copyright (C) 2017 Genome Research Ltd.
 
     Author: Jennifer Liddle <js10@sanger.ac.uk>
 
@@ -46,6 +46,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define DEFAULT_BARCODE_TAG "BC"
 #define DEFAULT_QUALITY_TAG "QT"
 
+
+enum match {
+    MATCHED_NONE,
+    MATCHED_FIRST,
+    MATCHED_SECOND,
+    MATCHED_BOTH,
+    MATCHED_NEW
+};
+
+
 /*
  * structure to hold options
  */
@@ -68,6 +78,8 @@ typedef struct {
     char *output_fmt;
     char compression_level;
     int tag_len;
+    bool ignore_pf;
+    unsigned short dual_tag;
 } opts_t;
 
 static void free_opts(opts_t* opts)
@@ -96,7 +108,60 @@ typedef struct {
     char *sample;
     char *desc;
     uint64_t reads, pf_reads, perfect, pf_perfect, one_mismatch, pf_one_mismatch;
+    char *next_tag;
+    int first_tag_match, second_tag_match;
+    bool tag_hop;
 } bc_details_t;
+
+void print_header(FILE* f, opts_t* opts, bool metrics) {
+    // print header
+    fprintf(f, "##\n");
+    fprintf(f, "# ");
+    fprintf(f, "BARCODE_TAG_NAME=%s ", opts->barcode_tag_name);
+    fprintf(f, "MAX_MISMATCHES=%d ", opts->max_mismatches);
+    fprintf(f, "MIN_MISMATCH_DELTA=%d ", opts->min_mismatch_delta);
+    fprintf(f, "MAX_NO_CALLS=%d ", opts->max_no_calls);
+    fprintf(f, "\n");
+    fprintf(f, "##\n");
+    fprintf(f, "#\n");
+    fprintf(f, "\n");
+    fprintf(f, "##\n");
+    fprintf(f, "BARCODE\t");
+    if (metrics) {
+        fprintf(f, "BARCODE_NAME\t");
+        fprintf(f, "LIBRARY_NAME\t");
+        fprintf(f, "SAMPLE_NAME\t");
+    }
+    fprintf(f, "DESCRIPTION\t");
+    fprintf(f, "READS\t");
+    if (!opts->ignore_pf) {
+        fprintf(f, "PF_READS\t");
+    }
+    fprintf(f, "PERFECT_MATCHES\t");
+    if (!opts->ignore_pf) {
+        fprintf(f, "PF_PERFECT_MATCHES\t");
+    }
+    fprintf(f, "ONE_MISMATCH_MATCHES\t");
+    if (!opts->ignore_pf) {
+        fprintf(f, "PF_ONE_MISMATCH_MATCHES\t");
+    }
+    if (metrics) {
+        fprintf(f, "FIRST_TAG_MATCHES\t");
+        fprintf(f, "SECOND_TAG_MATCHES\t");
+    }
+    fprintf(f, "PCT_MATCHES\t");
+    fprintf(f, "RATIO_THIS_BARCODE_TO_BEST_BARCODE_PCT");
+    if (!opts->ignore_pf) {
+        fprintf(f, "\tPF_PCT_MATCHES");
+    }
+    if (!opts->ignore_pf) {
+        fprintf(f, "\tPF_RATIO_THIS_BARCODE_TO_BEST_BARCODE_PCT");
+    }
+    if (!opts->ignore_pf) {
+        fprintf(f, "\tPF_NORMALIZED_MATCHES");
+    }
+    fprintf(f, "\n");
+}
 
 void free_bcd(void *entry)
 {
@@ -107,6 +172,19 @@ void free_bcd(void *entry)
     free(bcd->sample);
     free(bcd->desc);
     free(bcd);
+}
+
+static int compareTagHops(const void *t1, const void *t2) {
+    bc_details_t *th1 = *(bc_details_t **)t1;
+    bc_details_t *th2 = *(bc_details_t **)t2;
+
+    int read_diff = th1->reads - th2->reads;
+    //if read count is equal, sort by number of perfect matches
+    return read_diff ? -read_diff : -(th1->perfect - th2->perfect);
+}
+
+static void sortTagHops(va_t *tagHopArray) {
+    qsort(tagHopArray->entries, tagHopArray->end, sizeof(bc_details_t*), compareTagHops);
 }
 
 static void freeRecord(void *r) { bam_destroy1((bam1_t *)r); }
@@ -140,6 +218,8 @@ static void usage(FILE *write_to)
 "       --input-fmt                     format of input file [sam/bam/cram]\n"
 "       --output-fmt                    format of output file [sam/bam/cram]\n"
 "       --compression-level             Compression level of output file [0..9]\n"
+"       --ignore-pf                     Doesn't output PF statistics\n"
+"       --dual-tag                      Dual tag position in the barcode string (between 2 and barcode length - 1)\n"
 );
 }
 
@@ -169,6 +249,8 @@ static opts_t* parse_args(int argc, char *argv[])
         { "input-fmt",                  1, 0, 0 },
         { "output-fmt",                 1, 0, 0 },
         { "compression-level",          1, 0, 0 },
+        { "ignore-pf",                  0, 0, 0 },
+        { "dual-tag",                   1, 0, 0 },
         { NULL, 0, NULL, 0 }
     };
 
@@ -188,6 +270,8 @@ static opts_t* parse_args(int argc, char *argv[])
     opts->change_read_name = false;
     opts->barcode_tag_name = NULL;
     opts->quality_tag_name = NULL;
+    opts->ignore_pf = 0;
+    opts->dual_tag = 0;
 
     int opt;
     int option_index = 0;
@@ -215,6 +299,9 @@ static opts_t* parse_args(int argc, char *argv[])
                     else if (strcmp(arg, "input-fmt") == 0)                  opts->input_fmt = strdup(optarg);
                     else if (strcmp(arg, "output-fmt") == 0)                 opts->output_fmt = strdup(optarg);
                     else if (strcmp(arg, "compression-level") == 0)          opts->compression_level = *optarg;
+                    else if (strcmp(arg, "ignore-pf") == 0)                  opts->ignore_pf = true;
+                    else if (strcmp(arg, "dual-tag") == 0)                  {opts->dual_tag = (short)atoi(optarg);
+                                                                             opts->max_no_calls = 0;}  
                     else {
                         printf("\nUnknown option: %s\n\n", arg); 
                         usage(stdout); free_opts(opts);
@@ -280,38 +367,58 @@ static char *checkBarcodeQuality(char *bc_tag, char *qt_tag, opts_t *opts)
     return newBarcode;
 }
 
-void writeMetricsLine(FILE *f, bc_details_t *bcd, opts_t *opts, uint64_t total_reads, uint64_t max_reads, uint64_t total_pf_reads, uint64_t max_pf_reads, uint64_t total_pf_reads_assigned, uint64_t nReads)
+void writeMetricsLine(FILE *f, bc_details_t *bcd, opts_t *opts, uint64_t total_reads, uint64_t max_reads, uint64_t total_pf_reads, uint64_t max_pf_reads, uint64_t total_pf_reads_assigned, uint64_t nReads, bool metrics)
 {
     fprintf(f, "%s\t", bcd->seq);
-    fprintf(f, "%s\t", bcd->name);
-    fprintf(f, "%s\t", bcd->lib);
-    fprintf(f, "%s\t", bcd->sample);
+    if (metrics) {
+        fprintf(f, "%s\t", bcd->name);
+        fprintf(f, "%s\t", bcd->lib);
+        fprintf(f, "%s\t", bcd->sample);
+    }
     fprintf(f, "%s\t", bcd->desc);
     fprintf(f, "%"PRIu64"\t", bcd->reads);
-    fprintf(f, "%"PRIu64"\t", bcd->pf_reads);
+    if (!opts->ignore_pf) {
+        fprintf(f, "%"PRIu64"\t", bcd->pf_reads); 
+    }
     fprintf(f, "%"PRIu64"\t", bcd->perfect);
-    fprintf(f, "%"PRIu64"\t", bcd->pf_perfect);
+    if (!opts->ignore_pf) {
+        fprintf(f, "%"PRIu64"\t", bcd->pf_perfect); 
+    }
     fprintf(f, "%"PRIu64"\t", bcd->one_mismatch);
-    fprintf(f, "%"PRIu64"\t", bcd->pf_one_mismatch);
-    fprintf(f, "%f\t", total_reads ? bcd->reads / (double)total_reads : 0 );
-    fprintf(f, "%f\t", max_reads ? bcd->reads / (double)max_reads : 0 );
-    fprintf(f, "%f\t", total_pf_reads ? bcd->pf_reads / (double)total_pf_reads : 0 );
-    fprintf(f, "%f\t", max_pf_reads ? bcd->pf_reads / (double)max_pf_reads : 0 );
-    fprintf(f, "%f", total_pf_reads_assigned ? bcd->pf_reads * nReads / (double)total_pf_reads_assigned : 0);
+    if (!opts->ignore_pf) {
+        fprintf(f, "%"PRIu64"\t", bcd->pf_one_mismatch); 
+    }
+    if (metrics) {
+        fprintf(f, "%d\t", bcd->first_tag_match);
+        fprintf(f, "%d\t", bcd->second_tag_match);
+    }
+    fprintf(f, "%.3f\t", total_reads ? bcd->reads / (double)total_reads : 0 );
+    fprintf(f, "%.3f", max_reads ? bcd->reads / (double)max_reads  : 0 );
+    if (!opts->ignore_pf) {
+        fprintf(f, "\t%.3f", total_pf_reads ? bcd->pf_reads / (double)total_pf_reads  : 0 ); 
+    }
+    if (!opts->ignore_pf) {
+        fprintf(f, "\t%.3f", max_pf_reads ? bcd->pf_reads / (double)max_pf_reads  : 0 ); 
+    }
+    if (!opts->ignore_pf) {
+        fprintf(f, "\t%.3f", total_pf_reads_assigned ? bcd->pf_reads * nReads / (double)total_pf_reads_assigned  : 0);
+    }
     fprintf(f, "\n");
-
 }
+
 
 /*
  *
  */
-int writeMetrics(va_t *barcodeArray, opts_t *opts)
+int writeMetrics(va_t *barcodeArray, va_t *tagHopArray, opts_t *opts)
 {
     bc_details_t *bcd = barcodeArray->entries[0];
     uint64_t total_reads = bcd->reads;
     uint64_t total_pf_reads = bcd->pf_reads;
     uint64_t total_pf_reads_assigned = 0;
     uint64_t max_reads = 0;
+    uint64_t total_original_reads = 0;
+    uint64_t total_hop_reads = 0;
     uint64_t max_pf_reads = 0;
     uint64_t nReads = 0;
     int n;
@@ -327,6 +434,8 @@ int writeMetrics(va_t *barcodeArray, opts_t *opts)
     for (n=1; n < barcodeArray->end; n++) {
         bc_details_t *bcd = barcodeArray->entries[n];;
         total_reads += bcd->reads;
+        if (bcd->tag_hop) total_hop_reads += bcd->reads;
+        else total_original_reads += bcd->reads;
         total_pf_reads += bcd->pf_reads;
         total_pf_reads_assigned += bcd->pf_reads;
         if (max_reads < bcd->reads) max_reads = bcd->reads;
@@ -335,54 +444,46 @@ int writeMetrics(va_t *barcodeArray, opts_t *opts)
     }
 
     // print header
-    fprintf(f, "##\n");
-    fprintf(f, "# ");
-    fprintf(f, "BARCODE_TAG_NAME=%s ", opts->barcode_tag_name);
-    fprintf(f, "MAX_MISMATCHES=%d ", opts->max_mismatches);
-    fprintf(f, "MIN_MISMATCH_DELTA=%d ", opts->min_mismatch_delta);
-    fprintf(f, "MAX_NO_CALLS=%d ", opts->max_no_calls);
-    fprintf(f, "\n");
-    fprintf(f, "##\n");
-    fprintf(f, "#\n");
-    fprintf(f, "\n");
-    fprintf(f, "##\n");
-
-    fprintf(f, "BARCODE\t");
-    fprintf(f, "BARCODE_NAME\t");
-    fprintf(f, "LIBRARY_NAME\t");
-    fprintf(f, "SAMPLE_NAME\t");
-    fprintf(f, "DESCRIPTION\t");
-    fprintf(f, "READS\t");
-    fprintf(f, "PF_READS\t");
-    fprintf(f, "PERFECT_MATCHES\t");
-    fprintf(f, "PF_PERFECT_MATCHES\t");
-    fprintf(f, "ONE_MISMATCH_MATCHES\t");
-    fprintf(f, "PF_ONE_MISMATCH_MATCHES\t");
-    fprintf(f, "PCT_MATCHES\t");
-    fprintf(f, "RATIO_THIS_BARCODE_TO_BEST_BARCODE_PCT\t");
-    fprintf(f, "PF_PCT_MATCHES\t");
-    fprintf(f, "PF_RATIO_THIS_BARCODE_TO_BEST_BARCODE_PCT\t");
-    fprintf(f, "PF_NORMALIZED_MATCHES\n");
-
+    print_header(f, opts, true);
 
     // second loop to print things
     for (n=1; n < barcodeArray->end; n++) {
         bc_details_t *bcd = barcodeArray->entries[n];
-        writeMetricsLine(f, bcd, opts, total_reads, max_reads, total_pf_reads, max_pf_reads, total_pf_reads_assigned, nReads);
+        if (!bcd->tag_hop)
+            writeMetricsLine(f, bcd, opts, total_reads, max_reads, total_pf_reads, max_pf_reads, total_pf_reads_assigned, nReads, true);
     }
     // treat Tag 0 as a special case
     bcd = barcodeArray->entries[0];
     bcd->perfect = 0;
     bcd->pf_perfect = 0;
     bcd->name[0] = 0;
-    writeMetricsLine(f, bcd, opts, total_reads, max_reads, total_pf_reads, max_pf_reads, 0, nReads);
+    writeMetricsLine(f, bcd, opts, total_reads, max_reads, total_pf_reads, max_pf_reads, 0, nReads, true);
+
+    if (tagHopArray && tagHopArray->end > 0) {
+
+        FILE *g = fopen(strcat(opts->metrics_name, ".hops"), "w");
+        if (!g) {
+            fprintf(stderr,"Can't open tag hops file %s\n", strcat(opts->metrics_name, ".hops"));
+        } else {
+            sortTagHops(tagHopArray);
+
+            fprintf(g, "##\n# TOTAL_READS=%"PRIu64", TOTAL_ORIGINAL_TAG_READS=%"PRIu64", TOTAL_TAG_HOP_READS=%"PRIu64", MAX_READ_ON_A_TAG=%"PRIu64", TOTAL_TAG_HOPS=%d, PCT_TAG_HOPS=%f\n",total_reads, total_original_reads, total_hop_reads, max_reads, tagHopArray->end, (float)total_hop_reads / total_original_reads * 100);
+            print_header(g, opts, false);
+
+            for (n=0; n < tagHopArray->end; n++) {
+                bc_details_t *bcd = tagHopArray->entries[n];
+                writeMetricsLine(g, bcd, opts, total_reads, max_reads, total_pf_reads, max_pf_reads, total_pf_reads_assigned, nReads, false);
+            }
+            fclose(g);
+        }
+    }
 
     fclose(f);
     return 0;
 }
 
 /*
- * Read the barcode file into a hash
+ * Read the barcode file into an array
  */
 va_t *loadBarcodeFile(opts_t *opts)
 {
@@ -421,11 +522,20 @@ va_t *loadBarcodeFile(opts_t *opts)
         s = strtok(NULL,"\t"); bcd->lib     = strdup(s);
         s = strtok(NULL,"\t"); bcd->sample  = strdup(s);
         s = strtok(NULL,"\t"); bcd->desc    = strdup(s);
+
+        if (!(bcd->next_tag = strstr(bcd->seq," ")) && !(bcd->next_tag = strstr(bcd->seq,"-")) && opts->dual_tag > 1)
+            bcd->next_tag = bcd->seq + opts->dual_tag - 1;
+        bcd->tag_hop = false;
+
         va_push(barcodeArray,bcd);
         free(buf); buf=NULL;
 
         if (tag_length == 0) {
             tag_length = strlen(bcd->seq);
+            if (tag_length < opts->dual_tag + 1) {
+                fprintf(stderr,"ERROR: TAG2 start=%d is larger or equal to the barcode length=%d\n", opts->dual_tag, tag_length);
+                return NULL;
+            }
         } else {
             if (tag_length != strlen(bcd->seq)) {
                 fprintf(stderr,"ERROR: Tag '%s' is a different length to the previous tag\n", bcd->seq);
@@ -484,72 +594,244 @@ static int countMismatches(char *tag, char *barcode)
 }
 
 /*
+ * count number of mismatches between two sequences up to a maximum length
+ * (does NOT ignore noCalls)
+ */
+static int countNMismatches(char *tag, char *barcode, unsigned int length)
+{
+    char *t, *b;;
+    int n = 0, l;
+    for (t=tag, b=barcode, l=0; *t && l<length; t++, b++) {
+        if (*t != *b) {
+            n++;
+        }
+        l++;
+    }
+    return n;
+}
+
+/*
  * find the best match in the barcode (tag) file for a given barcode
  * return the tag, if a match found, else return NULL
  */
-bc_details_t *findBestMatch(char *barcode, va_t *barcodeArray, opts_t *opts)
+bc_details_t *findBestMatch(char *barcode, va_t *barcodeArray, va_t *tagHopArray, opts_t *opts, bool isPf, bool isUpdateMetrics)
 {
     int bcLen = opts->tag_len;   // size of barcode sequence in barcode file
     bc_details_t *best_match = NULL;
     int nmBest = bcLen;             // number of mismatches (best)
     int nm2Best = bcLen;            // number of mismatches (second best)
+
+    bc_details_t *best_match1 = NULL;
+    bc_details_t *best_match2 = NULL;
+    int nmBest1 = bcLen/2;
+    int nm2Best1 = bcLen/2;
+    int nmBest2 = bcLen/2;
+    int nm2Best2 = bcLen/2;
+    unsigned short match_case = MATCHED_NONE;
+    int d1 = nmBest1;
+    int d2 = nmBest2;
+
     int nCalls = noCalls(barcode);
-    int n;
+    char *next_tag = NULL;
+    bool dual_tag = (((next_tag = strstr(barcode," ")) != NULL) || ((next_tag = strstr(barcode,"-")) != NULL) || (opts->dual_tag > 1));
 
-    // for each tag in barcodeArray
-    for (n=1; n < barcodeArray->end; n++) {
-        bc_details_t *bcd = barcodeArray->entries[n];
+    if (nCalls <= opts->max_no_calls) {
+        if (dual_tag) {
 
-        int nMismatches = countMismatches(bcd->seq, barcode);
-        if (nMismatches < nmBest) {
-            if (best_match) nm2Best = nmBest;
-            nmBest = nMismatches;
-            best_match = bcd;
+            unsigned int arrayIndex1, arrayIndex2;
+            unsigned short barcode_sep = 0;
+            if (!next_tag)
+                next_tag = barcode + opts->dual_tag - 1;
+            else
+                barcode_sep = 1;
+
+            // for each tag in barcodeArray
+            for (int n=1; n < barcodeArray->end; n++) {
+                bc_details_t *bcd = barcodeArray->entries[n];
+                if(bcd->next_tag) {
+
+                    unsigned short tag_sep = ((bcd->next_tag[0] == ' ' || bcd->next_tag[0] == '-') ? 1 : 0);
+                    if((strlen(bcd->seq) - tag_sep) != (strlen(barcode) - barcode_sep)) 
+                        break; 
+
+                    unsigned short len1 = (unsigned short)(bcd->next_tag - bcd->seq);
+                    unsigned short len2 = bcLen - len1 - tag_sep;
+
+                    int nMismatches1 = countNMismatches(bcd->seq, barcode, len1);
+                    int nMismatches2 = countNMismatches(bcd->next_tag + tag_sep, next_tag + barcode_sep, len2);
+                    int nMismatches = nMismatches1 + nMismatches2; 
+
+                    //match the first tag
+                    if (nMismatches1 < nmBest1) {
+                        if (best_match1) {
+                            nm2Best1 = nmBest1;
+                        }
+                        nmBest1 = nMismatches1;
+                        best_match1 = bcd;
+                        arrayIndex1 = n;
+                    } else {
+                        if (nMismatches1 < nm2Best1) {
+                            nm2Best1 = nMismatches1;
+                        }
+                    }
+
+                    //match the second tag
+                    if (nMismatches2 < nmBest2) {
+                        if (best_match2) {
+                            nm2Best2 = nmBest2;
+                        }
+                        nmBest2 = nMismatches2;
+                        best_match2 = bcd;
+                        arrayIndex2 = n;
+                    } else {
+                        if (nMismatches2 < nm2Best2) {
+                            nm2Best2 = nMismatches2;
+                        }
+                    }
+
+                    //match both
+                    if (nMismatches < nmBest) {
+                        if (best_match) {
+                            nm2Best = nmBest;
+                        }
+                        nmBest = nMismatches;
+
+                        best_match = bcd;
+                        d1 = nMismatches1;
+                        d2 = nMismatches2;
+                    } else {
+                        if (nMismatches < nm2Best) {
+                            nm2Best = nMismatches;
+                        }
+                    }
+                }
+            }
+
+            bool matched_both = best_match && d1 <= opts->max_mismatches && d2 <= opts->max_mismatches && nm2Best - nmBest >= opts->min_mismatch_delta;
+            bool matched_first = best_match1 && nmBest1 <= opts->max_mismatches;
+            bool matched_second = best_match2 && nmBest2 <= opts->max_mismatches;
+
+
+            if (matched_both) {
+                match_case = MATCHED_BOTH;
+            } else {
+                if (matched_first) {
+                    if (!matched_second) {
+                        best_match = best_match1;
+                        match_case = MATCHED_FIRST;
+                    } else {
+                        if (best_match1 != best_match2) {
+
+                           unsigned short tag_sep = ((best_match1->next_tag[0] == ' ' || best_match1->next_tag[0] == '-') ? 1 : 0);
+                           unsigned short len1 = (unsigned short)(best_match1->next_tag - best_match1->seq);
+                           unsigned short len2 = bcLen - len1 - tag_sep;
+
+                           char tag_name[40];
+
+                           bc_details_t *new_bcd = calloc(1, sizeof(bc_details_t)); //create a new entry with the two tags
+                           new_bcd->seq = malloc(len1 + tag_sep + len2 + 1);
+                           new_bcd->next_tag = new_bcd->seq + len1;
+                           strncpy(new_bcd->seq, best_match1->seq, len1 + tag_sep); //copy the first tag, including the space
+                           strncpy(new_bcd->next_tag + tag_sep, best_match2->next_tag + tag_sep, len2); //copy the second tag, after the space
+                           new_bcd->seq[len1 + tag_sep + len2] = 0;
+                           new_bcd->name = strdup("0");
+                           new_bcd->lib = strdup("DUMMY_LIB");
+                           new_bcd->sample = strdup("DUMMY_SAMPLE");
+                           snprintf(tag_name,40,"TAG_HOP (%d AND %d)", arrayIndex1, arrayIndex2);
+                           new_bcd->desc = strdup(tag_name);  //the combination is registered as a tag hop
+                           new_bcd->tag_hop = true;
+                           va_push(barcodeArray,new_bcd);
+                           va_push(tagHopArray,new_bcd);
+                           best_match = new_bcd;   //the best match is the new entry
+                           match_case = MATCHED_NEW;
+                        }
+                    }
+                } else {
+                    if (best_match2) {
+                        best_match = best_match2;
+                        match_case = MATCHED_SECOND;
+                    } else {
+                        best_match = barcodeArray->entries[0];
+                    }
+                }
+            }
+        } else {    //one tag case
+            for (int n=1; n < barcodeArray->end; n++) {
+                bc_details_t *bcd = barcodeArray->entries[n];
+
+                int nMismatches = countMismatches(bcd->seq, barcode);
+                if (nMismatches < nmBest) {
+                    if (best_match) nm2Best = nmBest;
+                    nmBest = nMismatches;
+                    best_match = bcd;
+                } else {
+                    if (nMismatches < nm2Best) nm2Best = nMismatches;
+                }
+            }
+
+            bool matched = best_match && nmBest <= opts->max_mismatches && nm2Best - nmBest >= opts->min_mismatch_delta;
+
+            if (!matched)
+                best_match = barcodeArray->entries[0];
+        }
+    } else {
+        best_match = barcodeArray->entries[0];
+    }
+
+    if (isUpdateMetrics && best_match) {
+        best_match->reads++;
+        if (isPf) best_match->pf_reads++;
+
+        if (dual_tag) {
+            switch (match_case) {
+            case MATCHED_FIRST:
+                best_match->first_tag_match++;
+                break;
+            case MATCHED_SECOND:
+                best_match->second_tag_match++;
+                break;
+            case MATCHED_BOTH:
+                if (d1==0 && d2==0){
+                    best_match->perfect++;
+                    if (isPf) best_match->pf_perfect++;
+                } else {
+                    best_match->one_mismatch++;
+                    if (isPf) best_match->pf_one_mismatch++;
+                }
+                break;
+            case MATCHED_NEW:
+                if (nmBest1==0 && nmBest2==0){
+                    best_match->perfect++;
+                    if (isPf) best_match->pf_perfect++;
+                } else {
+                    best_match->one_mismatch++;
+                    if (isPf) best_match->pf_one_mismatch++;
+                }
+                break;
+            default:
+                ;
+            }
         } else {
-            if (nMismatches < nm2Best) nm2Best = nMismatches;
+            if (nmBest==0) {     // count perfect matches
+                best_match->perfect++;
+                if (isPf) best_match->pf_perfect++;
+            } else if (nmBest==1) {     // count out-by-one matches
+                best_match->one_mismatch++;
+                if (isPf) best_match->pf_one_mismatch++;
+            } 
         }
     }
 
-    bool matched = best_match &&
-                   nCalls <= opts->max_no_calls &&
-                   nmBest <= opts->max_mismatches &&
-                   nm2Best - nmBest >= opts->min_mismatch_delta;
-
-    if (matched) return best_match;
-    return barcodeArray->entries[0];
-}
-
-/*
- * Update the metrics information
- */
-void updateMetrics(bc_details_t *bcd, char *seq, bool isPf)
-{
-    int n = 99;
-    if (seq) n = countMismatches(bcd->seq, seq);
-
-    bcd->reads++;
-    if (isPf) bcd->pf_reads++;
-
-    if (n==0) {     // count perfect matches
-        bcd->perfect++;
-        if (isPf) bcd->pf_perfect++;
-    }
-
-    if (n==1) {     // count out-by-one matches
-        bcd->one_mismatch++;
-        if (isPf) bcd->pf_one_mismatch++;
-    }
-        
+    return best_match;
 }
 
 /*
  * find the best match in the barcode (tag) file, and return the corresponding barcode name
  * return NULL if no match found
  */
-static char *findBarcodeName(char *barcode, va_t *barcodeArray, opts_t *opts, bool isPf, bool isUpdateMetrics)
+static char *findBarcodeName(char *barcode, va_t *barcodeArray, va_t *tagHopArray, opts_t *opts, bool isPf, bool isUpdateMetrics)
 {
-    bc_details_t *bcd = findBestMatch(barcode, barcodeArray, opts);
-    if (isUpdateMetrics) updateMetrics(bcd, barcode, isPf);
+    bc_details_t *bcd = findBestMatch(barcode, barcodeArray, tagHopArray, opts, isPf, isUpdateMetrics);
     return bcd->name;
 }
 
@@ -713,11 +995,12 @@ void changeHeader(va_t *barcodeArray, bam_hdr_t *h, char *argv_list)
 /*
  * Process one template
  */
-int processTemplate(va_t *template, BAMit_t *bam_out, va_t *barcodeArray, opts_t *opts)
+int processTemplate(va_t *template, BAMit_t *bam_out, va_t *barcodeArray, va_t *tagHopArray, opts_t *opts)
 {
     char *name = NULL;
     char *bc_tag = NULL;
     char *qt_tag = NULL;
+    short error_code = 0;
 
     // look for barcode tag
     for (int n=0; n < template->end; n++) {
@@ -754,7 +1037,7 @@ int processTemplate(va_t *template, BAMit_t *bam_out, va_t *barcodeArray, opts_t
     for (int n=0; n < template->end; n++) {
         bam1_t *rec = template->entries[n];
         if (newtag) {
-            name = findBarcodeName(newtag,barcodeArray,opts,!(rec->core.flag & BAM_FQCFAIL), n==0);
+            name = findBarcodeName(newtag,barcodeArray, tagHopArray, opts,!(rec->core.flag & BAM_FQCFAIL), n==0);
             if (!name) name = "0";
             char * newrg = makeNewTag(rec,"RG",name);
             bam_aux_update_str(rec,"RG",strlen(newrg)+1, newrg);
@@ -764,14 +1047,15 @@ int processTemplate(va_t *template, BAMit_t *bam_out, va_t *barcodeArray, opts_t
         int r = sam_write1(bam_out->f, bam_out->h, rec);
         if (r < 0) {
             fprintf(stderr, "Could not write sequence\n");
-            return -1;
+            error_code = -1;
+            break;
         }
     }
 
     free(newtag);
     free(qt_tag);
     free(bc_tag);
-    return 0;
+    return error_code;
 }
 
 /*
@@ -789,6 +1073,8 @@ static va_t *loadTemplate(BAMit_t *bit, char *qname)
 
     return recordSet;
 }
+
+
  
 /*
  * Main code
@@ -799,6 +1085,7 @@ static int decode(opts_t* opts)
     BAMit_t *bam_in = NULL;
     BAMit_t *bam_out = NULL;
     va_t *barcodeArray = NULL;
+    va_t *tagHopArray = NULL;
 
     while (1) {
         /*
@@ -806,6 +1093,8 @@ static int decode(opts_t* opts)
          */
         barcodeArray = loadBarcodeFile(opts);
         if (!barcodeArray) break;
+
+        tagHopArray = va_init(barcodeArray->end, free_bcd);
 
         /*
          * Open input fnd output BAM files
@@ -829,7 +1118,7 @@ static int decode(opts_t* opts)
             bam1_t *rec = BAMit_peek(bam_in);
             char *qname = strdup(bam_get_qname(rec));
             va_t *template = loadTemplate(bam_in, qname);
-            if (processTemplate(template, bam_out, barcodeArray, opts)) break;
+            if (processTemplate(template, bam_out, barcodeArray, tagHopArray, opts)) break;
             va_free(template);
             free(qname);
         }
@@ -840,16 +1129,17 @@ static int decode(opts_t* opts)
          * And finally.....the metrics
          */
         if (opts->metrics_name) {
-            if (writeMetrics(barcodeArray, opts) != 0) break;
+            if (writeMetrics(barcodeArray, tagHopArray, opts) != 0) break;
         }
                 
-
         retcode = 0;
         break;
     }
 
     // tidy up after us
     va_free(barcodeArray);
+    tagHopArray->end = 0;
+    va_free(tagHopArray);
     BAMit_free(bam_in);
     BAMit_free(bam_out);
 
