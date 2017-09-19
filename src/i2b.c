@@ -320,7 +320,7 @@ static void usage(FILE *write_to)
 "       --final-cycle                   Last cycle for each standard (non-index) read. Comma separated list.\n"
 "       --first-index-cycle             First cycle for each index read. Comma separated list.\n"
 "       --final-index-cycle             Last cycle for each index read. Comma separated list.\n"
-"  -s   --index-separator               Separate dual indexes with a '" INDEX_SEPARATOR "' character.\n"
+"  -s   --no-index-separator            Do NOT separate dual indexes with a '" INDEX_SEPARATOR "' character. Just concatenate instead.\n"
 "  -v   --verbose                       verbose output\n"
 "       --output-fmt                    [sam/bam/cram] [default: bam]\n"
 "       --compression-level             [0..9]\n"
@@ -342,7 +342,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
         { "basecalls-dir",              1, 0, 'b' },
         { "lane",                       1, 0, 'l' },
         { "output-file",                1, 0, 'o' },
-        { "index-separator",            0, 0, 's' },
+        { "no-index-separator",         0, 0, 's' },
         { "generate-secondary-basecalls", 0, 0, 0 },
         { "no-filter",                  0, 0, 0 },
         { "read-group-id",              1, 0, 0 },
@@ -384,6 +384,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
     opts->final_index_cycle = ia_init(5);
     opts->barcode_tag = va_init(5, free);
     opts->quality_tag = va_init(5, free);
+    opts->separator = true;
 
     int opt;
     int option_index = 0;
@@ -402,7 +403,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
                     break;
         case 'v':   opts->verbose++;
                     break;
-        case 's':   opts->separator = true;
+        case 's':   opts->separator = false;
                     break;
         case 0:     arg = lopts[option_index].name;
                          if (strcmp(arg, "output-fmt") == 0)                   opts->output_fmt = strdup(optarg);

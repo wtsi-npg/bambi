@@ -502,7 +502,7 @@ void test_paramaters(void)
     icheckEqual("options: final-cycle", 3, opts->final_cycle->end);
     icheckEqual("options: final-index-cycle", 1, opts->final_index_cycle->end);
     icheckEqual("options: final-cycle[0]", 16, opts->final_cycle->entries[0]);
-    icheckEqual("options: index-separator", 1, opts->separator);
+    icheckEqual("options: index-separator", 0, opts->separator);
     free_args(argv_1);
     i2b_free_opts(opts);
 }
@@ -656,9 +656,9 @@ int main(int argc, char**argv)
     free_args(argv_1);
 
     //
-    // separator test
+    // no separator test
     //
-    if (verbose) fprintf(stderr,"\n===> Separator test\n");
+    if (verbose) fprintf(stderr,"\n===> no Separator test\n");
     sprintf(outputfile,"%s/i2b_8.bam",TMPDIR);
     separator_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
@@ -666,9 +666,9 @@ int main(int argc, char**argv)
     free_args(argv_1);
 
     //
-    // no separator test
+    // separator test
     //
-    if (verbose) fprintf(stderr,"\n===> no Separator test\n");
+    if (verbose) fprintf(stderr,"\n===> Separator test\n");
     sprintf(outputfile,"%s/i2b_9.bam",TMPDIR);
     no_separator_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
