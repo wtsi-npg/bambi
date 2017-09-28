@@ -37,10 +37,10 @@ command line.
 <tr><td>--final-cycle</td><td>Last cycle for each standard (non-index) read. Comma separated list.</td></tr>
 <tr><td>--first-index-cycle</td><td>First cycle for each index read. Comma separated list.</td></tr>
 <tr><td>--final-index-cycle</td><td>Last cycle for each index read. Comma separated list.</td></tr>
-<tr><td>--index-separator -s</td><td>Separate multiple indexes with a '-' character [default: false]</td></tr>
+<tr><td>--no-index-separator -s</td><td>Do NOT separate multiple indexes with a '-' character, just concatenate instead. [default: false]</td></tr>
 <tr><td>--verbose -v</td><td>Display progress messages</td></tr>
 <tr><td>--output-fmt</td><td>[sam/bam/cram] [default: 'bam']</td></tr>
-<tr><td>--conpression-level</td><td>[0..9]</td></tr>
+<tr><td>--compression-level</td><td>[0..9]</td></tr>
 </table>
 <br/>
 
@@ -54,12 +54,12 @@ command line.
 <tr><th>Option</th><th>Description</th></tr>
 <tr><td>--input -i</td><td>Comma seperated list of input files</td></tr>
 <tr><td>--output -o</td><td>Comma seperated list of output files</td></tr>
-<tr><td>-n</td><td>The ouput SAM or BAM file for unaligned reads. If not given, the unaligned reads will put into the last output file.</td></tr>
+<tr><td>-n</td><td>The output SAM or BAM file for unaligned reads. If not given, the unaligned reads will put into the last output file.</td></tr>
 <tr><td>-m</td><td>Metrics file name  Default value: null. </td></tr>
 <tr><td>--verbose -v</td><td>Display progress messages</td></tr>
 <tr><td>--input-fmt</td><td>[sam/bam/cram] [default: 'bam']</td></tr>
 <tr><td>--output-fmt</td><td>[sam/bam/cram] [default: 'bam']</td></tr>
-<tr><td>--conpression-level</td><td>[0..9]</td></tr>
+<tr><td>--compression-level</td><td>[0..9]</td></tr>
 </table>
 <br/>
 
@@ -82,10 +82,11 @@ command line.
 <tr><td>--change-read-name</td><td>Change the read name by adding #<barcode> suffix [default: do not change]</td></tr>
 <tr><td>--barcode-tag-name</td><td>Barcode tag name [default: BC]</td></tr>
 <tr><td>--quality-tag-name</td><td>Quality tag name [default: QT]</td></tr>
+<tr><td>--dual-tag</td><td>Dual tag position in the barcode string (between 2 and barcode length - 1). Only required if the dual tags are not separated by a '-'</td></tr>
 <tr><td>--verbose -v</td><td>Display progress messages</td></tr>
 <tr><td>--input-fmt</td><td>[sam/bam/cram] [default: 'bam']</td></tr>
 <tr><td>--output-fmt</td><td>[sam/bam/cram] [default: 'bam']</td></tr>
-<tr><td>--conpression-level</td><td>[0..9]</td></tr>
+<tr><td>--compression-level</td><td>[0..9]</td></tr>
 </table>
 <br/>
 
@@ -106,7 +107,39 @@ command line.
 <tr><td>--verbose -v</td><td>Display progress messages</td></tr>
 <tr><td>--input-fmt</td><td>[sam/bam/cram] [default: 'bam']</td></tr>
 <tr><td>--output-fmt</td><td>[sam/bam/cram] [default: 'bam']</td></tr>
-<tr><td>--conpression-level</td><td>[0..9]</td></tr>
+<tr><td>--compression-level</td><td>[0..9]</td></tr>
+</table>
+<br/>
+
+<a name="read2tags"/>
+<h3>read2tags</h3>
+<p>USAGE: bambi read2tags [options]
+<p>
+<p>Convert a portion of the reads for each record into aux tags.</p>
+<p>If all of the read is used up, then it is merged with it's paired record.</p>
+<p></p>
+<table>
+<tr><th>Option</th><th>Description</th></tr>
+<tr><td>--input -i</td><td>Input SAM or BAM file  Required. </td></tr>
+<tr><td>--output -o</td><td>Output SAM/BAM path for target sequences.  Required. </td></tr>
+<tr><td>--tags -t</td><td>Comma separated list of barcode tags</td></tr>
+<tr><td>--qtags -q</td><td>Comma separated list of quality tags</td></tr>
+<tr><td>--keep-tags -k</td><td>Comma separated list of tags to keep when merging records [default: BC,QT,RG]</td></tr>
+<tr><td>--discard-tags -k</td><td>Comma separated list of tags to discard when merging records [default: as,af,aa,a3,ah]</td></tr>
+<tr><td>--positions -p</td>
+<td>Comma separated list of positions within the read to convert<br/>
+The format is r:s:e,r:s:e,r:s:e,...<br/>
+r is record number (0, 1 or 2 and is optional)<br/>
+s is the start position in the read string<br/>
+e is the end position in the read string<br/>
+Note that the start and end positions are 1 (not zero) based<br/>
+</td></tr>
+<tr><td>--merge -m</td><td>Merge duplicate tags</td></tr>
+<tr><td>--replace -r</td><td>Replace duplicate tags</td></tr>
+<tr><td>--verbose -v</td><td>Display progress messages</td></tr>
+<tr><td>--input-fmt</td><td>[sam/bam/cram] [default: 'bam']</td></tr>
+<tr><td>--output-fmt</td><td>[sam/bam/cram] [default: 'bam']</td></tr>
+<tr><td>--compression-level</td><td>[0..9]</td></tr>
 </table>
 <br/>
 
