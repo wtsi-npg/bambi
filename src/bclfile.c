@@ -162,6 +162,7 @@ bclfile_t *bclfile_open(char *fname)
                 r = read(bclfile->fhandle, (void *)&x, sizeof(x)); if (r<=0) break;
                 tilerec->compressed_blocksize = x;
                 va_push(bclfile->tiles, tilerec);
+                if (!bclfile->current_tile) bclfile->current_tile = tilerec;
             }
             r = read(bclfile->fhandle, (void *)&bclfile->pfFlag, sizeof(bclfile->pfFlag));
         }
@@ -249,6 +250,7 @@ int bclfile_seek_tile(bclfile_t *bcl, int tile)
         return -1;
     }
     r=uncompressBlock(compressed_block, ti->compressed_blocksize, bcl->current_block, ti->uncompressed_blocksize);
+    bcl->current_block_ptr = bcl->current_block;
     free(compressed_block);
     if (r<0) {
         fprintf(stderr,"uncompressBlock() somehow failed in bclfile_seek_tile(%d)\n", tile);
@@ -281,9 +283,11 @@ int bclfile_next(bclfile_t *bcl)
 
     if (bcl->file_type == BCL_CBCL) {
         if (bcl->current_block == NULL) {
-            tilerec_t *t = bcl->tiles->entries[0];
+            //tilerec_t *t = bcl->tiles->entries[0];
+            tilerec_t *t = bcl->current_tile;
             bclfile_seek_tile(bcl, t->tilenum);
             bcl->block_index = 0;
+            bcl->current_block_ptr = bcl->current_block;
         }
     }
 
@@ -297,7 +301,9 @@ int bclfile_next(bclfile_t *bcl)
                 if (bcl->block_index >= bcl->current_block_size) {
                     return -1;
                 }
-                bcl->current_byte = bcl->current_block[bcl->block_index++];
+                bcl->current_byte = *(bcl->current_block_ptr);
+                bcl->current_block_ptr++;
+                bcl->block_index++;
             } else {
                 if (read(bcl->fhandle, (void *)&(bcl->current_byte), 1) != 1) return -1;
             }
