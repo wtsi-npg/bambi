@@ -320,7 +320,7 @@ static void usage(FILE *write_to)
 "       --final-cycle                   Last cycle for each standard (non-index) read. Comma separated list.\n"
 "       --first-index-cycle             First cycle for each index read. Comma separated list.\n"
 "       --final-index-cycle             Last cycle for each index read. Comma separated list.\n"
-"  -s   --no-index-separator            Do NOT separate dual indexes with a '" INDEX_SEPARATOR "' character. Just concatenate instead.\n"
+"  -S   --no-index-separator            Do NOT separate dual indexes with a '" INDEX_SEPARATOR "' character. Just concatenate instead.\n"
 "  -v   --verbose                       verbose output\n"
 "       --output-fmt                    [sam/bam/cram] [default: bam]\n"
 "       --compression-level             [0..9]\n"
@@ -333,7 +333,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
 {
     if (argc == 1) { usage(stdout); return NULL; }
 
-    const char* optstring = "vsr:i:b:l:o:";
+    const char* optstring = "vSr:i:b:l:o:";
 
     static const struct option lopts[] = {
         { "verbose",                    0, 0, 'v' },
@@ -342,7 +342,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
         { "basecalls-dir",              1, 0, 'b' },
         { "lane",                       1, 0, 'l' },
         { "output-file",                1, 0, 'o' },
-        { "no-index-separator",         0, 0, 's' },
+        { "no-index-separator",         0, 0, 'S' },
         { "generate-secondary-basecalls", 0, 0, 0 },
         { "no-filter",                  0, 0, 0 },
         { "read-group-id",              1, 0, 0 },
@@ -403,7 +403,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
                     break;
         case 'v':   opts->verbose++;
                     break;
-        case 's':   opts->separator = false;
+        case 'S':   opts->separator = false;
                     break;
         case 0:     arg = lopts[option_index].name;
                          if (strcmp(arg, "output-fmt") == 0)                   opts->output_fmt = strdup(optarg);

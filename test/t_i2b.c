@@ -100,7 +100,7 @@ void setup_param_test(int* argc, char*** argv)
     (*argv)[(*argc)++] = strdup("1");
     (*argv)[(*argc)++] = strdup("--final-index-cycle");
     (*argv)[(*argc)++] = strdup("1");
-    (*argv)[(*argc)++] = strdup("-s");
+    (*argv)[(*argc)++] = strdup("-S");
 
     assert(*argc<100);
 }
@@ -357,7 +357,7 @@ void no_separator_test(int* argc, char*** argv, char *outputfile, bool verbose)
     (*argv)[(*argc)++] = strdup("b1,b2,b1");
     (*argv)[(*argc)++] = strdup("--quality-tag");
     (*argv)[(*argc)++] = strdup("q1,q2,q1");
-    (*argv)[(*argc)++] = strdup("-s");
+    (*argv)[(*argc)++] = strdup("-S");
 
     assert(*argc<100);
 }
