@@ -44,6 +44,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define DEFAULT_BARCODE_TAG "BC"
 #define DEFAULT_QUALITY_TAG "QT"
+#define DEFAULT_MAX_BARCODES 10
 
 char *strptime(const char *s, const char *format, struct tm *tm);
 
@@ -480,8 +481,16 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
     if (!opts->library_name) opts->library_name = strdup("unknown");
     if (!opts->sample_alias) opts->sample_alias = strdup(opts->library_name);
     if (!opts->sequencing_centre) opts->sequencing_centre = strdup("SC");
-    if (va_isEmpty(opts->barcode_tag)) while (opts->barcode_tag->end < 10) va_push(opts->barcode_tag,strdup(DEFAULT_BARCODE_TAG));
-    if (va_isEmpty(opts->quality_tag)) while (opts->quality_tag->end < 10) va_push(opts->quality_tag,strdup(DEFAULT_QUALITY_TAG));
+    if (va_isEmpty(opts->barcode_tag)) {
+        while (opts->barcode_tag->end < DEFAULT_MAX_BARCODES) {
+            va_push(opts->barcode_tag,strdup(DEFAULT_BARCODE_TAG));
+        }
+    }
+    if (va_isEmpty(opts->quality_tag)) {
+        while (opts->quality_tag->end < DEFAULT_MAX_BARCODES) {
+            va_push(opts->quality_tag,strdup(DEFAULT_QUALITY_TAG));
+        }
+    }
     if (!opts->platform) opts->platform = strdup("ILLUMINA");
 
     if (!opts->run_folder) {
