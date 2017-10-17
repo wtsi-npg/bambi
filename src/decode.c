@@ -112,17 +112,19 @@ typedef struct {
     bool tag_hop;
 } bc_details_t;
 
-void print_header(FILE* f, opts_t* opts, bool metrics) {
+/*
+ * Print matrics file header
+ */
+static void print_header(FILE* f, opts_t* opts, bool metrics) {
     // print header
     fprintf(f, "##\n");
-    fprintf(f, "# ");
-    fprintf(f, "BARCODE_TAG_NAME=%s ", opts->barcode_tag_name);
+    fprintf(f, "# BARCODE_TAG_NAME=%s ", opts->barcode_tag_name);
     fprintf(f, "MAX_MISMATCHES=%d ", opts->max_mismatches);
     fprintf(f, "MIN_MISMATCH_DELTA=%d ", opts->min_mismatch_delta);
     fprintf(f, "MAX_NO_CALLS=%d ", opts->max_no_calls);
     fprintf(f, "\n");
     fprintf(f, "##\n");
-    fprintf(f, "#\n");
+    fprintf(f, "# ID:bambi VN:%s (htslib %s) CL:%s\n", bambi_version(), hts_version(), opts->argv_list);
     fprintf(f, "\n");
     fprintf(f, "##\n");
     fprintf(f, "BARCODE\t");
