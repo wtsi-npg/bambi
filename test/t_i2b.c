@@ -100,7 +100,7 @@ void setup_param_test(int* argc, char*** argv)
     (*argv)[(*argc)++] = strdup("1");
     (*argv)[(*argc)++] = strdup("--final-index-cycle");
     (*argv)[(*argc)++] = strdup("1");
-    (*argv)[(*argc)++] = strdup("-s");
+    (*argv)[(*argc)++] = strdup("-S");
 
     assert(*argc<100);
 }
@@ -320,48 +320,6 @@ void setup_tags_test(int* argc, char*** argv, char *outputfile, bool verbose)
     assert(*argc<100);
 }
 
-void separator_test(int* argc, char*** argv, char *outputfile, bool verbose)
-{
-    *argc = 0;
-    *argv = (char**)calloc(sizeof(char*), 100);
-    (*argv)[(*argc)++] = strdup("bambi");
-    (*argv)[(*argc)++] = strdup("i2b");
-    (*argv)[(*argc)++] = strdup("-i");
-    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/160919_hiseq2500_4966_FC/Data/Intensities"));
-    (*argv)[(*argc)++] = strdup("-o");
-    (*argv)[(*argc)++] = strdup(outputfile);
-    (*argv)[(*argc)++] = strdup("--lane");
-    (*argv)[(*argc)++] = strdup("1");
-    (*argv)[(*argc)++] = strdup("--first-tile");
-    (*argv)[(*argc)++] = strdup("1101");
-    (*argv)[(*argc)++] = strdup("--tile-limit");
-    (*argv)[(*argc)++] = strdup("1");
-    (*argv)[(*argc)++] = strdup("--library-name");
-    (*argv)[(*argc)++] = strdup("TestLibrary");
-    (*argv)[(*argc)++] = strdup("--sample-alias");
-    (*argv)[(*argc)++] = strdup("TestSample");
-    (*argv)[(*argc)++] = strdup("--study-name");
-    (*argv)[(*argc)++] = strdup("Study TestStudy");
-    (*argv)[(*argc)++] = strdup("--run-start-date");
-    (*argv)[(*argc)++] = strdup("2011-03-23T00:00:00+0000");
-    if (verbose) (*argv)[(*argc)++] = strdup("--verbose");
-    (*argv)[(*argc)++] = strdup("--first-cycle");
-    (*argv)[(*argc)++] = strdup("1,30");
-    (*argv)[(*argc)++] = strdup("--final-cycle");
-    (*argv)[(*argc)++] = strdup("2,32");
-    (*argv)[(*argc)++] = strdup("--first-index-cycle");
-    (*argv)[(*argc)++] = strdup("3,6,11");
-    (*argv)[(*argc)++] = strdup("--final-index-cycle");
-    (*argv)[(*argc)++] = strdup("4,9,12");
-    (*argv)[(*argc)++] = strdup("--barcode-tag");
-    (*argv)[(*argc)++] = strdup("b1,b2,b1");
-    (*argv)[(*argc)++] = strdup("--quality-tag");
-    (*argv)[(*argc)++] = strdup("q1,q2,q1");
-    (*argv)[(*argc)++] = strdup("-s");
-
-    assert(*argc<100);
-}
-
 void no_separator_test(int* argc, char*** argv, char *outputfile, bool verbose)
 {
     *argc = 0;
@@ -399,6 +357,85 @@ void no_separator_test(int* argc, char*** argv, char *outputfile, bool verbose)
     (*argv)[(*argc)++] = strdup("b1,b2,b1");
     (*argv)[(*argc)++] = strdup("--quality-tag");
     (*argv)[(*argc)++] = strdup("q1,q2,q1");
+    (*argv)[(*argc)++] = strdup("-S");
+
+    assert(*argc<100);
+}
+void separator_test(int* argc, char*** argv, char *outputfile, bool verbose)
+{
+    *argc = 0;
+    *argv = (char**)calloc(sizeof(char*), 100);
+    (*argv)[(*argc)++] = strdup("bambi");
+    (*argv)[(*argc)++] = strdup("i2b");
+    (*argv)[(*argc)++] = strdup("-i");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/160919_hiseq2500_4966_FC/Data/Intensities"));
+    (*argv)[(*argc)++] = strdup("-o");
+    (*argv)[(*argc)++] = strdup(outputfile);
+    (*argv)[(*argc)++] = strdup("--lane");
+    (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("--first-tile");
+    (*argv)[(*argc)++] = strdup("1101");
+    (*argv)[(*argc)++] = strdup("--tile-limit");
+    (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("--library-name");
+    (*argv)[(*argc)++] = strdup("TestLibrary");
+    (*argv)[(*argc)++] = strdup("--sample-alias");
+    (*argv)[(*argc)++] = strdup("TestSample");
+    (*argv)[(*argc)++] = strdup("--study-name");
+    (*argv)[(*argc)++] = strdup("Study TestStudy");
+    (*argv)[(*argc)++] = strdup("--run-start-date");
+    (*argv)[(*argc)++] = strdup("2011-03-23T00:00:00+0000");
+    if (verbose) (*argv)[(*argc)++] = strdup("--verbose");
+    (*argv)[(*argc)++] = strdup("--first-cycle");
+    (*argv)[(*argc)++] = strdup("1,30");
+    (*argv)[(*argc)++] = strdup("--final-cycle");
+    (*argv)[(*argc)++] = strdup("2,32");
+    (*argv)[(*argc)++] = strdup("--first-index-cycle");
+    (*argv)[(*argc)++] = strdup("3,6,11");
+    (*argv)[(*argc)++] = strdup("--final-index-cycle");
+    (*argv)[(*argc)++] = strdup("4,9,12");
+    (*argv)[(*argc)++] = strdup("--barcode-tag");
+    (*argv)[(*argc)++] = strdup("b1,b2,b1");
+    (*argv)[(*argc)++] = strdup("--quality-tag");
+    (*argv)[(*argc)++] = strdup("q1,q2,q1");
+
+    assert(*argc<100);
+}
+
+
+void consecutive_index_test(int* argc, char*** argv, char *outputfile, bool verbose)
+{
+    *argc = 0;
+    *argv = (char**)calloc(sizeof(char*), 100);
+    (*argv)[(*argc)++] = strdup("bambi");
+    (*argv)[(*argc)++] = strdup("i2b");
+    (*argv)[(*argc)++] = strdup("-i");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/160919_hiseq2500_4966_FC/Data/Intensities"));
+    (*argv)[(*argc)++] = strdup("-o");
+    (*argv)[(*argc)++] = strdup(outputfile);
+    (*argv)[(*argc)++] = strdup("--lane");
+    (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("--first-tile");
+    (*argv)[(*argc)++] = strdup("1101");
+    (*argv)[(*argc)++] = strdup("--tile-limit");
+    (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("--library-name");
+    (*argv)[(*argc)++] = strdup("TestLibrary");
+    (*argv)[(*argc)++] = strdup("--sample-alias");
+    (*argv)[(*argc)++] = strdup("TestSample");
+    (*argv)[(*argc)++] = strdup("--study-name");
+    (*argv)[(*argc)++] = strdup("Study TestStudy");
+    (*argv)[(*argc)++] = strdup("--run-start-date");
+    (*argv)[(*argc)++] = strdup("2011-03-23T00:00:00+0000");
+    if (verbose) (*argv)[(*argc)++] = strdup("--verbose");
+    (*argv)[(*argc)++] = strdup("--first-cycle");
+    (*argv)[(*argc)++] = strdup("1,30");
+    (*argv)[(*argc)++] = strdup("--final-cycle");
+    (*argv)[(*argc)++] = strdup("2,32");
+    (*argv)[(*argc)++] = strdup("--first-index-cycle");
+    (*argv)[(*argc)++] = strdup("3,5");
+    (*argv)[(*argc)++] = strdup("--final-index-cycle");
+    (*argv)[(*argc)++] = strdup("4,7");
 
     assert(*argc<100);
 }
@@ -660,7 +697,7 @@ int main(int argc, char**argv)
     //
     if (verbose) fprintf(stderr,"\n===> no Separator test\n");
     sprintf(outputfile,"%s/i2b_8.bam",TMPDIR);
-    separator_test(&argc_1, &argv_1, outputfile, verbose);
+    no_separator_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
     checkFiles("separator test", outputfile, MKNAME(DATA_DIR,"/out/test8.bam"));
     free_args(argv_1);
@@ -670,9 +707,19 @@ int main(int argc, char**argv)
     //
     if (verbose) fprintf(stderr,"\n===> Separator test\n");
     sprintf(outputfile,"%s/i2b_9.bam",TMPDIR);
-    no_separator_test(&argc_1, &argv_1, outputfile, verbose);
+    separator_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
     checkFiles("no separator test", outputfile, MKNAME(DATA_DIR,"/out/test9.bam"));
+    free_args(argv_1);
+
+    //
+    // consecutive index test
+    //
+    if (verbose) fprintf(stderr,"\n===> consecutive test\n");
+    sprintf(outputfile,"%s/i2b_10.bam",TMPDIR);
+    consecutive_index_test(&argc_1, &argv_1, outputfile, verbose);
+    main_i2b(argc_1-1,argv_1+1);
+    checkFiles("consecutive index test", outputfile, MKNAME(DATA_DIR,"/out/test10.bam"));
     free_args(argv_1);
 
     //

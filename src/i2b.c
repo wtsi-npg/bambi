@@ -46,6 +46,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define DEFAULT_BARCODE_TAG "BC"
 #define DEFAULT_QUALITY_TAG "QT"
 #define DEFAULT_MAX_THREADS 8
+#define DEFAULT_MAX_BARCODES 10
 
 char *strptime(const char *s, const char *format, struct tm *tm);
 
@@ -405,7 +406,7 @@ static void usage(FILE *write_to)
 "       --final-cycle                   Last cycle for each standard (non-index) read. Comma separated list.\n"
 "       --first-index-cycle             First cycle for each index read. Comma separated list.\n"
 "       --final-index-cycle             Last cycle for each index read. Comma separated list.\n"
-"  -s   --no-index-separator            Do NOT separate dual indexes with a '" INDEX_SEPARATOR "' character. Just concatenate instead.\n"
+"  -S   --no-index-separator            Do NOT separate dual indexes with a '" INDEX_SEPARATOR "' character. Just concatenate instead.\n"
 "  -v   --verbose                       verbose output\n"
 "  -t   --threads                       maximum number of threads to use [default: 8]\n"
 "       --output-fmt                    [sam/bam/cram] [default: bam]\n"
@@ -419,7 +420,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
 {
     if (argc == 1) { usage(stdout); return NULL; }
 
-    const char* optstring = "vsr:i:b:l:o:t:";
+    const char* optstring = "vSr:i:b:l:o:t:";
 
     static const struct option lopts[] = {
         { "verbose",                    0, 0, 'v' },
@@ -428,7 +429,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
         { "basecalls-dir",              1, 0, 'b' },
         { "lane",                       1, 0, 'l' },
         { "output-file",                1, 0, 'o' },
-        { "no-index-separator",         0, 0, 's' },
+        { "no-index-separator",         0, 0, 'S' },
         { "threads",                    1, 0, 't' },
         { "generate-secondary-basecalls", 0, 0, 0 },
         { "no-filter",                  0, 0, 0 },
@@ -491,7 +492,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
                     break;
         case 'v':   opts->verbose++;
                     break;
-        case 's':   opts->separator = false;
+        case 'S':   opts->separator = false;
                     break;
         case 't':   opts->max_threads = atoi(optarg);
                     break;
@@ -572,8 +573,16 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
     if (!opts->library_name) opts->library_name = strdup("unknown");
     if (!opts->sample_alias) opts->sample_alias = strdup(opts->library_name);
     if (!opts->sequencing_centre) opts->sequencing_centre = strdup("SC");
-    if (va_isEmpty(opts->barcode_tag)) va_push(opts->barcode_tag,strdup(DEFAULT_BARCODE_TAG));
-    if (va_isEmpty(opts->quality_tag)) va_push(opts->quality_tag,strdup(DEFAULT_QUALITY_TAG));
+    if (va_isEmpty(opts->barcode_tag)) {
+        while (opts->barcode_tag->end < DEFAULT_MAX_BARCODES) {
+            va_push(opts->barcode_tag,strdup(DEFAULT_BARCODE_TAG));
+        }
+    }
+    if (va_isEmpty(opts->quality_tag)) {
+        while (opts->quality_tag->end < DEFAULT_MAX_BARCODES) {
+            va_push(opts->quality_tag,strdup(DEFAULT_QUALITY_TAG));
+        }
+    }
     if (!opts->platform) opts->platform = strdup("ILLUMINA");
 
     if (!opts->run_folder) {
@@ -986,40 +995,6 @@ static void getCycleRangeFromFile(va_t *cycleRange, xmlDocPtr doc)
 }
 
 /*
- * Check if we have two cycle indexes, which are consecutive, and have *no* secondary barcode tag.
- * If so, merge the two indexes into one.
- */
-static void mergeIndexes(va_t *cycleRange, opts_t *opts)
-{
-    int i1=-1, i2=-1;
-    if (opts->barcode_tag->end > 1) return;     // there is a secondary barcode tag specified
-
-    for (int n = 0; n < cycleRange->end; n++) {
-        cycleRangeEntry_t *cr = cycleRange->entries[n];
-        if (strcmp(cr->readname, "readIndex") == 0) i1 = n;
-        if (strcmp(cr->readname, "readIndex2") == 0) i2 = n;
-    }
-
-    if (i1 > -1 && i2 > -1) {
-        // we have two indexes
-        cycleRangeEntry_t *cr1 = cycleRange->entries[i1];
-        cycleRangeEntry_t *cr2 = cycleRange->entries[i2];
-        if (cr1->last+1 == cr2->first) {
-            // and they look consecutive to me
-            // so merge them
-            cr1->last = cr2->last;
-            // remove i2 entry
-            cycleRange->end--;
-            free(cycleRange->entries[i2]);
-            for (int n=i2; n < cycleRange->end; n++) {
-                cycleRange->entries[n] = cycleRange->entries[n+1];
-            }
-        }
-    }
-}
-
-
-/*
  * Try to find a cycle range from somewhere
  */
 static va_t *getCycleRange(opts_t *opts)
@@ -1080,7 +1055,6 @@ static va_t *getCycleRange(opts_t *opts)
     }
 
     if (ptr) xmlXPathFreeObject(ptr);
-    mergeIndexes(cycleRange, opts);
     return cycleRange;
 }
 
