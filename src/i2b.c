@@ -1489,7 +1489,7 @@ static void *processTile(void *arg)
             }
             nRecords++;
             while ( q_push(job_data->q, rec1, rec2) ) {
-                if (opts->verbose) fprintf(stderr,"WARNING: Queue full [%d]\n", tile);
+                //if (opts->verbose) fprintf(stderr,"WARNING: Queue full [%d]\n", tile);
                 sleep(1);
             }
         }
@@ -1498,6 +1498,7 @@ static void *processTile(void *arg)
         va_free(bases_index); va_free(qualities_index);
         va_free(bases_index2); va_free(qualities_index2);
         free(readName);
+
     }
 
     free(id);
@@ -1529,6 +1530,9 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
     bool output_thread_created = false;
     int retcode = 0;
     pthread_t tid, output_tid;
+
+    job_data_t *o_job_data = malloc(sizeof(job_data_t));
+    if (!o_job_data) { fprintf(stderr,"Can't allocate memory for output_thread job_data\n"); exit(1); }
 
     pthread_mutex_init(&n_threads_mutex,NULL);
     queue_t *q = malloc(sizeof(queue_t));
@@ -1579,32 +1583,30 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
         if ( (retcode = pthread_create(&tid, NULL, processTile, job_data))) {
             fprintf(stderr,"ABORT: Can't create thread for tile %d: Error code %d\n", job_data->tile, retcode);
             exit(1);
-        } else {
-            if (pthread_mutex_lock(&n_threads_mutex)) { fprintf(stderr,"mutex_lock failed\n"); exit(1); }
-            n_threads++;
-            pthread_mutex_unlock(&n_threads_mutex);
         }
+
+        if (pthread_mutex_lock(&n_threads_mutex)) { fprintf(stderr,"mutex_lock failed\n"); exit(1); }
+        n_threads++;
+        pthread_mutex_unlock(&n_threads_mutex);
+        pthread_detach(tid);
 
         if (!output_thread_created) {
             /*
              * Create output thread
              */
-            job_data_t *job_data = malloc(sizeof(job_data_t));
-            if (!job_data) { fprintf(stderr,"Can't allocate memory for output_thread job_data\n"); exit(1); }
-            job_data->tile = 0;
-            job_data->output_file = output_file;
-            job_data->output_header = output_header;
-            job_data->opts = opts;
-            job_data->q = q;
-            job_data->n_threads = &n_threads;
-            job_data->tiles_left = &tiles_left;
+            o_job_data->tile = 0;
+            o_job_data->output_file = output_file;
+            o_job_data->output_header = output_header;
+            o_job_data->opts = opts;
+            o_job_data->q = q;
+            o_job_data->n_threads = &n_threads;
+            o_job_data->tiles_left = &tiles_left;
 
-            if ( (retcode = pthread_create(&output_tid, NULL, output_thread, job_data)) ) {
+            if ( (retcode = pthread_create(&output_tid, NULL, output_thread, o_job_data)) ) {
                 fprintf(stderr,"ABORT: Can't create output thread: Error code %d\n", retcode);
                 exit(1);
             }
             output_thread_created = true;
-            free(job_data);
         }
     }
 
@@ -1616,6 +1618,7 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
         exit(1);
     }
 
+    free(o_job_data);
     free(q);
     va_free(cycleRange);
     va_free(tileIndex);
