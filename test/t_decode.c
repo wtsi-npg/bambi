@@ -239,6 +239,15 @@ int main(int argc, char**argv)
         success++;
     }
 
+    sprintf(cmd,"diff -I ID:bambi %s %s", metricsfile, MKNAME(DATA_DIR,"/out/decode_1.metrics"));
+    result = system(cmd);
+    if (result) {
+        fprintf(stderr, "test 1 failed at metrics file diff\n");
+        failure++;
+    } else {
+        success++;
+    }
+
     // --convert_low_quality option
     int argc_2;
     char** argv_2;

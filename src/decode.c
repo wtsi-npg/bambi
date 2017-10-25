@@ -373,7 +373,7 @@ static char *checkBarcodeQuality(char *bc_tag, char *qt_tag, opts_t *opts)
 void writeMetricsLine(FILE *f, bc_details_t *bcd, opts_t *opts, uint64_t total_reads, uint64_t max_reads, uint64_t total_pf_reads, uint64_t max_pf_reads, uint64_t total_pf_reads_assigned, uint64_t nReads, bool metrics)
 {
     fprintf(f, "%s", bcd->idx1);
-    if (bcd->idx2) fprintf(f, "-%s", bcd->idx2);
+    if (bcd->idx2 && *bcd->idx2) fprintf(f, "-%s", bcd->idx2);
     fprintf(f, "\t");
     if (metrics) {
         fprintf(f, "%s\t", bcd->name);
