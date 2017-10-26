@@ -473,9 +473,12 @@ int writeMetrics(va_t *barcodeArray, va_t *tagHopArray, opts_t *opts)
      */
 
     if (tagHopArray && tagHopArray->end > 0) {
-        FILE *g = fopen(strcat(opts->metrics_name, ".hops"), "w");
+        char *metrics_hops_name = malloc(strlen(opts->metrics_name)+6);
+        strcpy(metrics_hops_name, opts->metrics_name);
+        strcat(metrics_hops_name, ".hops");
+        FILE *g = fopen(metrics_hops_name, "w");
         if (!g) {
-            fprintf(stderr,"Can't open tag hops file %s\n", strcat(opts->metrics_name, ".hops"));
+            fprintf(stderr,"Can't open tag hops file %s\n", metrics_hops_name);
         } else {
             sortTagHops(tagHopArray);
             fprintf(g, "##\n");
@@ -493,6 +496,7 @@ int writeMetrics(va_t *barcodeArray, va_t *tagHopArray, opts_t *opts)
             }
             fclose(g);
         }
+        free(metrics_hops_name);
     }
 
     return 0;
@@ -688,6 +692,8 @@ static bc_details_t *check_tag_hopping(char *barcode, va_t *barcodeArray, va_t *
         }
     }
 
+    free(idx2); free(idx1);
+
     bool matched_first = (nmBest1 == 0 );
     bool matched_second = (nmBest2 == 0 );
 
@@ -802,7 +808,7 @@ static char *makeNewTag(bam1_t *rec, char *tag, char *name)
     char *rg = "";
     uint8_t *p = bam_aux_get(rec,tag);
     if (p) rg = bam_aux2Z(p);
-    char *newtag = malloc(strlen(rg)+1+strlen(name)+1);
+    char *newtag = malloc(strlen(rg) + strlen(name) + 16);
     strcpy(newtag, rg);
     strcat(newtag,"#");
     strcat(newtag, name);
@@ -992,20 +998,20 @@ static int processTemplate(va_t *template, BAMit_t *bam_out, va_t *barcodeArray,
         char *idx1, *idx2;
         split_index(bc_tag, opts->dual_tag, &idx1, &idx2);
         if ( (strlen(idx1) > opts->idx1_len) || (strlen(idx2) > opts->idx2_len) ) {
-            idx1[opts->idx1_len]=0;
-            idx2[opts->idx2_len]=0;
+            if (strlen(idx1) > opts->idx1_len) idx1[opts->idx1_len]=0;
+            if (strlen(idx2) > opts->idx2_len) idx2[opts->idx2_len]=0;
             strcpy(newtag,idx1); 
             if (opts->idx2_len) strcat(newtag,INDEX_SEPARATOR);
             strcat(newtag,idx2);
         }
+        free(idx2); free(idx1);
     }
 
     for (int n=0; n < template->end; n++) {
         bam1_t *rec = template->entries[n];
         if (newtag) {
             name = findBarcodeName(newtag,barcodeArray, tagHopArray, opts,!(rec->core.flag & BAM_FQCFAIL), n==0);
-            if (!name) name = "0";
-            char * newrg = makeNewTag(rec,"RG",name);
+            char *newrg = makeNewTag(rec,"RG",name);
             bam_aux_update_str(rec,"RG",strlen(newrg)+1, newrg);
             free(newrg);
             if (opts->change_read_name) add_suffix(rec, name);
