@@ -33,6 +33,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <libxml/xpath.h>
 #include <time.h>
 #include <fcntl.h>
+#include <pthread.h>
 
 #include <cram/sam_header.h>
 
@@ -44,10 +45,76 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define DEFAULT_BARCODE_TAG "BC"
 #define DEFAULT_QUALITY_TAG "QT"
+#define DEFAULT_MAX_THREADS 8
 #define DEFAULT_MAX_BARCODES 10
 
 char *strptime(const char *s, const char *format, struct tm *tm);
 
+/*
+ * A simple FIFO Queue
+ */
+
+#define QUEUELEN 5000
+
+typedef struct {
+    pthread_mutex_t mutex;
+    bam1_t *q[QUEUELEN];
+    int first, last, count;
+} queue_t;
+
+/*
+ * Initialise the Queue
+ */
+static void q_init(queue_t *q)
+{
+    pthread_mutex_init(&q->mutex,NULL);
+    q->first = 0; q->last = QUEUELEN-1; q->count = 0;
+}
+
+/*
+ * quick push single item, no validation
+ * No need for locking here, it's already done by q_push()
+ */
+static void _q_push(queue_t *q, bam1_t *rec)
+{
+    q->last = (q->last+1) % QUEUELEN;
+    q->q[ q->last ] = rec;
+    q->count++;
+}
+/*
+ * Push one or two records onto the Queue
+ * We have to push two records atomically to ensure our output BAM is collated.
+ * Return 0 on success, 1 if the Queue is already full
+ */
+static int q_push(queue_t *q, bam1_t *rec1, bam1_t *rec2)
+{
+    int retval = 1;
+    if (pthread_mutex_lock(&q->mutex)) { fprintf(stderr,"mutex_lock failed\n"); exit(1); }
+    if (q->count+1 < QUEUELEN) {
+        if (rec1) _q_push(q,rec1);
+        if (rec2) _q_push(q,rec2);
+        retval = 0;
+    }
+    pthread_mutex_unlock(&q->mutex);
+    return retval;
+}
+
+/*
+ * Pop an item from the Queue.
+ * Return the item, or NULL if the Queue is empty.
+ */
+static bam1_t *q_pop(queue_t *q)
+{
+    bam1_t *rec = NULL;
+    if (pthread_mutex_lock(&q->mutex)) { fprintf(stderr,"mutex_lock failed\n"); exit(1); }
+    if (q->count > 0) {
+        rec = q->q[q->first];
+        q->first = (q->first+1) % QUEUELEN;
+        q->count--;
+    }
+    pthread_mutex_unlock(&q->mutex);
+    return rec;
+}
 
 /*
  * Cycle range array
@@ -112,6 +179,7 @@ typedef struct {
     char *intensity_dir;
     char *basecalls_dir;
     int lane;
+    int max_threads;
     char *output_file;
     char *output_fmt;
     char compression_level;
@@ -139,6 +207,23 @@ typedef struct {
     xmlDocPtr parametersConfig;
     xmlDocPtr runinfoConfig;
 } opts_t;
+
+/*
+ * Data to be passed / shared between threads
+ */
+typedef struct {
+    unsigned int tile;
+    samFile *output_file;
+    bam_hdr_t *output_header;
+    opts_t *opts;
+    va_t *cycleRange;
+    va_t *tileIndex;
+    queue_t *q;
+    int *n_threads;
+    int *tiles_left;
+    pthread_mutex_t *n_threads_mutex;
+} job_data_t;
+
 
 
 /*
@@ -323,6 +408,7 @@ static void usage(FILE *write_to)
 "       --final-index-cycle             Last cycle for each index read. Comma separated list.\n"
 "  -S   --no-index-separator            Do NOT separate dual indexes with a '" INDEX_SEPARATOR "' character. Just concatenate instead.\n"
 "  -v   --verbose                       verbose output\n"
+"  -t   --threads                       maximum number of threads to use [default: 8]\n"
 "       --output-fmt                    [sam/bam/cram] [default: bam]\n"
 "       --compression-level             [0..9]\n"
 );
@@ -334,7 +420,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
 {
     if (argc == 1) { usage(stdout); return NULL; }
 
-    const char* optstring = "vSr:i:b:l:o:";
+    const char* optstring = "vSr:i:b:l:o:t:";
 
     static const struct option lopts[] = {
         { "verbose",                    0, 0, 'v' },
@@ -344,6 +430,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
         { "lane",                       1, 0, 'l' },
         { "output-file",                1, 0, 'o' },
         { "no-index-separator",         0, 0, 'S' },
+        { "threads",                    1, 0, 't' },
         { "generate-secondary-basecalls", 0, 0, 0 },
         { "no-filter",                  0, 0, 0 },
         { "read-group-id",              1, 0, 0 },
@@ -386,6 +473,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
     opts->barcode_tag = va_init(5, free);
     opts->quality_tag = va_init(5, free);
     opts->separator = true;
+    opts->max_threads = DEFAULT_MAX_THREADS;
 
     int opt;
     int option_index = 0;
@@ -405,6 +493,8 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
         case 'v':   opts->verbose++;
                     break;
         case 'S':   opts->separator = false;
+                    break;
+        case 't':   opts->max_threads = atoi(optarg);
                     break;
         case 0:     arg = lopts[option_index].name;
                          if (strcmp(arg, "output-fmt") == 0)                   opts->output_fmt = strdup(optarg);
@@ -475,6 +565,8 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
         fprintf(stderr, "compression-level must be a digit in the range [0..9], not '%c'\n", opts->compression_level);
         usage(stderr); return NULL;
     }
+
+    if (opts->max_threads < 3) opts->max_threads = 3;
 
     // Set defaults
     if (!opts->read_group_id) opts->read_group_id = strdup("1");
@@ -1260,9 +1352,9 @@ static void update_aux(bam1_t *bam, char *auxtag, char *data, char *tag_separato
 }
 
 /*
- * Write a BAM record
+ * Create a BAM record
  */
-static void writeRecord(int flags, opts_t *opts, char *readName, 
+static bam1_t *makeRecord(int flags, opts_t *opts, char *readName, 
                  char *bases, char *qualities, va_t *ib, va_t *iq,
                  samFile *output_file, bam_hdr_t *output_header)
 {
@@ -1289,19 +1381,48 @@ static void writeRecord(int flags, opts_t *opts, char *readName,
         update_aux(bam, opts->quality_tag->entries[n], iq->entries[n], opts->separator ? QUAL_SEPARATOR : NULL);
     }
 
-    r = sam_write1(output_file, output_header, bam);
-    if (r <= 0) {
-        fprintf(stderr, "Problem writing record %s  : r=%d\n", readName,r);
-        exit(1);
+    return bam;
+}
+
+/*
+ * Read records from the queue and write them to the BAM file.
+ * Exit when the queue is empty AND there are no more input threads running.
+ */
+static void *output_thread(void *arg)
+{
+    int r = 1;
+    bam1_t *rec;
+    job_data_t *job_data = (job_data_t *)arg;
+    opts_t *opts = job_data->opts;
+    
+    if (opts->verbose) fprintf(stderr,"Started output thread\n");
+
+    while (job_data->q->count || *(job_data->tiles_left)) {
+        rec = q_pop(job_data->q);
+        if (rec) r = sam_write1(job_data->output_file, job_data->output_header, rec);
+        if (r <= 0) {
+            fprintf(stderr, "Problem writing record %s  : r=%d\n", bam_get_qname(rec),r);
+            exit(1);
+        }
+        if (rec) bam_destroy1(rec);
     }
-    bam_destroy1(bam);
+    return NULL;
 }
 
 /*
  * Write all the BAM records for a given tile
+ * Records are written to the global FIFO queue
  */
-static int processTile(int tile, samFile *output_file, bam_hdr_t *output_header, va_t *cycleRange, va_t *tileIndex, opts_t *opts)
+static void *processTile(void *arg)
 {
+    job_data_t *job_data = (job_data_t *)arg;
+    int tile = job_data->tile;
+    samFile *output_file = job_data->output_file;
+    bam_hdr_t *output_header = job_data->output_header;
+    va_t *cycleRange = job_data->cycleRange;
+    va_t *tileIndex = job_data->tileIndex;
+    opts_t *opts = job_data->opts;
+
     va_t *bclReadArray;
     int filtered;
     int max_cluster = 0;
@@ -1313,13 +1434,13 @@ static int processTile(int tile, samFile *output_file, bam_hdr_t *output_header,
     posfile_t *posfile = openPositionFile(tile, tileIndex, opts);
     if (posfile->errmsg) {
         fprintf(stderr,"Can't find position file for Tile %d\n%s\n", tile, posfile->errmsg);
-        return 1;
+        return NULL;
     }
 
     filter_t *filter = openFilterFile(tile,tileIndex,opts);
     if (filter->errmsg) {
         fprintf(stderr,"Can't find filter file for tile %d\n%s\n", tile, filter->errmsg);
-        return 1;
+        return NULL;
     }
 
     if (tileIndex) max_cluster = findClusters(tile, tileIndex);
@@ -1358,19 +1479,26 @@ static int processTile(int tile, samFile *output_file, bam_hdr_t *output_header,
 
         if (opts->no_filter || !filtered) {
             int flags;
+            bam1_t *rec1 = NULL;
+            bam1_t *rec2 = NULL;
             flags = setFlag(false,filtered,ispaired);
-            writeRecord(flags, opts, readName, bases->entries[0], qualities->entries[0], bases_index, qualities_index, output_file, output_header);
+            rec1 = makeRecord(flags, opts, readName, bases->entries[0], qualities->entries[0], bases_index, qualities_index, output_file, output_header);
             if (ispaired) {
                 flags = setFlag(true,filtered,ispaired);
-                writeRecord(flags, opts, readName, bases->entries[1], qualities->entries[1], bases_index2, qualities_index2, output_file, output_header);
+                rec2 = makeRecord(flags, opts, readName, bases->entries[1], qualities->entries[1], bases_index2, qualities_index2, output_file, output_header);
             }
             nRecords++;
+            while ( q_push(job_data->q, rec1, rec2) ) {
+                //if (opts->verbose) fprintf(stderr,"WARNING: Queue full [%d]\n", tile);
+                sleep(1);
+            }
         }
 
         va_free(bases); va_free(qualities);
         va_free(bases_index); va_free(qualities_index);
         va_free(bases_index2); va_free(qualities_index2);
         free(readName);
+
     }
 
     free(id);
@@ -1380,7 +1508,12 @@ static int processTile(int tile, samFile *output_file, bam_hdr_t *output_header,
 
     if (opts->verbose) fprintf(stderr,"%d records written\n", nRecords);
 
-    return 0;
+    if (pthread_mutex_lock(job_data->n_threads_mutex)) { fprintf(stderr,"mutex_lock failed\n"); exit(1); }
+    (*job_data->n_threads)--;
+    (*job_data->tiles_left)--;
+    pthread_mutex_unlock(job_data->n_threads_mutex);
+
+    return NULL;
 }
 
 /*
@@ -1388,26 +1521,105 @@ static int processTile(int tile, samFile *output_file, bam_hdr_t *output_header,
  */
 static int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
 {
+    static int n_threads = 0;
+    static pthread_mutex_t n_threads_mutex;
+
+    static int tiles_left = 0;
+    static pthread_mutex_t tiles_left_mutex;
+
+    bool output_thread_created = false;
     int retcode = 0;
+    pthread_t tid, output_tid;
+
+    job_data_t *o_job_data = malloc(sizeof(job_data_t));
+    if (!o_job_data) { fprintf(stderr,"Can't allocate memory for output_thread job_data\n"); exit(1); }
+
+    pthread_mutex_init(&n_threads_mutex,NULL);
+    queue_t *q = malloc(sizeof(queue_t));
+    if (!q) { fprintf(stderr,"Can't allocate memory for results queue\n"); exit(1); }
+
     ia_t *tiles = getTileList(opts);
     va_t *cycleRange = getCycleRange(opts);;
     va_t *tileIndex = getTileIndex(opts);
 
-    for (int n=0; n < cycleRange->end; n++) {
-        cycleRangeEntry_t *cr = (cycleRangeEntry_t *)cycleRange->entries[n];
-        if (opts->verbose) fprintf(stderr,"CycleRange: %s\t%d\t%d\n", cr->readname, cr->first, cr->last);
-    }
+    q_init(q);
 
-    if (tiles->end == 0) fprintf(stderr, "There are no tiles to process\n");
-
-    for (int n=0; n < tiles->end; n++) {
-        if (processTile(tiles->entries[n], output_file, output_header, cycleRange, tileIndex, opts)) {
-            fprintf(stderr,"Error processing tile %d\n", tiles->entries[n]);
-            retcode = 1;
-            break;
+    if (opts->verbose) {
+        for (int n=0; n < cycleRange->end; n++) {
+            cycleRangeEntry_t *cr = (cycleRangeEntry_t *)cycleRange->entries[n];
+            fprintf(stderr,"CycleRange: %s\t%d\t%d\n", cr->readname, cr->first, cr->last);
+        }
+        for (int n=0; n < tiles->end; n++) {
+            fprintf(stderr,"Tile %d\n", tiles->entries[n]);
         }
     }
 
+    if (tiles->end == 0) fprintf(stderr, "There are no tiles to process\n");
+    tiles_left = tiles->end;
+
+    /*
+     * Loop to create input threads - one for each tile
+     */
+    for (int n=0; n < tiles->end; n++) {
+        job_data_t *job_data = malloc(sizeof(job_data_t));
+        if (!job_data) { fprintf(stderr,"Can't allocate memory for job_data\n"); exit(1); }
+        job_data->tile = tiles->entries[n];
+        job_data->output_file = output_file;
+        job_data->output_header = output_header;
+        job_data->opts = opts;
+        job_data->cycleRange = cycleRange;
+        job_data->tileIndex = tileIndex;
+        job_data->q = q;
+        job_data->n_threads = &n_threads;
+        job_data->n_threads_mutex = &n_threads_mutex;
+        job_data->tiles_left = &tiles_left;
+
+        // the -2 is to allow for the main thread and output thread
+        while (n_threads >= opts->max_threads-2) {
+            if (opts->verbose) fprintf(stderr,"Waiting for thread to become free\n");
+            sleep(60);
+        }
+
+        if ( (retcode = pthread_create(&tid, NULL, processTile, job_data))) {
+            fprintf(stderr,"ABORT: Can't create thread for tile %d: Error code %d\n", job_data->tile, retcode);
+            exit(1);
+        }
+
+        if (pthread_mutex_lock(&n_threads_mutex)) { fprintf(stderr,"mutex_lock failed\n"); exit(1); }
+        n_threads++;
+        pthread_mutex_unlock(&n_threads_mutex);
+        pthread_detach(tid);
+
+        if (!output_thread_created) {
+            /*
+             * Create output thread
+             */
+            o_job_data->tile = 0;
+            o_job_data->output_file = output_file;
+            o_job_data->output_header = output_header;
+            o_job_data->opts = opts;
+            o_job_data->q = q;
+            o_job_data->n_threads = &n_threads;
+            o_job_data->tiles_left = &tiles_left;
+
+            if ( (retcode = pthread_create(&output_tid, NULL, output_thread, o_job_data)) ) {
+                fprintf(stderr,"ABORT: Can't create output thread: Error code %d\n", retcode);
+                exit(1);
+            }
+            output_thread_created = true;
+        }
+    }
+
+    /*
+     * Wait here until output thread (and therefore all threads) have finished
+     */
+    if ( (retcode = pthread_join(output_tid,NULL)) ) {
+        fprintf(stderr,"ABORT: Can't join output thread: Error code %d\n", retcode);
+        exit(1);
+    }
+
+    free(o_job_data);
+    free(q);
     va_free(cycleRange);
     va_free(tileIndex);
     ia_free(tiles);
