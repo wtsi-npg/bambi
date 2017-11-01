@@ -77,7 +77,7 @@ typedef struct {
     char *input_fmt;
     char *output_fmt;
     char compression_level;
-    int tag_len;
+    int idx1_len, idx2_len;
     bool ignore_pf;
     unsigned short dual_tag;
 } opts_t;
@@ -102,28 +102,29 @@ static void free_opts(opts_t* opts)
  * Plus metrics information for each barcode
  */
 typedef struct {
-    char *seq;
+    char *seq, *idx1, *idx2;
     char *name;
     char *lib;
     char *sample;
     char *desc;
     uint64_t reads, pf_reads, perfect, pf_perfect, one_mismatch, pf_one_mismatch;
-    char *next_tag;
     int first_tag_match, second_tag_match;
     bool tag_hop;
 } bc_details_t;
 
-void print_header(FILE* f, opts_t* opts, bool metrics) {
+/*
+ * Print matrics file header
+ */
+static void print_header(FILE* f, opts_t* opts, bool metrics) {
     // print header
     fprintf(f, "##\n");
-    fprintf(f, "# ");
-    fprintf(f, "BARCODE_TAG_NAME=%s ", opts->barcode_tag_name);
+    fprintf(f, "# BARCODE_TAG_NAME=%s ", opts->barcode_tag_name);
     fprintf(f, "MAX_MISMATCHES=%d ", opts->max_mismatches);
     fprintf(f, "MIN_MISMATCH_DELTA=%d ", opts->min_mismatch_delta);
     fprintf(f, "MAX_NO_CALLS=%d ", opts->max_no_calls);
     fprintf(f, "\n");
     fprintf(f, "##\n");
-    fprintf(f, "#\n");
+    fprintf(f, "# ID:bambi VN:%s (htslib %s) CL:%s\n", bambi_version(), hts_version(), opts->argv_list);
     fprintf(f, "\n");
     fprintf(f, "##\n");
     fprintf(f, "BARCODE\t");
@@ -167,6 +168,8 @@ void free_bcd(void *entry)
 {
     bc_details_t *bcd = (bc_details_t *)entry;
     free(bcd->seq);
+    free(bcd->idx1);
+    free(bcd->idx2);
     free(bcd->name);
     free(bcd->lib);
     free(bcd->sample);
@@ -369,7 +372,9 @@ static char *checkBarcodeQuality(char *bc_tag, char *qt_tag, opts_t *opts)
 
 void writeMetricsLine(FILE *f, bc_details_t *bcd, opts_t *opts, uint64_t total_reads, uint64_t max_reads, uint64_t total_pf_reads, uint64_t max_pf_reads, uint64_t total_pf_reads_assigned, uint64_t nReads, bool metrics)
 {
-    fprintf(f, "%s\t", bcd->seq);
+    fprintf(f, "%s", bcd->idx1);
+    if (bcd->idx2 && *bcd->idx2) fprintf(f, "-%s", bcd->idx2);
+    fprintf(f, "\t");
     if (metrics) {
         fprintf(f, "%s\t", bcd->name);
         fprintf(f, "%s\t", bcd->lib);
@@ -433,14 +438,16 @@ int writeMetrics(va_t *barcodeArray, va_t *tagHopArray, opts_t *opts)
     // first loop to count things
     for (n=1; n < barcodeArray->end; n++) {
         bc_details_t *bcd = barcodeArray->entries[n];;
-        total_reads += bcd->reads;
-        if (bcd->tag_hop) total_hop_reads += bcd->reads;
-        else total_original_reads += bcd->reads;
-        total_pf_reads += bcd->pf_reads;
-        total_pf_reads_assigned += bcd->pf_reads;
-        if (max_reads < bcd->reads) max_reads = bcd->reads;
-        if (max_pf_reads < bcd->pf_reads) max_pf_reads = bcd->pf_reads;
-        nReads++;
+        if (!bcd->tag_hop) {
+            total_reads += bcd->reads;
+            if (bcd->tag_hop) total_hop_reads += bcd->reads;
+            else total_original_reads += bcd->reads;
+            total_pf_reads += bcd->pf_reads;
+            total_pf_reads_assigned += bcd->pf_reads;
+            if (max_reads < bcd->reads) max_reads = bcd->reads;
+            if (max_pf_reads < bcd->pf_reads) max_pf_reads = bcd->pf_reads;
+            nReads++;
+        }
     }
 
     // print header
@@ -459,15 +466,28 @@ int writeMetrics(va_t *barcodeArray, va_t *tagHopArray, opts_t *opts)
     bcd->name[0] = 0;
     writeMetricsLine(f, bcd, opts, total_reads, max_reads, total_pf_reads, max_pf_reads, 0, nReads, true);
 
-    if (tagHopArray && tagHopArray->end > 0) {
+    fclose(f);
 
-        FILE *g = fopen(strcat(opts->metrics_name, ".hops"), "w");
+    /*
+     * Now write tag hop metrics file - if there are any
+     */
+
+    if (tagHopArray && tagHopArray->end > 0) {
+        char *metrics_hops_name = malloc(strlen(opts->metrics_name)+6);
+        strcpy(metrics_hops_name, opts->metrics_name);
+        strcat(metrics_hops_name, ".hops");
+        FILE *g = fopen(metrics_hops_name, "w");
         if (!g) {
-            fprintf(stderr,"Can't open tag hops file %s\n", strcat(opts->metrics_name, ".hops"));
+            fprintf(stderr,"Can't open tag hops file %s\n", metrics_hops_name);
         } else {
             sortTagHops(tagHopArray);
-
-            fprintf(g, "##\n# TOTAL_READS=%"PRIu64", TOTAL_ORIGINAL_TAG_READS=%"PRIu64", TOTAL_TAG_HOP_READS=%"PRIu64", MAX_READ_ON_A_TAG=%"PRIu64", TOTAL_TAG_HOPS=%d, PCT_TAG_HOPS=%f\n",total_reads, total_original_reads, total_hop_reads, max_reads, tagHopArray->end, (float)total_hop_reads / total_original_reads * 100);
+            fprintf(g, "##\n");
+            fprintf(g, "# TOTAL_READS=%"PRIu64", ", total_reads);
+            fprintf(g, "TOTAL_ORIGINAL_TAG_READS=%"PRIu64", ", total_original_reads);
+            fprintf(g, "TOTAL_TAG_HOP_READS=%"PRIu64", ", total_hop_reads);
+            fprintf(g, "MAX_READ_ON_A_TAG=%"PRIu64", ", max_reads);
+            fprintf(g, "TOTAL_TAG_HOPS=%d, ", tagHopArray->end);
+            fprintf(g, "PCT_TAG_HOPS=%f\n", (float)total_hop_reads / total_original_reads * 100);
             print_header(g, opts, false);
 
             for (n=0; n < tagHopArray->end; n++) {
@@ -476,22 +496,48 @@ int writeMetrics(va_t *barcodeArray, va_t *tagHopArray, opts_t *opts)
             }
             fclose(g);
         }
+        free(metrics_hops_name);
     }
 
-    fclose(f);
     return 0;
+}
+
+/*
+ * split a dual index (eg ACACAC-TGTGTG) into two different indexes.
+ * If a single index is given, then the second index is an empty string.
+ */
+static void split_index(char *seq, int dual_tag, char **idx1_ptr, char **idx2_ptr)
+{
+    char *seq_copy = strdup(seq);
+
+    if (dual_tag) {
+        *idx2_ptr = strdup(seq_copy + dual_tag);
+        seq_copy[dual_tag-1] = 0;
+        *idx1_ptr = strdup(seq_copy);
+    } else {
+        char *saveptr;
+        char *p;
+        p = strtok_r(seq_copy, INDEX_SEPARATOR, &saveptr);
+        if (p) *idx1_ptr = strdup(p);
+        p = strtok_r(NULL, INDEX_SEPARATOR, &saveptr);
+        if (p) *idx2_ptr = strdup(p); else *idx2_ptr = strdup("");
+    }
+    free(seq_copy);
 }
 
 /*
  * Read the barcode file into an array
  */
-va_t *loadBarcodeFile(opts_t *opts)
+static va_t *loadBarcodeFile(opts_t *opts)
 {
+    int idx1_len=0, idx2_len=0;
     va_t *barcodeArray = va_init(100,free_bcd);
 
     // initialise first entry for null metrics
     bc_details_t *bcd = calloc(1, sizeof(bc_details_t));
-    bcd->seq = NULL;    // we can't initialise this until we know the tag_length
+    bcd->seq = NULL;
+    bcd->idx1 = NULL;
+    bcd->idx2 = NULL;
     bcd->name = strdup("0");
     bcd->lib = strdup("");
     bcd->sample = strdup("");
@@ -505,9 +551,8 @@ va_t *loadBarcodeFile(opts_t *opts)
     }
     
     char *buf = NULL;
-    int tag_length = 0;
     size_t n;
-    if (getline(&buf,&n,fh) < 0) {;    // burn first line which is a header
+    if (getline(&buf,&n,fh) < 0) {    // burn first line which is a header
         fprintf(stderr,"ERROR: problem reading barcode file\n");
         return NULL;
     }
@@ -523,31 +568,33 @@ va_t *loadBarcodeFile(opts_t *opts)
         s = strtok(NULL,"\t"); bcd->sample  = strdup(s);
         s = strtok(NULL,"\t"); bcd->desc    = strdup(s);
 
-        if (!(bcd->next_tag = strstr(bcd->seq," ")) && !(bcd->next_tag = strstr(bcd->seq,"-")) && opts->dual_tag > 1)
-            bcd->next_tag = bcd->seq + opts->dual_tag - 1;
+        split_index(bcd->seq, opts->dual_tag, &bcd->idx1, &bcd->idx2);
         bcd->tag_hop = false;
 
         va_push(barcodeArray,bcd);
         free(buf); buf=NULL;
 
-        if (tag_length == 0) {
-            tag_length = strlen(bcd->seq);
-            if (tag_length < opts->dual_tag + 1) {
-                fprintf(stderr,"ERROR: TAG2 start=%d is larger or equal to the barcode length=%d\n", opts->dual_tag, tag_length);
-                return NULL;
-            }
+        if (idx1_len == 0) {
+            idx1_len = strlen(bcd->idx1);
+            idx2_len = strlen(bcd->idx2);
         } else {
-            if (tag_length != strlen(bcd->seq)) {
+            if ( (idx1_len != strlen(bcd->idx1)) && (idx2_len != strlen(bcd->idx2)) ) {
                 fprintf(stderr,"ERROR: Tag '%s' is a different length to the previous tag\n", bcd->seq);
                 return NULL;
             }
         }
     }
 
-    opts->tag_len = tag_length;
+    opts->idx1_len = idx1_len;
+    opts->idx2_len = idx2_len;
     bcd = barcodeArray->entries[0];
-    bcd->seq = calloc(1,tag_length+1);
-    memset(bcd->seq, 'N', tag_length);
+    bcd->idx1 = calloc(1,idx1_len+1); memset(bcd->idx1, 'N', idx1_len);
+    bcd->idx2 = calloc(1,idx2_len+1); memset(bcd->idx2, 'N', idx2_len);
+    bcd->seq = calloc(1,idx1_len+idx2_len+2);
+    strcpy(bcd->seq,bcd->idx1);
+    if (idx2_len) strcat(bcd->seq,INDEX_SEPARATOR);
+    strcat(bcd->seq,bcd->idx2);
+
     free(buf);
     fclose(fh);
     return barcodeArray;
@@ -611,239 +658,157 @@ static int countNMismatches(char *tag, char *barcode, unsigned int length)
 }
 
 /*
+ * For a failed match, check is there is tag hopping to report
+ */
+static bc_details_t *check_tag_hopping(char *barcode, va_t *barcodeArray, va_t *tagHopArray, opts_t *opts)
+{
+    bc_details_t *new_bcd=NULL, *best_match1, *best_match2;
+    char *idx1, *idx2;
+    int arrayIndex1, arrayIndex2;
+    int nmBest1 = opts->idx1_len + opts->idx2_len + 1;
+    int nmBest2 = nmBest1;
+
+    split_index(barcode, opts->dual_tag, &idx1, &idx2);
+
+    // for each tag in barcodeArray
+    for (int n=1; n < barcodeArray->end; n++) {
+        bc_details_t *bcd = barcodeArray->entries[n];
+
+        int nMismatches1 = countMismatches(bcd->idx1, idx1);
+        int nMismatches2 = countMismatches(bcd->idx2, idx2);
+
+        // match the first tag
+        if (nMismatches1 < nmBest1) {
+            nmBest1 = nMismatches1;
+            best_match1 = bcd;
+            arrayIndex1 = n;
+        }
+
+        // match the second tag
+        if (nMismatches2 < nmBest2) {
+            nmBest2 = nMismatches2;
+            best_match2 = bcd;
+            arrayIndex2 = n;
+        }
+    }
+
+    free(idx2); free(idx1);
+
+    bool matched_first = (nmBest1 == 0 );
+    bool matched_second = (nmBest2 == 0 );
+
+    if (matched_first && matched_second) {
+        char tag_name[40];
+
+        new_bcd = calloc(1, sizeof(bc_details_t)); //create a new entry with the two tags
+
+        new_bcd->idx1 = strdup(best_match1->idx1);            
+        new_bcd->idx2 = strdup(best_match2->idx2);            
+        new_bcd->seq = malloc(opts->idx1_len + opts->idx2_len + 2);
+        strcpy(new_bcd->seq, best_match1->idx1);
+        strcat(new_bcd->seq, INDEX_SEPARATOR);
+        strcat(new_bcd->seq, best_match2->idx2);
+        new_bcd->name = strdup("0");
+        new_bcd->lib = strdup("DUMMY_LIB");
+        new_bcd->sample = strdup("DUMMY_SAMPLE");
+        snprintf(tag_name,40,"TAG_HOP (%d AND %d)", arrayIndex1, arrayIndex2);
+        new_bcd->desc = strdup(tag_name);  //the combination is registered as a tag hop
+        new_bcd->tag_hop = true;
+        va_push(barcodeArray,new_bcd);
+        va_push(tagHopArray,new_bcd);
+    }
+
+    return new_bcd;
+}
+
+
+/*
  * find the best match in the barcode (tag) file for a given barcode
  * return the tag, if a match found, else return NULL
  */
-bc_details_t *findBestMatch(char *barcode, va_t *barcodeArray, va_t *tagHopArray, opts_t *opts, bool isPf, bool isUpdateMetrics)
+bc_details_t *findBestMatch(char *barcode, va_t *barcodeArray, opts_t *opts)
 {
-    int bcLen = opts->tag_len;   // size of barcode sequence in barcode file
+    int bcLen = opts->idx1_len + opts->idx2_len + 1;   // size of barcode sequence in barcode file
     bc_details_t *best_match = NULL;
     int nmBest = bcLen;             // number of mismatches (best)
     int nm2Best = bcLen;            // number of mismatches (second best)
 
-    bc_details_t *best_match1 = NULL;
-    bc_details_t *best_match2 = NULL;
-    int nmBest1 = bcLen/2;
-    int nm2Best1 = bcLen/2;
-    int nmBest2 = bcLen/2;
-    int nm2Best2 = bcLen/2;
-    unsigned short match_case = MATCHED_NONE;
-    int d1 = nmBest1;
-    int d2 = nmBest2;
+    bool matched = false;
 
-    int nCalls = noCalls(barcode);
-    char *next_tag = NULL;
-    bool dual_tag = (((next_tag = strstr(barcode," ")) != NULL) || ((next_tag = strstr(barcode,"-")) != NULL) || (opts->dual_tag > 1));
+        for (int n=1; n < barcodeArray->end; n++) {
+            bc_details_t *bcd = barcodeArray->entries[n];
 
-    if (nCalls <= opts->max_no_calls) {
-        if (dual_tag) {
-
-            unsigned int arrayIndex1, arrayIndex2;
-            unsigned short barcode_sep = 0;
-            if (!next_tag)
-                next_tag = barcode + opts->dual_tag - 1;
-            else
-                barcode_sep = 1;
-
-            // for each tag in barcodeArray
-            for (int n=1; n < barcodeArray->end; n++) {
-                bc_details_t *bcd = barcodeArray->entries[n];
-                if(bcd->next_tag) {
-
-                    unsigned short tag_sep = ((bcd->next_tag[0] == ' ' || bcd->next_tag[0] == '-') ? 1 : 0);
-                    if((strlen(bcd->seq) - tag_sep) != (strlen(barcode) - barcode_sep)) 
-                        break; 
-
-                    unsigned short len1 = (unsigned short)(bcd->next_tag - bcd->seq);
-                    unsigned short len2 = bcLen - len1 - tag_sep;
-
-                    int nMismatches1 = countNMismatches(bcd->seq, barcode, len1);
-                    int nMismatches2 = countNMismatches(bcd->next_tag + tag_sep, next_tag + barcode_sep, len2);
-                    int nMismatches = nMismatches1 + nMismatches2; 
-
-                    //match the first tag
-                    if (nMismatches1 < nmBest1) {
-                        if (best_match1) {
-                            nm2Best1 = nmBest1;
-                        }
-                        nmBest1 = nMismatches1;
-                        best_match1 = bcd;
-                        arrayIndex1 = n;
-                    } else {
-                        if (nMismatches1 < nm2Best1) {
-                            nm2Best1 = nMismatches1;
-                        }
-                    }
-
-                    //match the second tag
-                    if (nMismatches2 < nmBest2) {
-                        if (best_match2) {
-                            nm2Best2 = nmBest2;
-                        }
-                        nmBest2 = nMismatches2;
-                        best_match2 = bcd;
-                        arrayIndex2 = n;
-                    } else {
-                        if (nMismatches2 < nm2Best2) {
-                            nm2Best2 = nMismatches2;
-                        }
-                    }
-
-                    //match both
-                    if (nMismatches < nmBest) {
-                        if (best_match) {
-                            nm2Best = nmBest;
-                        }
-                        nmBest = nMismatches;
-
-                        best_match = bcd;
-                        d1 = nMismatches1;
-                        d2 = nMismatches2;
-                    } else {
-                        if (nMismatches < nm2Best) {
-                            nm2Best = nMismatches;
-                        }
-                    }
-                }
-            }
-
-            bool matched_both = best_match && d1 <= opts->max_mismatches && d2 <= opts->max_mismatches && nm2Best - nmBest >= opts->min_mismatch_delta;
-            bool matched_first = best_match1 && nmBest1 <= opts->max_mismatches;
-            bool matched_second = best_match2 && nmBest2 <= opts->max_mismatches;
-
-
-            if (matched_both) {
-                match_case = MATCHED_BOTH;
+            int nMismatches = countMismatches(bcd->seq, barcode);
+            if (nMismatches < nmBest) {
+                nm2Best = nmBest;
+                nmBest = nMismatches;
+                best_match = bcd;
             } else {
-                if (matched_first) {
-                    if (!matched_second) {
-                        best_match = best_match1;
-                        match_case = MATCHED_FIRST;
-                    } else {
-                        if (best_match1 != best_match2) {
-
-                           unsigned short tag_sep = ((best_match1->next_tag[0] == ' ' || best_match1->next_tag[0] == '-') ? 1 : 0);
-                           unsigned short len1 = (unsigned short)(best_match1->next_tag - best_match1->seq);
-                           unsigned short len2 = bcLen - len1 - tag_sep;
-
-                           char tag_name[40];
-
-                           bc_details_t *new_bcd = calloc(1, sizeof(bc_details_t)); //create a new entry with the two tags
-                           new_bcd->seq = malloc(len1 + tag_sep + len2 + 1);
-                           new_bcd->next_tag = new_bcd->seq + len1;
-                           strncpy(new_bcd->seq, best_match1->seq, len1 + tag_sep); //copy the first tag, including the space
-                           strncpy(new_bcd->next_tag + tag_sep, best_match2->next_tag + tag_sep, len2); //copy the second tag, after the space
-                           new_bcd->seq[len1 + tag_sep + len2] = 0;
-                           new_bcd->name = strdup("0");
-                           new_bcd->lib = strdup("DUMMY_LIB");
-                           new_bcd->sample = strdup("DUMMY_SAMPLE");
-                           snprintf(tag_name,40,"TAG_HOP (%d AND %d)", arrayIndex1, arrayIndex2);
-                           new_bcd->desc = strdup(tag_name);  //the combination is registered as a tag hop
-                           new_bcd->tag_hop = true;
-                           va_push(barcodeArray,new_bcd);
-                           va_push(tagHopArray,new_bcd);
-                           best_match = new_bcd;   //the best match is the new entry
-                           match_case = MATCHED_NEW;
-                        }
-                    }
-                } else {
-                    if (best_match2) {
-                        best_match = best_match2;
-                        match_case = MATCHED_SECOND;
-                    } else {
-                        best_match = barcodeArray->entries[0];
-                    }
-                }
+                if (nMismatches < nm2Best) nm2Best = nMismatches;
             }
-        } else {    //one tag case
-            for (int n=1; n < barcodeArray->end; n++) {
-                bc_details_t *bcd = barcodeArray->entries[n];
-
-                int nMismatches = countMismatches(bcd->seq, barcode);
-                if (nMismatches < nmBest) {
-                    if (best_match) nm2Best = nmBest;
-                    nmBest = nMismatches;
-                    best_match = bcd;
-                } else {
-                    if (nMismatches < nm2Best) nm2Best = nMismatches;
-                }
-            }
-
-            bool matched = best_match && nmBest <= opts->max_mismatches && nm2Best - nmBest >= opts->min_mismatch_delta;
-
-            if (!matched)
-                best_match = barcodeArray->entries[0];
         }
-    } else {
+
+        matched = best_match && nmBest <= opts->max_mismatches && nm2Best - nmBest >= opts->min_mismatch_delta;
+
+    if (!matched) {
         best_match = barcodeArray->entries[0];
-    }
-
-    if (isUpdateMetrics && best_match) {
-        best_match->reads++;
-        if (isPf) best_match->pf_reads++;
-
-        if (dual_tag) {
-            switch (match_case) {
-            case MATCHED_FIRST:
-                best_match->first_tag_match++;
-                break;
-            case MATCHED_SECOND:
-                best_match->second_tag_match++;
-                break;
-            case MATCHED_BOTH:
-                if (d1==0 && d2==0){
-                    best_match->perfect++;
-                    if (isPf) best_match->pf_perfect++;
-                } else {
-                    best_match->one_mismatch++;
-                    if (isPf) best_match->pf_one_mismatch++;
-                }
-                break;
-            case MATCHED_NEW:
-                if (nmBest1==0 && nmBest2==0){
-                    best_match->perfect++;
-                    if (isPf) best_match->pf_perfect++;
-                } else {
-                    best_match->one_mismatch++;
-                    if (isPf) best_match->pf_one_mismatch++;
-                }
-                break;
-            default:
-                ;
-            }
-        } else {
-            if (nmBest==0) {     // count perfect matches
-                best_match->perfect++;
-                if (isPf) best_match->pf_perfect++;
-            } else if (nmBest==1) {     // count out-by-one matches
-                best_match->one_mismatch++;
-                if (isPf) best_match->pf_one_mismatch++;
-            } 
-        }
     }
 
     return best_match;
 }
 
 /*
+ * Update the metrics information
+ */
+static void updateMetrics(bc_details_t *bcd, char *seq, bool isPf)
+{
+    int n = 99;
+    if (seq) n = countMismatches(bcd->seq, seq);
+
+    bcd->reads++;
+    if (isPf) bcd->pf_reads++;
+
+    if (n==0) {     // count perfect matches
+        bcd->perfect++;
+        if (isPf) bcd->pf_perfect++;
+    }
+
+    if (n==1) {     // count out-by-one matches
+        bcd->one_mismatch++;
+        if (isPf) bcd->pf_one_mismatch++;
+    }
+}
+
+/*
  * find the best match in the barcode (tag) file, and return the corresponding barcode name
- * return NULL if no match found
+ * If no match found, check for tag hopping, and return dummy entry 0
  */
 static char *findBarcodeName(char *barcode, va_t *barcodeArray, va_t *tagHopArray, opts_t *opts, bool isPf, bool isUpdateMetrics)
 {
-    bc_details_t *bcd = findBestMatch(barcode, barcodeArray, tagHopArray, opts, isPf, isUpdateMetrics);
+    bc_details_t *bcd;
+    if (noCalls(barcode) > opts->max_no_calls) {
+        bcd = barcodeArray->entries[0];
+        if (isUpdateMetrics) updateMetrics(bcd, barcode, isPf);
+    } else {
+        bcd = findBestMatch(barcode, barcodeArray, opts);
+        if (isUpdateMetrics) updateMetrics(bcd, barcode, isPf);
+        if ((bcd == barcodeArray->entries[0]) && opts->idx2_len) {
+            bc_details_t *tag_hop = check_tag_hopping(barcode, barcodeArray, tagHopArray, opts);
+            if (isUpdateMetrics && tag_hop) updateMetrics(tag_hop, barcode, isPf);
+        }
+    }
     return bcd->name;
 }
 
 /*
  * make a new tag by appending #<name> to the old tag
  */
-char *makeNewTag(bam1_t *rec, char *tag, char *name)
+static char *makeNewTag(bam1_t *rec, char *tag, char *name)
 {
     char *rg = "";
     uint8_t *p = bam_aux_get(rec,tag);
     if (p) rg = bam_aux2Z(p);
-    char *newtag = malloc(strlen(rg)+1+strlen(name)+1);
+    char *newtag = malloc(strlen(rg) + strlen(name) + 16);
     strcpy(newtag, rg);
     strcat(newtag,"#");
     strcat(newtag, name);
@@ -853,7 +818,7 @@ char *makeNewTag(bam1_t *rec, char *tag, char *name)
 /*
  * Change the read name by adding "#<suffix>"
  */
-void add_suffix(bam1_t *rec, char *suffix)
+static void add_suffix(bam1_t *rec, char *suffix)
 {
     int oldqlen = strlen((char *)rec->data);
     int newlen = rec->l_data + strlen(suffix) + 1;
@@ -877,7 +842,7 @@ void add_suffix(bam1_t *rec, char *suffix)
 /*
  * Add a new @RG line to the header
  */
-void addNewRG(SAM_hdr *sh, char *entry, char *bcname, char *lib, char *sample, char *desc)
+static void addNewRG(SAM_hdr *sh, char *entry, char *bcname, char *lib, char *sample, char *desc)
 {
     char *saveptr;
     char *p = strtok_r(entry,"\t",&saveptr);
@@ -923,7 +888,7 @@ void addNewRG(SAM_hdr *sh, char *entry, char *bcname, char *lib, char *sample, c
  *
  * And don't forget to add a @PG header
  */ 
-void changeHeader(va_t *barcodeArray, bam_hdr_t *h, char *argv_list)
+static void changeHeader(va_t *barcodeArray, bam_hdr_t *h, char *argv_list)
 {
     SAM_hdr *sh = sam_hdr_parse_(h->text, h->l_text);
     char **rgArray = malloc(sizeof(char*) * sh->nrg);
@@ -995,7 +960,7 @@ void changeHeader(va_t *barcodeArray, bam_hdr_t *h, char *argv_list)
 /*
  * Process one template
  */
-int processTemplate(va_t *template, BAMit_t *bam_out, va_t *barcodeArray, va_t *tagHopArray, opts_t *opts)
+static int processTemplate(va_t *template, BAMit_t *bam_out, va_t *barcodeArray, va_t *tagHopArray, opts_t *opts)
 {
     char *name = NULL;
     char *bc_tag = NULL;
@@ -1029,17 +994,24 @@ int processTemplate(va_t *template, BAMit_t *bam_out, va_t *barcodeArray, va_t *
         } else {
             newtag = strdup(bc_tag);
         }
-        if (strlen(bc_tag) > opts->tag_len) {
-            newtag[opts->tag_len] = 0;  // truncate seq to barcode length
+        // truncate to barcode lengths if necessary
+        char *idx1, *idx2;
+        split_index(bc_tag, opts->dual_tag, &idx1, &idx2);
+        if ( (strlen(idx1) > opts->idx1_len) || (strlen(idx2) > opts->idx2_len) ) {
+            if (strlen(idx1) > opts->idx1_len) idx1[opts->idx1_len]=0;
+            if (strlen(idx2) > opts->idx2_len) idx2[opts->idx2_len]=0;
+            strcpy(newtag,idx1); 
+            if (opts->idx2_len) strcat(newtag,INDEX_SEPARATOR);
+            strcat(newtag,idx2);
         }
+        free(idx2); free(idx1);
     }
 
     for (int n=0; n < template->end; n++) {
         bam1_t *rec = template->entries[n];
         if (newtag) {
             name = findBarcodeName(newtag,barcodeArray, tagHopArray, opts,!(rec->core.flag & BAM_FQCFAIL), n==0);
-            if (!name) name = "0";
-            char * newrg = makeNewTag(rec,"RG",name);
+            char *newrg = makeNewTag(rec,"RG",name);
             bam_aux_update_str(rec,"RG",strlen(newrg)+1, newrg);
             free(newrg);
             if (opts->change_read_name) add_suffix(rec, name);

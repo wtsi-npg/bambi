@@ -105,12 +105,12 @@ void setup_test_3(int* argc, char*** argv, char *outputfile, char *metricsfile)
 
 void setup_test_4(int* argc, char*** argv, char *outputfile, char* metricsfile)
 {
-    *argc = 17;
+    *argc = 15;
     *argv = (char**)calloc(sizeof(char*), *argc);
     (*argv)[0] = strdup("bambi");
     (*argv)[1] = strdup("decode");
     (*argv)[2] = strdup("-i");
-    (*argv)[3] = strdup(MKNAME(DATA_DIR,"/decode_4i.sam"));
+    (*argv)[3] = strdup(MKNAME(DATA_DIR,"/decode_4.sam"));
     (*argv)[4] = strdup("-o");
     (*argv)[5] = strdup(outputfile);
     (*argv)[6] = strdup("--output-fmt");
@@ -122,8 +122,6 @@ void setup_test_4(int* argc, char*** argv, char *outputfile, char* metricsfile)
     (*argv)[12] = strdup("--metrics-file");
     (*argv)[13] = strdup(metricsfile);
     (*argv)[14] = strdup("--ignore-pf");
-    (*argv)[15] = strdup("--dual-tag");
-    (*argv)[16] = strdup("9");
 }
 
 void free_argv(int argc, char *argv[])
@@ -241,6 +239,15 @@ int main(int argc, char**argv)
         success++;
     }
 
+    sprintf(cmd,"diff -I ID:bambi %s %s", metricsfile, MKNAME(DATA_DIR,"/out/decode_1.metrics"));
+    result = system(cmd);
+    if (result) {
+        fprintf(stderr, "test 1 failed at metrics file diff\n");
+        failure++;
+    } else {
+        success++;
+    }
+
     // --convert_low_quality option
     int argc_2;
     char** argv_2;
@@ -280,13 +287,13 @@ int main(int argc, char**argv)
     // --dual-tag option
     int argc_4;
     char** argv_4;
-    sprintf(outputfile,"%s/decode_4o.sam",TMPDIR);
+    sprintf(outputfile,"%s/decode_4.sam",TMPDIR);
     snprintf(metricsfile, max_path_length, "%s/decode_4.metrics", TMPDIR);
     setup_test_4(&argc_4, &argv_4, outputfile, metricsfile);
     main_decode(argc_4-1, argv_4+1);
     free_argv(argc_4,argv_4);
 
-    sprintf(cmd,"diff -I ID:bambi %s %s", outputfile, MKNAME(DATA_DIR,"/out/decode_4o_ref.sam"));
+    sprintf(cmd,"diff -I ID:bambi %s %s", outputfile, MKNAME(DATA_DIR,"/out/decode_4.sam"));
     result = system(cmd);
     if (result) {
         fprintf(stderr, "test 4 failed at SAM file diff\n");
@@ -295,7 +302,7 @@ int main(int argc, char**argv)
         success++;
     }
 
-    sprintf(cmd,"diff -I ID:bambi %s %s", metricsfile, MKNAME(DATA_DIR,"/out/decode_4_ref.metrics"));
+    sprintf(cmd,"diff -I ID:bambi %s %s", metricsfile, MKNAME(DATA_DIR,"/out/decode_4.metrics"));
     result = system(cmd);
     if (result) {
         fprintf(stderr, "test 4 failed at metrics file diff\n");
@@ -304,7 +311,7 @@ int main(int argc, char**argv)
         success++;
     }
 
-    sprintf(cmd,"diff -I ID:bambi %s %s", strcat(metricsfile, ".hops"), MKNAME(DATA_DIR,"/out/decode_4_ref.metrics.hops"));
+    sprintf(cmd,"diff -I ID:bambi %s %s", strcat(metricsfile, ".hops"), MKNAME(DATA_DIR,"/out/decode_4.metrics.hops"));
     result = system(cmd);
     if (result) {
         fprintf(stderr, "test 4 failed at tag hops file diff\n");
