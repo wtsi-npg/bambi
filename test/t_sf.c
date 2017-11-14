@@ -116,7 +116,7 @@ int main(int argc, char**argv)
     checkFilterFiles(prog, TMPDIR, filterfile, MKNAME(DATA_DIR,"/out/sf_1.filter"));
 
     // apply filter
-    sprintf(cmd, "%s -a -F %s -o %s %s", prog, filterfile, outputfile, MKNAME(DATA_DIR,"/sf.bam"));
+    sprintf(cmd, "%s -a --verbose -F %s -o %s %s", prog, filterfile, outputfile, MKNAME(DATA_DIR,"/sf.bam"));
     if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
     checkFiles(TMPDIR, outputfile, MKNAME(DATA_DIR,"/out/sf_filtered.bam"), verbose);
 
