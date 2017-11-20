@@ -440,13 +440,14 @@ int writeMetrics(va_t *barcodeArray, va_t *tagHopArray, opts_t *opts)
         bc_details_t *bcd = barcodeArray->entries[n];;
         if (!bcd->tag_hop) {
             total_reads += bcd->reads;
-            if (bcd->tag_hop) total_hop_reads += bcd->reads;
-            else total_original_reads += bcd->reads;
+            total_original_reads += bcd->reads;
             total_pf_reads += bcd->pf_reads;
             total_pf_reads_assigned += bcd->pf_reads;
             if (max_reads < bcd->reads) max_reads = bcd->reads;
             if (max_pf_reads < bcd->pf_reads) max_pf_reads = bcd->pf_reads;
             nReads++;
+        } else {
+            total_hop_reads += bcd->reads;
         }
     }
 
