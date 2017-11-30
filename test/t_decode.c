@@ -140,15 +140,8 @@ void test_noCalls(char *s, int e)
 void test_countMismatches(char *a, char *b, int e)
 {
     int n;
-    if ((n=countMismatches(a,b)) == e) success++;
+    if ((n=countMismatches(a,b,999)) == e) success++;
     else { failure++; fprintf(stderr, "countMismatches(%s,%s) returned %d: expected %d\n", a,b,n,e); }
-}
-
-void test_countNMismatches(char *a, char *b, unsigned int l, int e)
-{
-    int n;
-    if ((n=countNMismatches(a,b,l)) == e) success++;
-    else { failure++; fprintf(stderr, "countNMismatches(%s,%s) returned %d: expected %d\n", a,b,n,e); }
 }
 
 int main(int argc, char**argv)
@@ -201,16 +194,10 @@ int main(int argc, char**argv)
     test_countMismatches("ABC","AXC",1);
     test_countMismatches("ABC","XYZ",3);
     test_countMismatches("ABC","ABC",0);
-    test_countMismatches("ABCNXYZ","ABCxXYZ",0);
+    test_countMismatches("ABCxXYZ","ABCNXYZ",0);
     test_countMismatches("ABCiXYZ","ABCNXYZ",0);
-    test_countMismatches("NBCiXYZ",".BCNXYz",1);
+    test_countMismatches("xBCiXYZ","NBCNXYz",1);
     test_countMismatches("AGCACGTT","AxCACGTTXXXXXX",1);
-
-    // test countNMismatches()
-    test_countNMismatches("ACTGGTAA","ACTGCTAA",4,0);
-    test_countNMismatches("ACTGGTAA","ACTGCTAA",8,1);
-    test_countNMismatches("ACTGGTAA","ACTGGTAA",8,0);
-    test_countNMismatches("ACTGGTAA","ACTGGTAAG",8,0);
 
     //
     // Now test the actual decoding
