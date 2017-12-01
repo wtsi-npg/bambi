@@ -54,7 +54,9 @@ char *strptime(const char *s, const char *format, struct tm *tm);
  * A simple FIFO Queue
  */
 
-#define QUEUELEN 5000
+#define QUEUELEN 50000
+
+static int machineType = -1;    // used to determin BCL file format in openBclFile()
 
 typedef struct {
     pthread_mutex_t mutex;
@@ -1184,33 +1186,40 @@ static bclfile_t *openBclFile(char *basecalls, int lane, int tile, int cycle, in
     char *fname = calloc(1, strlen(basecalls)+128);
 
     // NextSeq format
-    sprintf(fname, "%s/L%03d/%04d.%s", basecalls, lane, cycle, ext);
-    bcl = bclfile_open(fname);
-    if (bcl->errmsg) {
-        bclfile_close(bcl);
-        // NovaSeq format
+    if (machineType==-1 || machineType==1) {
+        sprintf(fname, "%s/L%03d/%04d.%s", basecalls, lane, cycle, ext);
+        bcl = bclfile_open(fname);
+        if (bcl->errmsg) { bclfile_close(bcl); bcl=NULL; }
+        else             { machineType = 1; }
+    }
+
+    // NovaSeq format
+    if (machineType==-1 || machineType==2) {
         sprintf(fname, "%s/L%03d/C%d.1/L%03d_%d.cbcl", basecalls, lane, cycle, lane, surface);
         bcl = bclfile_open(fname);
-        if (bcl->errmsg) {
-            bclfile_close(bcl);
-            // other formats
-            sprintf(fname, "%s/L%03d/C%d.1/s_%d_%04d.%s", basecalls, lane, cycle, lane, tile, ext);
-            bcl = bclfile_open(fname);
-            if (bcl->errmsg) {
-                fprintf(stderr,"Can't open %s\n%s\n", fname, bcl->errmsg);
-                bclfile_close(bcl); bcl = NULL;
-            }
-        }
+        if (bcl->errmsg) { bclfile_close(bcl); bcl = NULL; }
+        else             { machineType = 2; }
+    }
+
+    // other formats
+    if (machineType==-1 || machineType==3) {
+        sprintf(fname, "%s/L%03d/C%d.1/s_%d_%04d.%s", basecalls, lane, cycle, lane, tile, ext);
+        bcl = bclfile_open(fname);
+        if (bcl->errmsg) { bclfile_close(bcl); bcl = NULL; }
+        else             { machineType = 3; }
+    }
+
+    if (!bcl) {
+        fprintf(stderr,"Can't open BCL file %s\n", fname);
+        exit(1);
     }
 
     free(fname);
 
-    if (bcl) {
-        bcl->surface = surface;
-        if (tileIndex) bclfile_seek(bcl, findClusterNumber(tile,tileIndex));
-        if (bcl->file_type == BCL_CBCL) bclfile_seek_tile(bcl, tile);
-//fprintf(stderr,"Opened [%d] %s\n", tile, bcl->filename);
-    }
+    bcl->surface = surface;
+    if (tileIndex) bclfile_seek(bcl, findClusterNumber(tile,tileIndex));
+    if (bcl->file_type == BCL_CBCL) bclfile_seek_tile(bcl, tile);
+
     return bcl;
 }
 
@@ -1577,7 +1586,7 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
         // the -2 is to allow for the main thread and output thread
         while (n_threads >= opts->max_threads-2) {
             if (opts->verbose) fprintf(stderr,"Waiting for thread to become free\n");
-            sleep(60);
+            sleep(1);
         }
 
         if ( (retcode = pthread_create(&tid, NULL, processTile, job_data))) {
@@ -1691,6 +1700,7 @@ static int i2b(opts_t* opts)
 int main_i2b(int argc, char *argv[])
 {
     int ret = 1;
+    machineType = -1;
     opts_t* opts = i2b_parse_args(argc, argv);
     if (opts) ret = i2b(opts);
     i2b_free_opts(opts);
