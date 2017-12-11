@@ -54,23 +54,26 @@ char *strptime(const char *s, const char *format, struct tm *tm);
  * A simple FIFO Queue
  */
 
-#define QUEUELEN 50000
+#define QUEUELEN "50000"
 
 static int machineType = -1;    // used to determin BCL file format in openBclFile()
 
 typedef struct {
     pthread_mutex_t mutex;
-    bam1_t *q[QUEUELEN];
+    bam1_t **q;
     int first, last, count;
+    int qlen;
 } queue_t;
 
 /*
  * Initialise the Queue
  */
-static void q_init(queue_t *q)
+static void q_init(queue_t *q, int qlen)
 {
     pthread_mutex_init(&q->mutex,NULL);
-    q->first = 0; q->last = QUEUELEN-1; q->count = 0;
+    q->first = 0; q->last = qlen-1; q->count = 0;
+    q->q = calloc(qlen, sizeof(bam1_t *));
+    q->qlen = qlen;
 }
 
 /*
@@ -79,7 +82,7 @@ static void q_init(queue_t *q)
  */
 static void _q_push(queue_t *q, bam1_t *rec)
 {
-    q->last = (q->last+1) % QUEUELEN;
+    q->last = (q->last+1) % q->qlen;
     q->q[ q->last ] = rec;
     q->count++;
 }
@@ -92,7 +95,7 @@ static int q_push(queue_t *q, bam1_t *rec1, bam1_t *rec2)
 {
     int retval = 1;
     if (pthread_mutex_lock(&q->mutex)) { fprintf(stderr,"mutex_lock failed\n"); exit(1); }
-    if (q->count+1 < QUEUELEN) {
+    if (q->count+1 < q->qlen) {
         if (rec1) _q_push(q,rec1);
         if (rec2) _q_push(q,rec2);
         retval = 0;
@@ -111,11 +114,20 @@ static bam1_t *q_pop(queue_t *q)
     if (pthread_mutex_lock(&q->mutex)) { fprintf(stderr,"mutex_lock failed\n"); exit(1); }
     if (q->count > 0) {
         rec = q->q[q->first];
-        q->first = (q->first+1) % QUEUELEN;
+        q->first = (q->first+1) % q->qlen;
         q->count--;
     }
     pthread_mutex_unlock(&q->mutex);
     return rec;
+}
+
+/*
+ * destroy the queue
+ */
+static void q_destroy(queue_t *q)
+{
+    if (q) free(q->q);
+    free(q);
 }
 
 /*
@@ -197,6 +209,7 @@ typedef struct {
     char *platform;
     int first_tile;
     int tile_limit;
+    int qlen;
     va_t *barcode_tag;
     va_t *quality_tag;
     ia_t *bc_read;
@@ -408,6 +421,7 @@ static void usage(FILE *write_to)
 "       --final-cycle                   Last cycle for each standard (non-index) read. Comma separated list.\n"
 "       --first-index-cycle             First cycle for each index read. Comma separated list.\n"
 "       --final-index-cycle             Last cycle for each index read. Comma separated list.\n"
+"  -q   --queue-len                     Size of output record queue (number of records) [default " QUEUELEN "]\n"
 "  -S   --no-index-separator            Do NOT separate dual indexes with a '" INDEX_SEPARATOR "' character. Just concatenate instead.\n"
 "  -v   --verbose                       verbose output\n"
 "  -t   --threads                       maximum number of threads to use [default: 8]\n"
@@ -415,6 +429,7 @@ static void usage(FILE *write_to)
 "       --compression-level             [0..9]\n"
 );
 }
+
 /*
  * Takes the command line options and turns them into something we can understand
  */
@@ -422,7 +437,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
 {
     if (argc == 1) { usage(stdout); return NULL; }
 
-    const char* optstring = "vSr:i:b:l:o:t:";
+    const char* optstring = "vSr:i:b:l:o:t:q:";
 
     static const struct option lopts[] = {
         { "verbose",                    0, 0, 'v' },
@@ -433,6 +448,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
         { "output-file",                1, 0, 'o' },
         { "no-index-separator",         0, 0, 'S' },
         { "threads",                    1, 0, 't' },
+        { "queue-len",                  1, 0, 'q' },
         { "generate-secondary-basecalls", 0, 0, 0 },
         { "no-filter",                  0, 0, 0 },
         { "read-group-id",              1, 0, 0 },
@@ -476,6 +492,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
     opts->quality_tag = va_init(5, free);
     opts->separator = true;
     opts->max_threads = DEFAULT_MAX_THREADS;
+    opts->qlen = atoi(QUEUELEN);
 
     int opt;
     int option_index = 0;
@@ -497,6 +514,8 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
         case 'S':   opts->separator = false;
                     break;
         case 't':   opts->max_threads = atoi(optarg);
+                    break;
+        case 'q':   opts->qlen = atoi(optarg);
                     break;
         case 0:     arg = lopts[option_index].name;
                          if (strcmp(arg, "output-fmt") == 0)                   opts->output_fmt = strdup(optarg);
@@ -1551,7 +1570,7 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
     va_t *cycleRange = getCycleRange(opts);;
     va_t *tileIndex = getTileIndex(opts);
 
-    q_init(q);
+    q_init(q, opts->qlen);
 
     if (opts->verbose) {
         for (int n=0; n < cycleRange->end; n++) {
@@ -1628,7 +1647,7 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
     }
 
     free(o_job_data);
-    free(q);
+    q_destroy(q);
     va_free(cycleRange);
     va_free(tileIndex);
     ia_free(tiles);
