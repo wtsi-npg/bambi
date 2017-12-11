@@ -1,12 +1,12 @@
 ##
 # BARCODE_TAG_NAME=BC MAX_MISMATCHES=1 MIN_MISMATCH_DELTA=1 MAX_NO_CALLS=2 
 ##
-# ID:bambi VN:12.34 (htslib 1.6-28-g288bf10) CL:bambi decode -i ./test/data/decode_4.sam -o /tmp/bambi.blB0ak/decode_4.sam --output-fmt sam --input-fmt sam --barcode-file ./test/data/decode_4.tag --metrics-file /tmp/bambi.blB0ak/decode_4.metrics --ignore-pf
+# ID:bambi VN:12.34 (htslib 1.6-28-g288bf10) CL:bambi decode -i ./test/data/decode_4.sam -o /tmp/bambi.iTyZFQ/decode_4.sam --output-fmt sam --input-fmt sam --barcode-file ./test/data/decode_4.tag --metrics-file /tmp/bambi.iTyZFQ/decode_4.metrics --ignore-pf
 
 ##
 BARCODE	BARCODE_NAME	LIBRARY_NAME	SAMPLE_NAME	DESCRIPTION	READS	PERFECT_MATCHES	ONE_MISMATCH_MATCHES	PCT_MATCHES	RATIO_THIS_BARCODE_TO_BEST_BARCODE_PCT
-ACGT-TGCAT	1	19663781	i5_QA7038122	EGAS00001002375: QA assay of barcodes	1	0	1	0.100	0.333
-TATG-TATGT	2	19663782	i5_QA7038122	EGAS00001002375: QA assay of barcodes	3	3	0	0.300	1.000
+ACGT-TGCAT	1	19663781	i5_QA7038122	EGAS00001002375: QA assay of barcodes	1	0	1	0.091	0.333
+TATG-TATGT	2	19663782	i5_QA7038122	EGAS00001002375: QA assay of barcodes	3	3	0	0.273	1.000
 TATG-ACACT	3	19663783	i5_QA7038122	EGAS00001002375: QA assay of barcodes	0	0	0	0.000	0.000
 CATG-TCACT	4	19663784	i5_QA7038122	EGAS00001002375: QA assay of barcodes	0	0	0	0.000	0.000
-NNNN-NNNNN					6	0	0	0.600	2.000
+NNNN-NNNNN					7	0	0	0.636	2.333
