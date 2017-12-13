@@ -492,7 +492,7 @@ int writeMetrics(va_t *barcodeArray, HashTable *tagHopHash, opts_t *opts)
             fprintf(g, "TOTAL_TAG_HOP_READS=%"PRIu64", ", total_hop_reads);
             fprintf(g, "MAX_READ_ON_A_TAG=%"PRIu64", ", max_reads);
             fprintf(g, "TOTAL_TAG_HOPS=%d, ", tagHopArray->end);
-            fprintf(g, "PCT_TAG_HOPS=%f\n", (float)total_hop_reads / total_original_reads * 100);
+            fprintf(g, "PCT_TAG_HOPS=%f\n", (float)total_hop_reads / total_reads * 100);
             print_header(g, opts, false);
 
             for (n=0; n < tagHopArray->end; n++) {
@@ -649,7 +649,6 @@ static bc_details_t *check_tag_hopping(char *barcode, va_t *barcodeArray, HashTa
 {
     bc_details_t *bcd=NULL, *best_match1, *best_match2;
     char *idx1, *idx2;
-    int arrayIndex1, arrayIndex2;
     int nmBest1 = opts->idx1_len + opts->idx2_len + 1;
     int nmBest2 = nmBest1;
 
@@ -666,14 +665,12 @@ static bc_details_t *check_tag_hopping(char *barcode, va_t *barcodeArray, HashTa
         if (nMismatches1 < nmBest1) {
             nmBest1 = nMismatches1;
             best_match1 = bcd;
-            arrayIndex1 = n;
         }
 
         // match the second tag
         if (nMismatches2 < nmBest2) {
             nmBest2 = nMismatches2;
             best_match2 = bcd;
-            arrayIndex2 = n;
         }
     }
 
@@ -701,7 +698,7 @@ static bc_details_t *check_tag_hopping(char *barcode, va_t *barcodeArray, HashTa
             bcd->name = strdup("0");
             bcd->lib = strdup("DUMMY_LIB");
             bcd->sample = strdup("DUMMY_SAMPLE");
-            snprintf(tag_name,40,"TAG_HOP (%d AND %d)", arrayIndex1, arrayIndex2);
+            snprintf(tag_name,40,"TAG_HOP (%s AND %s)", best_match1->name, best_match2->name);
             bcd->desc = strdup(tag_name);  //the combination is registered as a tag hop
             hd.p = bcd;
             HashTableAdd(tagHopHash, key, 0, hd, NULL);
