@@ -34,44 +34,47 @@ int main_i2b(int argc, char *argv[]);
 int main_select(int argc, char *argv[]);
 int main_chrsplit(int argc, char *argv[]);
 int main_read2tags(int argc, char *argv[]);
+int main_spatial_filter(int argc, char *argv[]);
 
 const char *bambi_version()
 {
     return VERSION;
 }
 
-static void vprint_error_core(const char *subcommand, const char *format, va_list args, const char *extra)
+void display(const char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  vfprintf(stderr, fmt, ap);
+  va_end(ap);
+}
+
+void die(const char *fmt, ...)
 {
+    va_list ap;
+    va_start(ap,fmt);
     fflush(stdout);
-    if (subcommand && *subcommand) fprintf(stderr, "bambi %s: ", subcommand);
-    else fprintf(stderr, "bambi: ");
-    vfprintf(stderr, format, args);
-    if (extra) fprintf(stderr, ": %s\n", extra);
-    else fprintf(stderr, "\n");
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
     fflush(stderr);
+    exit(EXIT_FAILURE);
 }
 
-void print_error(const char *subcommand, const char *format, ...)
+void * _s_malloc(size_t size, const char *file, unsigned int line, const char *func)
 {
-    va_list args;
-    va_start(args, format);
-    vprint_error_core(subcommand, format, args, NULL);
-    va_end(args);
+    void *m = malloc(size);
+    if (!m) die("Couldn't allocate %zd bytes in %s at %s line %u: %s\n", size, func, file, line, strerror(errno));
+    return m;
 }
 
-void print_error_errno(const char *subcommand, const char *format, ...)
+void * _s_realloc(void *ptr, size_t size, const char *file, unsigned int line, const char *func)
 {
-    int err = errno;
-    va_list args;
-    va_start(args, format);
-    vprint_error_core(subcommand, format, args, strerror(err));
-    va_end(args);
+    void *m = realloc(ptr, size);
+    if (!m) die("Couldn't reallocate %zd bytes in %s at %s line %u: %s\n", size, func, file, line, strerror(errno));
+    return m;
 }
 
 static void usage(FILE *fp)
 {
-    /* Please improve the grouping */
-
     fprintf(fp,
 "\n"
 "Program: bambi (Tools for alignments in the SAM format)\n"
@@ -85,6 +88,7 @@ static void usage(FILE *fp)
 "     select         select reads by alignment\n"
 "     chrsplit       split reads by chromosome\n"
 "     read2tags      convert reads into tags\n"
+"     spatial_filter spatial filtering\n"
 "\n"
 "bambi <command> for help on a particular command\n"
 "\n");
@@ -110,10 +114,11 @@ int main(int argc, char *argv[])
     else if (strcmp(argv[1], "select") == 0)    ret = main_select(argc-1, argv+1);
     else if (strcmp(argv[1], "chrsplit") == 0)  ret = main_chrsplit(argc-1, argv+1);
     else if (strcmp(argv[1], "read2tags") == 0) ret = main_read2tags(argc-1, argv+1);
+    else if (strcmp(argv[1], "spatial_filter") == 0) ret = main_spatial_filter(argc-1, argv+1);
     else if (strcmp(argv[1], "--version") == 0) {
         printf( "bambi %s\n"
                 "Using htslib %s\n"
-                "Copyright (C) 2016 Genome Research Ltd.\n",
+                "Copyright (C) 2017 Genome Research Ltd.\n",
                 bambi_version(), hts_version());
     }
     else if (strcmp(argv[1], "--version-only") == 0) {
