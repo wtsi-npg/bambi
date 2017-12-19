@@ -26,12 +26,12 @@ src_bambi_SOURCES = src/bambi.c \
                     src/parse.h \
                     src/bamit.c \
                     src/bamit.h \
-            src/rts.c \
-            src/rts.h \
-            src/hash_table.c \
-            src/hash_table.h \
-            src/parse_bam.c \
-            src/parse_bam.h
+                    src/rts.c \
+                    src/rts.h \
+                    src/hash_table.c \
+                    src/hash_table.h \
+                    src/parse_bam.c \
+                    src/parse_bam.h
 
 nobase_include_HEADERS = src/cram/cram_samtools.h src/cram/pooled_alloc.h src/cram/sam_header.h src/cram/string_alloc.h
 src_bambi_CFLAGS = -I/usr/include/libxml2 -I$(top_srcdir)/src
@@ -90,7 +90,7 @@ test_t_bclfile_SOURCES = test/t_bclfile.c src/array.c
 test_t_bclfile_CFLAGS = $(TEST_CFLAGS)
 test_t_bclfile_LDADD = $(TEST_LDADD)
 
-test_t_decode_SOURCES = test/t_decode.c src/array.c src/bamit.c
+test_t_decode_SOURCES = test/t_decode.c src/array.c src/bamit.c src/hash_table.c
 test_t_decode_CFLAGS = $(TEST_CFLAGS)
 test_t_decode_LDADD = $(TEST_LDADD)
 
