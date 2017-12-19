@@ -237,6 +237,8 @@ void setup_bcread_test(int* argc, char*** argv, char *outputfile, bool verbose)
     (*argv)[(*argc)++] = strdup("31");
     (*argv)[(*argc)++] = strdup("--bc-read");
     (*argv)[(*argc)++] = strdup("2");
+    (*argv)[(*argc)++] = strdup("--queue-len");
+    (*argv)[(*argc)++] = strdup("200000");
 
     assert(*argc<100);
 }
