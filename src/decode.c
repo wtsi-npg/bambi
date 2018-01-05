@@ -446,6 +446,7 @@ int writeMetrics(va_t *barcodeArray, HashTable *tagHopHash, opts_t *opts)
         while ( (hi = HashTableIterNext(tagHopHash, iter)) != NULL) {
             va_push(tagHopArray, hi->data.p);
         }
+        HashTableIterDestroy(iter);
         sortTagHops(tagHopArray);
     }
 
@@ -714,7 +715,7 @@ static bc_details_t *check_tag_hopping(char *barcode, va_t *barcodeArray, HashTa
  * find the best match in the barcode (tag) file for a given barcode
  * return the tag, if a match found, else return NULL
  */
-bc_details_t *findBestMatch(char *barcode, va_t *barcodeArray, opts_t *opts)
+bc_details_t *findBestMatch(char *barcode, va_t *barcodeArray, HashTable *barcodeHash, opts_t *opts)
 {
     int bcLen = opts->idx1_len + opts->idx2_len + 1;   // size of barcode sequence in barcode file
     bc_details_t *best_match = NULL;
@@ -723,6 +724,17 @@ bc_details_t *findBestMatch(char *barcode, va_t *barcodeArray, opts_t *opts)
 
     bool matched = false;
 
+    // First look in the barcodeHash for an exact match
+    // This optimisation only applies when mismatch_delta is 1 (the default)
+    if (opts->min_mismatch_delta <= 1) {
+        HashItem *hi;
+        hi = HashTableSearch(barcodeHash, barcode, 0);
+        if (hi) {
+            return hi->data.p;
+        }
+    }
+
+    // No exact match, so do it the hard way...
     for (int n=1; n < barcodeArray->end; n++) {
         bc_details_t *bcd = barcodeArray->entries[n];
 
@@ -771,14 +783,14 @@ static void updateMetrics(bc_details_t *bcd, char *seq, bool isPf)
  * find the best match in the barcode (tag) file, and return the corresponding barcode name
  * If no match found, check for tag hopping, and return dummy entry 0
  */
-static char *findBarcodeName(char *barcode, va_t *barcodeArray, HashTable *tagHopHash, opts_t *opts, bool isPf, bool isUpdateMetrics)
+static char *findBarcodeName(char *barcode, va_t *barcodeArray, HashTable *barcodeHash, HashTable *tagHopHash, opts_t *opts, bool isPf, bool isUpdateMetrics)
 {
     bc_details_t *bcd;
     if (noCalls(barcode) > opts->max_no_calls) {
         bcd = barcodeArray->entries[0];
         if (isUpdateMetrics) updateMetrics(bcd, barcode, isPf);
     } else {
-        bcd = findBestMatch(barcode, barcodeArray, opts);
+        bcd = findBestMatch(barcode, barcodeArray, barcodeHash, opts);
         if (isUpdateMetrics) updateMetrics(bcd, barcode, isPf);
         if ((bcd == barcodeArray->entries[0]) && opts->idx2_len) {
             bc_details_t *tag_hop = check_tag_hopping(barcode, barcodeArray, tagHopHash, opts);
@@ -948,7 +960,7 @@ static void changeHeader(va_t *barcodeArray, bam_hdr_t *h, char *argv_list)
 /*
  * Process one template
  */
-static int processTemplate(va_t *template, BAMit_t *bam_out, va_t *barcodeArray, HashTable *tagHopHash, opts_t *opts)
+static int processTemplate(va_t *template, BAMit_t *bam_out, va_t *barcodeArray, HashTable *barcodeHash, HashTable *tagHopHash, opts_t *opts)
 {
     char *name = NULL;
     char *bc_tag = NULL;
@@ -998,7 +1010,7 @@ static int processTemplate(va_t *template, BAMit_t *bam_out, va_t *barcodeArray,
     for (int n=0; n < template->end; n++) {
         bam1_t *rec = template->entries[n];
         if (newtag) {
-            if (n==0) name = findBarcodeName(newtag,barcodeArray, tagHopHash, opts,!(rec->core.flag & BAM_FQCFAIL), n==0);
+            if (n==0) name = findBarcodeName(newtag,barcodeArray, barcodeHash, tagHopHash, opts,!(rec->core.flag & BAM_FQCFAIL), n==0);
             char *newrg = makeNewTag(rec,"RG",name);
             bam_aux_update_str(rec,"RG",strlen(newrg)+1, newrg);
             free(newrg);
@@ -1046,6 +1058,7 @@ static int decode(opts_t* opts)
     BAMit_t *bam_out = NULL;
     va_t *barcodeArray = NULL;
     HashTable *tagHopHash = NULL;
+    HashTable *barcodeHash = NULL;
 
     while (1) {
         /*
@@ -1053,6 +1066,15 @@ static int decode(opts_t* opts)
          */
         barcodeArray = loadBarcodeFile(opts);
         if (!barcodeArray) break;
+
+        // create hash from barcodeArray
+        barcodeHash = HashTableCreate(0, HASH_DYNAMIC_SIZE | HASH_FUNC_JENKINS);
+        for (int n=0; n < barcodeArray->end; n++) {
+            bc_details_t *bcd = barcodeArray->entries[n];
+            HashData hd;
+            hd.p = bcd;
+            HashTableAdd(barcodeHash, bcd->seq, 0, hd, NULL);
+        }
 
         tagHopHash = HashTableCreate(0, HASH_DYNAMIC_SIZE | HASH_FUNC_JENKINS);
 
@@ -1078,7 +1100,7 @@ static int decode(opts_t* opts)
             bam1_t *rec = BAMit_peek(bam_in);
             char *qname = strdup(bam_get_qname(rec));
             va_t *template = loadTemplate(bam_in, qname);
-            if (processTemplate(template, bam_out, barcodeArray, tagHopHash, opts)) break;
+            if (processTemplate(template, bam_out, barcodeArray, barcodeHash, tagHopHash, opts)) break;
             va_free(template);
             free(qname);
         }
@@ -1098,6 +1120,7 @@ static int decode(opts_t* opts)
 
     // tidy up after us
     va_free(barcodeArray);
+    HashTableDestroy(barcodeHash, 0);
     HashTableDestroy(tagHopHash, 0);
     BAMit_free(bam_in);
     BAMit_free(bam_out);
