@@ -59,6 +59,7 @@ typedef struct {
     tilerec_t *current_tile;
     va_t *tiles;
     char *current_block;
+    char *current_block_ptr;
     uint32_t current_block_size;
     char pfFlag;
     int surface;

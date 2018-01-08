@@ -11,6 +11,7 @@ src_bambi_SOURCES = src/bambi.c \
                     src/select.c \
                     src/chrsplit.c \
                     src/read2tags.c \
+                    src/spatial_filter.c \
                     src/bclfile.c \
                     src/bclfile.h \
                     src/filterfile.c \
@@ -24,11 +25,17 @@ src_bambi_SOURCES = src/bambi.c \
                     src/parse.c \
                     src/parse.h \
                     src/bamit.c \
-                    src/bamit.h
+                    src/bamit.h \
+                    src/rts.c \
+                    src/rts.h \
+                    src/hash_table.c \
+                    src/hash_table.h \
+                    src/parse_bam.c \
+                    src/parse_bam.h
 
 nobase_include_HEADERS = src/cram/cram_samtools.h src/cram/pooled_alloc.h src/cram/sam_header.h src/cram/string_alloc.h
 src_bambi_CFLAGS = -I/usr/include/libxml2 -I$(top_srcdir)/src
-src_bambi_LDADD = $(HTSLIB_HOME)/lib/libhts.a -ldl -lxml2 -lz -llzma -lbz2 -lpthread -lcurl -lcrypto
+src_bambi_LDADD = $(HTSLIB_HOME)/lib/libhts.a -ldl -lxml2 -lz -llzma -lbz2 -lpthread -lcurl -lcrypto -lgd -lm
 
 TESTS = test/t_array \
         test/t_bamit \
@@ -39,7 +46,8 @@ TESTS = test/t_array \
         test/t_filterfile \
         test/t_posfile \
         test/t_i2b \
-        test/t_read2tags
+        test/t_read2tags \
+        test/t_sf
 
 dist_doc_DATA = README.md LICENSE
 
@@ -52,7 +60,8 @@ check_PROGRAMS = test/t_read2tags \
                  test/t_decode \
                  test/t_filterfile \
                  test/t_posfile \
-                 test/t_i2b
+                 test/t_i2b \
+                 test/t_sf
 
 TEST_CFLAGS = -I$(top_srcdir)/src -I/usr/include/libxml2 -DDATA_DIR=$(top_srcdir)/test/data
 TEST_LDADD = $(HTSLIB_HOME)/lib/libhts.a -lz -ldl -lxml2 -lpthread -llzma -lbz2 -lcurl -lcrypto
@@ -81,7 +90,7 @@ test_t_bclfile_SOURCES = test/t_bclfile.c src/array.c
 test_t_bclfile_CFLAGS = $(TEST_CFLAGS)
 test_t_bclfile_LDADD = $(TEST_LDADD)
 
-test_t_decode_SOURCES = test/t_decode.c src/array.c src/bamit.c
+test_t_decode_SOURCES = test/t_decode.c src/array.c src/bamit.c src/hash_table.c
 test_t_decode_CFLAGS = $(TEST_CFLAGS)
 test_t_decode_LDADD = $(TEST_LDADD)
 
@@ -94,6 +103,10 @@ test_t_posfile_CFLAGS = $(TEST_CFLAGS)
 test_t_i2b_SOURCES = test/t_i2b.c src/posfile.c src/bclfile.c src/filterfile.c src/array.c src/parse.c src/hts_addendum.c
 test_t_i2b_CFLAGS = $(TEST_CFLAGS)
 test_t_i2b_LDADD = $(TEST_LDADD)
+
+test_t_sf_SOURCES = test/t_sf.c
+test_t_sf_CFLAGS = $(TEST_CFLAGS)
+#test_t_sf_LDADD = $(TEST_LDADD)
 
 EXTRA_DIST = test/data
 
