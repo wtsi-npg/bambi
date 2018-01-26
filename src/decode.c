@@ -130,8 +130,8 @@ static void print_header(FILE* f, opts_t* opts, bool metrics) {
         fprintf(f, "BARCODE_NAME\t");
         fprintf(f, "LIBRARY_NAME\t");
         fprintf(f, "SAMPLE_NAME\t");
+        fprintf(f, "DESCRIPTION\t");
     }
-    fprintf(f, "DESCRIPTION\t");
     fprintf(f, "READS\t");
     if (!opts->ignore_pf) {
         fprintf(f, "PF_READS\t");
@@ -140,9 +140,11 @@ static void print_header(FILE* f, opts_t* opts, bool metrics) {
     if (!opts->ignore_pf) {
         fprintf(f, "PF_PERFECT_MATCHES\t");
     }
-    fprintf(f, "ONE_MISMATCH_MATCHES\t");
-    if (!opts->ignore_pf) {
-        fprintf(f, "PF_ONE_MISMATCH_MATCHES\t");
+    if (metrics) {
+        fprintf(f, "ONE_MISMATCH_MATCHES\t");
+        if (!opts->ignore_pf) {
+            fprintf(f, "PF_ONE_MISMATCH_MATCHES\t");
+        }
     }
     fprintf(f, "PCT_MATCHES\t");
     fprintf(f, "RATIO_THIS_BARCODE_TO_BEST_BARCODE_PCT");
@@ -373,8 +375,8 @@ void writeMetricsLine(FILE *f, bc_details_t *bcd, opts_t *opts, uint64_t total_r
         fprintf(f, "%s\t", bcd->name);
         fprintf(f, "%s\t", bcd->lib);
         fprintf(f, "%s\t", bcd->sample);
+        fprintf(f, "%s\t", bcd->desc);
     }
-    fprintf(f, "%s\t", bcd->desc);
     fprintf(f, "%"PRIu64"\t", bcd->reads);
     if (!opts->ignore_pf) {
         fprintf(f, "%"PRIu64"\t", bcd->pf_reads); 
@@ -383,9 +385,11 @@ void writeMetricsLine(FILE *f, bc_details_t *bcd, opts_t *opts, uint64_t total_r
     if (!opts->ignore_pf) {
         fprintf(f, "%"PRIu64"\t", bcd->pf_perfect); 
     }
-    fprintf(f, "%"PRIu64"\t", bcd->one_mismatch);
-    if (!opts->ignore_pf) {
-        fprintf(f, "%"PRIu64"\t", bcd->pf_one_mismatch); 
+    if (metrics) {
+        fprintf(f, "%"PRIu64"\t", bcd->one_mismatch);
+        if (!opts->ignore_pf) {
+            fprintf(f, "%"PRIu64"\t", bcd->pf_one_mismatch); 
+        }
     }
     fprintf(f, "%.3f\t", total_reads ? bcd->reads / (double)total_reads : 0 );
     fprintf(f, "%.3f", max_reads ? bcd->reads / (double)max_reads  : 0 );
@@ -478,7 +482,7 @@ int writeMetrics(va_t *barcodeArray, HashTable *tagHopHash, opts_t *opts)
      * Now write tag hop metrics file - if there are any
      */
 
-    if (tagHopArray && tagHopArray->end > 0) {
+    if (opts->idx2_len) {
         char *metrics_hops_name = malloc(strlen(opts->metrics_name)+6);
         strcpy(metrics_hops_name, opts->metrics_name);
         strcat(metrics_hops_name, ".hops");
@@ -486,19 +490,21 @@ int writeMetrics(va_t *barcodeArray, HashTable *tagHopHash, opts_t *opts)
         if (!g) {
             fprintf(stderr,"Can't open tag hops file %s\n", metrics_hops_name);
         } else {
-            sortTagHops(tagHopArray);
             fprintf(g, "##\n");
             fprintf(g, "# TOTAL_READS=%"PRIu64", ", total_reads);
             fprintf(g, "TOTAL_ORIGINAL_TAG_READS=%"PRIu64", ", total_original_reads);
             fprintf(g, "TOTAL_TAG_HOP_READS=%"PRIu64", ", total_hop_reads);
             fprintf(g, "MAX_READ_ON_A_TAG=%"PRIu64", ", max_reads);
-            fprintf(g, "TOTAL_TAG_HOPS=%d, ", tagHopArray->end);
+            fprintf(g, "TOTAL_TAG_HOPS=%d, ", (tagHopArray ? tagHopArray->end : 0));
             fprintf(g, "PCT_TAG_HOPS=%f\n", (float)total_hop_reads / total_reads * 100);
             print_header(g, opts, false);
 
-            for (n=0; n < tagHopArray->end; n++) {
-                bc_details_t *bcd = tagHopArray->entries[n];
-                writeMetricsLine(g, bcd, opts, total_reads, max_reads, total_pf_reads, max_pf_reads, total_pf_reads_assigned, nReads, false);
+            if (tagHopArray) {
+                sortTagHops(tagHopArray);
+                for (n=0; n < tagHopArray->end; n++) {
+                    bc_details_t *bcd = tagHopArray->entries[n];
+                    writeMetricsLine(g, bcd, opts, total_reads, max_reads, total_pf_reads, max_pf_reads, total_pf_reads_assigned, nReads, false);
+                }
             }
             fclose(g);
         }
@@ -691,7 +697,6 @@ static bc_details_t *check_tag_hopping(char *barcode, va_t *barcodeArray, HashTa
         if (hi) {
             bcd = hi->data.p;
         } else {
-            char tag_name[40];
             bcd = calloc(1, sizeof(bc_details_t)); //create a new entry with the two tags
             bcd->idx1 = strdup(best_match1->idx1);            
             bcd->idx2 = strdup(best_match2->idx2);            
@@ -699,8 +704,7 @@ static bc_details_t *check_tag_hopping(char *barcode, va_t *barcodeArray, HashTa
             bcd->name = strdup("0");
             bcd->lib = strdup("DUMMY_LIB");
             bcd->sample = strdup("DUMMY_SAMPLE");
-            snprintf(tag_name,40,"TAG_HOP (%s AND %s)", best_match1->name, best_match2->name);
-            bcd->desc = strdup(tag_name);  //the combination is registered as a tag hop
+            bcd->desc = NULL;
             hd.p = bcd;
             HashTableAdd(tagHopHash, key, 0, hd, NULL);
         }
