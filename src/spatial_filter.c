@@ -1503,8 +1503,8 @@ static void applyFilter(opts_t *s)
 		die("ERROR: failed to open apply status log %s\n", apply_stats_file);
 	}
 
-	if (s->verbose) fprintf(apply_stats_fd, "Processed %8lu traces\n", nreads);
-	if (s->verbose) fprintf(apply_stats_fd, "%s %8lu traces\n", (s->qcfail ? "QC failed" : "Removed"), nfiltered);
+	fprintf(apply_stats_fd, "Processed %8lu traces\n", nreads);
+	fprintf(apply_stats_fd, "%s %8lu traces\n", (s->qcfail ? "QC failed" : "Removed"), nfiltered);
 
 	fclose(apply_stats_fd);
 
