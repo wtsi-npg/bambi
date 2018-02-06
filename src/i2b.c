@@ -1390,7 +1390,7 @@ static bam1_t *makeRecord(int flags, opts_t *opts, char *readName,
 
     int r = bam_construct_seq(&bam, 0, readName, strlen(readName),
                                 flags, -1, 0, 0, 0, 0, (uint32_t*)"", -1, 0, 0, strlen(bases), bases, qualities);
-    if (r) {
+    if (r < 0) {
         fprintf(stderr,"bam_construct_seq() failed\n");
         exit(1);
     }
