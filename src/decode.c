@@ -496,7 +496,7 @@ int writeMetrics(va_t *barcodeArray, HashTable *tagHopHash, opts_t *opts)
             fprintf(g, "TOTAL_TAG_HOP_READS=%"PRIu64", ", total_hop_reads);
             fprintf(g, "MAX_READ_ON_A_TAG=%"PRIu64", ", max_reads);
             fprintf(g, "TOTAL_TAG_HOPS=%d, ", (tagHopArray ? tagHopArray->end : 0));
-            fprintf(g, "PCT_TAG_HOPS=%f\n", (float)total_hop_reads / total_reads * 100);
+            fprintf(g, "PCT_TAG_HOPS=%f\n", total_reads ? ((float)total_hop_reads / total_reads * 100) : 0.00) ;
             print_header(g, opts, false);
 
             if (tagHopArray) {
