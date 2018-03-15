@@ -29,13 +29,15 @@ typedef struct {
     uint32_t version;
     uint32_t total_clusters;
     int current_cluster;
-    int current_pf_cluster;
+    char *buffer;
 } filter_t;
 
 filter_t *filter_open(char *fname);
 int filter_next(filter_t *filter);
 void filter_close(filter_t *filter);
 void filter_seek(filter_t *filter, int cluster);
+void filter_load(filter_t *filter, int64_t n);
+char filter_get(filter_t *filter, int64_t cluster);
 
 #endif
 

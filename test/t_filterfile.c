@@ -75,7 +75,6 @@ int main(int argc, char**argv)
 
     f = filter_next(filter);
     icheckEqual("Next Current cluster", 1, filter->current_cluster);
-    icheckEqual("Next Current PF clusters", 0, filter->current_pf_cluster);
     icheckEqual("First entry", 0, f);
 
     for (n=0; n<318; n++) {
@@ -83,12 +82,10 @@ int main(int argc, char**argv)
     }
     icheckEqual("319 entry", 1, f);
     icheckEqual("319 Current cluster", 319, filter->current_cluster);
-    icheckEqual("319 Current PF clusters", 151, filter->current_pf_cluster);
     icheckEqual("319 Total clusters", 2000, filter->total_clusters);
 
     while (filter_next(filter) != -1);
     icheckEqual("Last Current cluster", 2000, filter->current_cluster);
-    icheckEqual("Last Current PF clusters", 977, filter->current_pf_cluster);
     icheckEqual("Last Total clusters", 2000, filter->total_clusters);
     filter_close(filter);
 

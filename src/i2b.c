@@ -21,6 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <ctype.h>
 #include <htslib/sam.h>
 #include <string.h>
+#include <dirent.h>
 #include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,6 +37,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <pthread.h>
 
 #include <cram/sam_header.h>
+#include <htslib/thread_pool.h>
 
 #include "posfile.h"
 #include "filterfile.h"
@@ -45,8 +47,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define DEFAULT_BARCODE_TAG "BC"
 #define DEFAULT_QUALITY_TAG "QT"
-#define DEFAULT_MAX_THREADS 8
+#define DEFAULT_MAX_THREADS "16"
 #define DEFAULT_MAX_BARCODES 10
+#define QUEUELEN "1000000"
+#define CLUSTERS_PER_THREAD 25000
 
 char *strptime(const char *s, const char *format, struct tm *tm);
 
@@ -54,9 +58,12 @@ char *strptime(const char *s, const char *format, struct tm *tm);
  * A simple FIFO Queue
  */
 
-#define QUEUELEN "50000"
 
-static int machineType = -1;    // used to determin BCL file format in openBclFile()
+static int machineType = MT_UNKNOWN;    // used to determine BCL file format in openBclFile()
+
+/**************
+ Simply Queue implementation
+**************/
 
 typedef struct {
     pthread_mutex_t mutex;
@@ -76,11 +83,20 @@ static void q_init(queue_t *q, int qlen)
     q->qlen = qlen;
 }
 
+static inline void q_lock(queue_t *q)
+{
+    if (pthread_mutex_lock(&q->mutex)) die("q_lock() failed\n");
+}
+static inline void q_unlock(queue_t *q)
+{
+    pthread_mutex_unlock(&q->mutex);
+}
+
 /*
  * quick push single item, no validation
  * No need for locking here, it's already done by q_push()
  */
-static void _q_push(queue_t *q, bam1_t *rec)
+static inline void _q_push(queue_t *q, bam1_t *rec)
 {
     q->last = (q->last+1) % q->qlen;
     q->q[ q->last ] = rec;
@@ -91,16 +107,15 @@ static void _q_push(queue_t *q, bam1_t *rec)
  * We have to push two records atomically to ensure our output BAM is collated.
  * Return 0 on success, 1 if the Queue is already full
  */
-static int q_push(queue_t *q, bam1_t *rec1, bam1_t *rec2)
+static inline int q_push(queue_t *q, bam1_t *rec1)
 {
     int retval = 1;
-    if (pthread_mutex_lock(&q->mutex)) { fprintf(stderr,"mutex_lock failed\n"); exit(1); }
+    q_lock(q);
     if (q->count+1 < q->qlen) {
         if (rec1) _q_push(q,rec1);
-        if (rec2) _q_push(q,rec2);
         retval = 0;
     }
-    pthread_mutex_unlock(&q->mutex);
+    q_unlock(q);
     return retval;
 }
 
@@ -108,16 +123,23 @@ static int q_push(queue_t *q, bam1_t *rec1, bam1_t *rec2)
  * Pop an item from the Queue.
  * Return the item, or NULL if the Queue is empty.
  */
-static bam1_t *q_pop(queue_t *q)
+static inline bam1_t *_q_pop(queue_t *q)
 {
     bam1_t *rec = NULL;
-    if (pthread_mutex_lock(&q->mutex)) { fprintf(stderr,"mutex_lock failed\n"); exit(1); }
     if (q->count > 0) {
         rec = q->q[q->first];
         q->first = (q->first+1) % q->qlen;
         q->count--;
     }
-    pthread_mutex_unlock(&q->mutex);
+    return rec;
+}
+
+static inline bam1_t *q_pop(queue_t *q)
+{
+    bam1_t *rec = NULL;
+    q_lock(q);
+    rec = _q_pop(q);
+    q_unlock(q);
     return rec;
 }
 
@@ -129,6 +151,10 @@ static void q_destroy(queue_t *q)
     if (q) free(q->q);
     free(q);
 }
+
+/***********************
+ End of Queue implementation
+************************/
 
 /*
  * Cycle range array
@@ -151,8 +177,8 @@ static void freeCycleRange(void *ent)
  */
 typedef struct {
     char *readname;
+    int surface;
     va_t *bclFileArray;
-    va_t *sclFileArray;
 } bclReadArrayEntry_t;
 
 typedef struct {
@@ -170,7 +196,6 @@ static void freeBCLReadArray(void *ent)
     bclReadArrayEntry_t *ra = (bclReadArrayEntry_t *)ent;
     free(ra->readname);
     va_free(ra->bclFileArray);
-    va_free(ra->sclFileArray);
     free(ra);
 }
 
@@ -193,11 +218,11 @@ typedef struct {
     char *intensity_dir;
     char *basecalls_dir;
     int lane;
-    int max_threads;
+    int nthreads;
+    int pool_size;
     char *output_file;
     char *output_fmt;
     char compression_level;
-    bool generate_secondary_basecalls;
     bool no_filter;
     char *read_group_id;
     char *sample_alias;
@@ -224,7 +249,7 @@ typedef struct {
 } opts_t;
 
 /*
- * Data to be passed / shared between threads
+ * Data to be passed / shared between tile threads
  */
 typedef struct {
     unsigned int tile;
@@ -237,6 +262,8 @@ typedef struct {
     int *n_threads;
     int *tiles_left;
     pthread_mutex_t *n_threads_mutex;
+    hts_tpool *thread_p;
+    hts_tpool_process *thread_q;
 } job_data_t;
 
 
@@ -274,6 +301,62 @@ void i2b_free_opts(opts_t* opts)
     xmlFreeDoc(opts->parametersConfig);
     xmlFreeDoc(opts->runinfoConfig);
     free(opts);
+}
+
+/*
+ * determineMachineType
+ *
+ * It would appear that the only way to tell the difference between a
+ * MISEQ, HISEQX, NEXTSEQ or NOVASEQ run is to look for the BCL files
+ * and see what extension they use.
+ *
+ */
+MACHINE_TYPE determineMachineType(char *basecalls_dir)
+{
+    MACHINE_TYPE mt = MT_UNKNOWN;
+    struct dirent *dir;
+    char *lane_n = NULL;
+    char *cycle_n = NULL;
+
+    DIR *d = opendir(basecalls_dir);
+    if (!d) die("Can't open basecalls directory: %s\n", basecalls_dir);
+
+    while ( (dir = readdir(d)) != NULL) {
+        // Look for a lane directory
+        if (dir->d_type == DT_DIR && dir->d_name[0] == 'L') {
+            lane_n = malloc(strlen(basecalls_dir)+strlen(dir->d_name)+16);
+            sprintf(lane_n, "%s/%s", basecalls_dir, dir->d_name);
+            DIR *lane_d = opendir(lane_n);
+            if (!lane_d) die("Can't open lane directory: %s\n", dir->d_name);
+            while ( (dir = readdir(lane_d)) != NULL) {
+                // Look for either a Cycle directory, or a .bcl.bgzf file
+                if (dir->d_type == DT_DIR && dir->d_name[0] == 'C') {
+                    cycle_n = malloc(strlen(lane_n)+strlen(dir->d_name)+16);
+                    sprintf(cycle_n, "%s/%s", lane_n, dir->d_name);
+                    DIR *cycle_d = opendir(cycle_n);
+                    if (!cycle_d) die("Can't open cycle directory: %s\n", dir->d_name);
+                    while ( (dir = readdir(cycle_d)) != NULL) {
+                        // Look for bcl, bcl.gz, or cbcl files
+                        if (strstr(dir->d_name, ".bcl.gz")) { mt = MT_HISEQX; break; }
+                        if (strstr(dir->d_name, ".bcl")) { mt = MT_MISEQ; break; }
+                        if (strstr(dir->d_name, ".cbcl")) { mt = MT_NOVASEQ; break; }
+                    }
+                    closedir(cycle_d);
+                    break;
+                }
+                if (strstr(dir->d_name, ".bcl.bgzf")) {
+                    mt = MT_NEXTSEQ;
+                    break;
+                }
+            }
+            closedir(lane_d);
+            break;
+        }
+    }
+    
+    closedir(d);
+    free(lane_n); free(cycle_n);
+    return mt;
 }
 
 /*
@@ -368,11 +451,7 @@ static xmlDocPtr loadXML(char *dir, char *fname, int verbose)
     char *tmp = calloc(1, strlen(dir) + strlen(fname) + 2);
     sprintf(tmp, "%s/%s", dir, fname);
     doc = xmlReadFile(tmp, NULL, XML_PARSE_NOWARNING);
-    if (!doc) {
-        if (verbose) fprintf(stderr, "WARNING: Failed to parse %s/%s\n", dir, fname);
-    } else {
-        if (verbose) fprintf(stderr, "Opened XML file: %s/%s\n", dir, fname);
-    }
+    if (doc && verbose) display("Opened XML file: %s/%s\n", dir, fname);
     free(tmp);
     return doc;
 }
@@ -391,11 +470,10 @@ static void usage(FILE *write_to)
 "  -i   --intensity-dir                 Illumina intensities directory including config xml file, and clocs,\n"
 "                                       locs or pos files under lane directory. Required\n"
 "  -b   --basecalls-dir                 Illumina basecalls directory including config xml file, and filter files,\n"
-"                                       bcl, maybe scl files under lane cycle directory\n"
+"                                       bcl files under lane cycle directory\n"
 "                                       [default: BaseCalls directory under intensities]\n"
 "  -l   --lane                          Lane number. Required\n"
 "  -o   --output-file                   Output file name. May be '-' for stdout. Required\n"
-"       --generate-secondary-basecalls  Including second base call or not [default: false]\n"
 "       --no-filter                     Do not filter cluster [default: false]\n"
 "       --read-group-id                 ID used to link RG header record with RG tag in SAM record. [default: '1']\n"
 "       --library-name                  The name of the sequenced library. [default: 'unknown']\n"
@@ -424,7 +502,7 @@ static void usage(FILE *write_to)
 "  -q   --queue-len                     Size of output record queue (number of records) [default " QUEUELEN "]\n"
 "  -S   --no-index-separator            Do NOT separate dual indexes with a '" INDEX_SEPARATOR "' character. Just concatenate instead.\n"
 "  -v   --verbose                       verbose output\n"
-"  -t   --threads                       maximum number of threads to use [default: 8]\n"
+"  -t   --threads                       maximum number of threads to use [default: " DEFAULT_MAX_THREADS "]\n"
 "       --output-fmt                    [sam/bam/cram] [default: bam]\n"
 "       --compression-level             [0..9]\n"
 );
@@ -437,7 +515,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
 {
     if (argc == 1) { usage(stdout); return NULL; }
 
-    const char* optstring = "vSr:i:b:l:o:t:q:";
+    const char* optstring = "vSr:i:b:l:o:t:q:p:";
 
     static const struct option lopts[] = {
         { "verbose",                    0, 0, 'v' },
@@ -449,7 +527,6 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
         { "no-index-separator",         0, 0, 'S' },
         { "threads",                    1, 0, 't' },
         { "queue-len",                  1, 0, 'q' },
-        { "generate-secondary-basecalls", 0, 0, 0 },
         { "no-filter",                  0, 0, 0 },
         { "read-group-id",              1, 0, 0 },
         { "output-fmt",                 1, 0, 0 },
@@ -491,7 +568,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
     opts->barcode_tag = va_init(5, free);
     opts->quality_tag = va_init(5, free);
     opts->separator = true;
-    opts->max_threads = DEFAULT_MAX_THREADS;
+    opts->nthreads = atoi(DEFAULT_MAX_THREADS);
     opts->qlen = atoi(QUEUELEN);
 
     int opt;
@@ -513,14 +590,13 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
                     break;
         case 'S':   opts->separator = false;
                     break;
-        case 't':   opts->max_threads = atoi(optarg);
+        case 't':   opts->nthreads = atoi(optarg);
                     break;
         case 'q':   opts->qlen = atoi(optarg);
                     break;
         case 0:     arg = lopts[option_index].name;
                          if (strcmp(arg, "output-fmt") == 0)                   opts->output_fmt = strdup(optarg);
                     else if (strcmp(arg, "compression-level") == 0)            opts->compression_level = *optarg;
-                    else if (strcmp(arg, "generate-secondary-basecalls") == 0) opts->generate_secondary_basecalls = true;
                     else if (strcmp(arg, "no-filter") == 0)                    opts->no_filter = true;
                     else if (strcmp(arg, "read-group-id") == 0)                opts->read_group_id = strdup(optarg);
                     else if (strcmp(arg, "library-name") == 0)                 opts->library_name = strdup(optarg);
@@ -587,7 +663,8 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
         usage(stderr); return NULL;
     }
 
-    if (opts->max_threads < 3) opts->max_threads = 3;
+    if (opts->nthreads < 4) opts->nthreads = 4;
+    opts->pool_size = opts->nthreads - 3;
 
     // Set defaults
     if (!opts->read_group_id) opts->read_group_id = strdup("1");
@@ -643,6 +720,16 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
         char *rf = basename(opts->run_folder);
         opts->platform_unit = calloc(1, strlen(rf) + 5);
         sprintf(opts->platform_unit, "%s_%d", rf, opts->lane);
+    }
+
+    // Once we have a basecalls directory, we can find the machine type
+    machineType = determineMachineType(opts->basecalls_dir);
+    if (machineType == MT_UNKNOWN) die("Unable to determine machine type\n");
+    if (opts->verbose) {
+        if (machineType == MT_MISEQ) display("Machine Type: MISEQ\n");
+        if (machineType == MT_HISEQX) display("Machine Type: HISEQX\n");
+        if (machineType == MT_NEXTSEQ) display("Machine Type: NEXTSEQ\n");
+        if (machineType == MT_NOVASEQ) display("Machine Type: NOVASEQ\n");
     }
 
     // read XML files
@@ -833,26 +920,24 @@ static char *getId(opts_t *opts)
 static va_t *getTileIndex(opts_t *opts)
 {
     va_t *tileIndex = NULL;
+    if (machineType != MT_NEXTSEQ) return tileIndex;
     char *fname = calloc(1,strlen(opts->basecalls_dir)+64);
     sprintf(fname, "%s/L%03d/s_%d.bci", opts->basecalls_dir, opts->lane, opts->lane);
     int fhandle = open(fname,O_RDONLY);
-    if (fhandle < 0) {
-        if (opts->verbose) fprintf(stderr,"Can't open BCI file %s\n", fname);
-    } else {
-        tileIndex = va_init(100,free);
-        int n;
-        do {
-            tileIndexEntry_t *ti = calloc(1, sizeof(tileIndexEntry_t));
-            n = read(fhandle, &ti->tile, 4);
-            n = read(fhandle, &ti->clusters, 4);
-            if (n == 4) {
-                va_push(tileIndex,ti);
-            } else {
-                free(ti);
-            }
-        } while (n == 4);
-        close(fhandle);
-    }
+    if (fhandle < 0) die("Can't open BCI file %s\n", fname);
+    tileIndex = va_init(100,free);
+    int n;
+    do {
+        tileIndexEntry_t *ti = calloc(1, sizeof(tileIndexEntry_t));
+        n = read(fhandle, &ti->tile, 4);
+        n = read(fhandle, &ti->clusters, 4);
+        if (n == 4) {
+            va_push(tileIndex,ti);
+        } else {
+            free(ti);
+        }
+    } while (n == 4);
+    close(fhandle);
     free(fname);
     return tileIndex;
 }
@@ -972,6 +1057,9 @@ static ia_t *getTileList(opts_t *opts)
     return tiles;
 }
 
+/*
+ * Get Cycle name : 'read1', 'read2', 'readIndex', 'readIndex2'
+ */
 static char *getCycleName(int readCount, bool isIndex)
 {
     // implements naming convention used by Illumina2Bam
@@ -986,6 +1074,9 @@ static char *getCycleName(int readCount, bool isIndex)
     return cycleName;
 }
 
+/*
+ * Try to get the cycle range from one of the config files
+ */
 static void getCycleRangeFromFile(va_t *cycleRange, xmlDocPtr doc)
 {
     xmlXPathObjectPtr ptr;
@@ -1047,8 +1138,6 @@ static va_t *getCycleRange(opts_t *opts)
     if (va_isEmpty(cycleRange)) getCycleRangeFromFile(cycleRange, opts->runinfoConfig);
     if (va_isEmpty(cycleRange)) getCycleRangeFromFile(cycleRange, opts->parametersConfig);
 
-    // TODO what if there is a barCodeCycleList ?
-
     if (va_isEmpty(cycleRange)) {
         doc = opts->basecallsConfig ? opts->basecallsConfig : opts->intensityConfig;
         ptr = getnodeset(doc, "//RunParameters/Reads");        
@@ -1092,8 +1181,8 @@ static int findClusterNumber(int tile, va_t *tileIndex)
             return clusterNumber;
         clusterNumber += ti->clusters;
     }
-    fprintf(stderr,"findClusterNumber(%d) : no such tile\n", tile);
-    exit(1);
+    die("findClusterNumber(%d) : no such tile\n", tile);
+    return -1;
 }
 
 static int findClusters(int tile, va_t *tileIndex)
@@ -1103,8 +1192,8 @@ static int findClusters(int tile, va_t *tileIndex)
         if (ti->tile == tile)
             return ti->clusters;
     }
-    fprintf(stderr,"findClusters(%d) : no such tile\n", tile);
-    exit(1);
+    die("findClusters(%d) : no such tile\n", tile);
+    return -1;
 }
 
 /*
@@ -1191,90 +1280,130 @@ static filter_t *openFilterFile(int tile, va_t *tileIndex, opts_t *opts)
     if (opts->verbose && !filter->errmsg) fprintf(stderr,"Opened filter file %s\n", fname);
 
     if (tileIndex) filter_seek(filter,findClusterNumber(tile,tileIndex));
+    filter_load(filter, tileIndex ? findClusters(tile, tileIndex) : filter->total_clusters);
 
     free(fname);
     return filter;
 }
 
 /*
- * Open a single bcl (or scl) file
+ * Open a single bcl file
  */
-static bclfile_t *openBclFile(char *basecalls, int lane, int tile, int cycle, int surface, char *ext, va_t *tileIndex)
+static bclfile_t *openBclFile(char *basecalls, int lane, int tile, int cycle, int surface, va_t *tileIndex, filter_t *filter)
 {
     bclfile_t *bcl;
     char *fname = calloc(1, strlen(basecalls)+128);
 
-    // NextSeq format
-    if (machineType==-1 || machineType==1) {
-        sprintf(fname, "%s/L%03d/%04d.%s", basecalls, lane, cycle, ext);
-        bcl = bclfile_open(fname);
-        if (bcl->errmsg) { bclfile_close(bcl); bcl=NULL; }
-        else             { machineType = 1; }
+    if (machineType==MT_NEXTSEQ) {
+        sprintf(fname, "%s/L%03d/%04d.bcl.bgzf", basecalls, lane, cycle);
     }
 
-    // NovaSeq format
-    if (machineType==-1 || machineType==2) {
+    if (machineType==MT_NOVASEQ) {
         sprintf(fname, "%s/L%03d/C%d.1/L%03d_%d.cbcl", basecalls, lane, cycle, lane, surface);
-        bcl = bclfile_open(fname);
-        if (bcl->errmsg) { bclfile_close(bcl); bcl = NULL; }
-        else             { machineType = 2; }
     }
 
-    // other formats
-    if (machineType==-1 || machineType==3) {
-        sprintf(fname, "%s/L%03d/C%d.1/s_%d_%04d.%s", basecalls, lane, cycle, lane, tile, ext);
-        bcl = bclfile_open(fname);
-        if (bcl->errmsg) { bclfile_close(bcl); bcl = NULL; }
-        else             { machineType = 3; }
+    if (machineType==MT_HISEQX) {
+        sprintf(fname, "%s/L%03d/C%d.1/s_%d_%04d.bcl.gz", basecalls, lane, cycle, lane, tile);
     }
 
-    if (!bcl) {
-        fprintf(stderr,"Can't open BCL file %s\n", fname);
-        exit(1);
+    if (machineType==MT_MISEQ) {
+        sprintf(fname, "%s/L%03d/C%d.1/s_%d_%04d.bcl", basecalls, lane, cycle, lane, tile);
+    }
+
+    bcl = bclfile_open(fname, machineType);
+
+    if (bcl->errmsg) {
+        bclfile_close(bcl);
+        bcl = NULL;
+        die("Can't open BCL file %s\n", fname);
     }
 
     free(fname);
 
     bcl->surface = surface;
-    if (tileIndex) bclfile_seek(bcl, findClusterNumber(tile,tileIndex));
-    if (bcl->file_type == BCL_CBCL) bclfile_seek_tile(bcl, tile);
+    if (tileIndex) bclfile_load_tile(bcl, findClusterNumber(tile,tileIndex), filter);
+    if (machineType == MT_NOVASEQ) bclfile_load_tile(bcl, tile, filter);
 
     return bcl;
 }
 
 /*
- * Find and open all the relevant bcl and scl files
- * Looking at the file type is also the only way to find out if we are on a NovaSeq system
+ * Find and open all the relevant bcl files
+ * This is done using the thread pool
  */
-static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, va_t *tileIndex, bool *novaSeq, filter_t *filter)
+
+struct bcl_opt {
+    hts_tpool *p;
+    hts_tpool_process *q;
+    cycleRangeEntry_t *cr;
+    opts_t *opts;
+    int tile;
+    int cycle;
+    int surface;
+    va_t *tileIndex;
+    filter_t *filter;
+};
+
+static void *bcl_thread(void *arg)
 {
+    struct bcl_opt *o = (struct bcl_opt *)arg;
+    bclfile_t *bcl = NULL;
+    if (o->cycle != -1) bcl = openBclFile(o->opts->basecalls_dir, o->opts->lane, o->tile, o->cycle, o->surface, o->tileIndex, o->filter);
+    free(arg);
+    return bcl;
+}
+
+static void *bcl_dispatcher(void *arg) {
+    struct bcl_opt *o = (struct bcl_opt *)arg;
+    cycleRangeEntry_t *cr = o->cr;
+    int surface = o->surface;
+    for (int  cycle = cr->first; cycle <= cr->last; cycle++) {
+        struct bcl_opt *o2 = malloc(sizeof(struct bcl_opt));
+        o2->cr = cr; o2->opts = o->opts; o2->tile = o->tile; o2->cycle = cycle; o2->surface = surface; o2->tileIndex = o->tileIndex;
+        o2->filter = o->filter;
+        if (hts_tpool_dispatch(o->p, o->q, bcl_thread, o2)) die("dispatch() died\n");
+    }
+
+    // Dispatch an sentinel job to mark the end
+    struct bcl_opt *o4 = malloc(sizeof(struct bcl_opt));
+    o4->cycle = -1;
+    if (hts_tpool_dispatch(o->p, o->q, bcl_thread, o4)) die("dispatch() died\n");
+    pthread_exit(NULL);
+}
+
+static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, va_t *tileIndex, filter_t *filter, hts_tpool *p, hts_tpool_process *q)
+{
+    
     va_t *bclReadArray = va_init(5,freeBCLReadArray);
-    *novaSeq = false;
 
     for (int n=0; n < cycleRange->end; n++) {
-        cycleRangeEntry_t *cr = cycleRange->entries[n];
-        bclReadArrayEntry_t *ra = calloc(1, sizeof(bclReadArrayEntry_t));
-        ra->readname = strdup(cr->readname);
-        int nCycles = cr->last - cr->first + 1;
-        ra->bclFileArray = va_init(nCycles, freeBCLFileArray);
-        ra->sclFileArray = va_init(nCycles, freeBCLFileArray);
+        for (int surface = 1; surface <= 2; surface++) {
+            cycleRangeEntry_t *cr = cycleRange->entries[n];
+            bclReadArrayEntry_t *ra = calloc(1, sizeof(bclReadArrayEntry_t));
+            ra->readname = strdup(cr->readname);
+            ra->surface = surface;
+            int nCycles = cr->last - cr->first + 1;
+            ra->bclFileArray = va_init(nCycles, freeBCLFileArray);
 
-        for (int cycle = cr->first; cycle <= cr->last; cycle++) {
-            bclfile_t *bcl = openBclFile(opts->basecalls_dir, opts->lane, tile, cycle, 1, "bcl", tileIndex);
-            if (bcl->file_type == BCL_CBCL) *novaSeq = true;
-            va_push(ra->bclFileArray, bcl);
+            pthread_t tid;
+            struct bcl_opt o = {p, q, cr, opts, tile, 0, surface, tileIndex, filter};
 
-            if (novaSeq) {
-                bclfile_t *bcl = openBclFile(opts->basecalls_dir, opts->lane, tile, cycle, 2, "bcl", tileIndex);
+            // Launch our job creation thread.
+            pthread_create(&tid, NULL, bcl_dispatcher, &o);
+
+            for (;;) {
+                hts_tpool_result *r = hts_tpool_next_result_wait(q);
+                bclfile_t *bcl = (bclfile_t *)hts_tpool_result_data(r);
+                hts_tpool_delete_result(r, 0);
+                if (!bcl) break;
                 va_push(ra->bclFileArray, bcl);
             }
+            va_push(bclReadArray,ra);
 
-            if (opts->generate_secondary_basecalls) {
-                bclfile_t *bcl = openBclFile(opts->basecalls_dir, opts->lane, tile, cycle, 1, "scl", tileIndex);
-                va_push(ra->sclFileArray, bcl);
-            }
+            hts_tpool_process_flush(q);
+            assert(hts_tpool_next_result(q) == NULL);
+            pthread_join(tid, NULL);
         }
-        va_push(bclReadArray,ra);
     }
 
     return bclReadArray;
@@ -1283,9 +1412,11 @@ static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, va_t *tileIn
 /*
  * calculate and return the readname
  */
-static char *getReadName(char *id, int lane, int tile, int x, int y)
+static char *getReadName(char *id, int lane, int tile, posfile_t *posfile, int cluster)
 {
     char *readName = calloc(1, 128);
+    int x = posfile_get_x(posfile,cluster);
+    int y = posfile_get_y(posfile,cluster);
 
     if (id && *id) {
         sprintf(readName, "%s:%d:%d:%d:%d", id, lane, tile, x, y);
@@ -1299,45 +1430,38 @@ static char *getReadName(char *id, int lane, int tile, int x, int y)
     return readName;
 }
 
-static bool readArrayContains(va_t *bclReadArray, char *readname)
+/*
+ * Return the BCL file array for a given readname and surface
+ */
+static va_t *getBclFileArray(va_t *bclReadArray, char *readname, int surface)
 {
     for (int n=0; n < bclReadArray->end; n++) {
         bclReadArrayEntry_t *ra = bclReadArray->entries[n];
-        if (strcmp(readname, ra->readname) == 0) return true;
+        if (strcmp(readname, ra->readname) == 0) {
+            if (surface == ra->surface) return ra->bclFileArray;
+        }
     }
-    return false;
+    return NULL;
 }
 
 /*
- * read all the bases and qualities for a given read name ("read1" or "read2")
+ * read all the bases and qualities for a given bclFileArray (ie readname: 'read1', 'read2', 'readIndex', etc)
+ * Profiling shows that this is where all the time is being taken, so it really needs to be optimal
  */
-static void getBases(va_t *bclReadArray, char *readname, va_t *bases, va_t *qualities, bool convert_qual, bool filtered, int surface)
+static void getBases(va_t *bclFileArray, va_t *bases, va_t *qualities, int convert_qual, int cluster)
 {
     int cycle=0;
-    for (int n=0; n < bclReadArray->end; n++) {
-        bclReadArrayEntry_t *ra = bclReadArray->entries[n];
-        if (strcmp(ra->readname, readname) == 0) {
-            char *b = calloc(1, ra->bclFileArray->end+1);
-            char *q = calloc(1, ra->bclFileArray->end+1);
-            cycle = 0;
-            for (int i=0; i < ra->bclFileArray->end; i++) {
-                bclfile_t *bcl = ra->bclFileArray->entries[i];
-                if (bcl->surface == surface) {    // ignore if this tile is not in this bcl file
-                    if (filtered && (bcl->file_type == BCL_CBCL) && bcl->pfFlag) continue;
-                    if (bclfile_next(bcl) < 0) {
-                        fprintf(stderr,"Failed to read bcl file %s : cluster %d\n", bcl->filename, bcl->current_cluster);
-                        exit(1);
-                    }
-                    b[cycle] = bcl->base;
-                    q[cycle] = bcl->quality + (convert_qual ? 33 : 0);
-                    cycle++;
-                }
-            }
-            va_push(bases,b);
-            va_push(qualities,q);
-            break;
-        }
+    char *b = calloc(1, bclFileArray->end+1);
+    char *q = calloc(1, bclFileArray->end+1);
+    cycle = 0;
+    for (int i=0; i < bclFileArray->end; i++) {
+        bclfile_t *bcl = bclFileArray->entries[i];
+        b[cycle] = bcl->bases[cluster];
+        q[cycle] = bcl->quals[cluster] + convert_qual;
+        cycle++;
     }
+    va_push(bases,b);
+    va_push(qualities,q);
 }
 
 /*
@@ -1383,8 +1507,7 @@ static void update_aux(bam1_t *bam, char *auxtag, char *data, char *tag_separato
  * Create a BAM record
  */
 static bam1_t *makeRecord(int flags, opts_t *opts, char *readName, 
-                 char *bases, char *qualities, va_t *ib, va_t *iq,
-                 samFile *output_file, bam_hdr_t *output_header)
+                 char *bases, char *qualities, va_t *ib, va_t *iq)
 {
     bam1_t *bam = bam_init1();
 
@@ -1419,22 +1542,135 @@ static bam1_t *makeRecord(int flags, opts_t *opts, char *readName,
 static void *output_thread(void *arg)
 {
     int r = 1;
+    bool done = false;
     bam1_t *rec;
-    job_data_t *job_data = (job_data_t *)arg;
+    volatile job_data_t *job_data = (job_data_t *)arg;
     opts_t *opts = job_data->opts;
     
-    if (opts->verbose) fprintf(stderr,"Started output thread\n");
+    if (opts->verbose) display("Started output thread\n");
 
-    while (job_data->q->count || *(job_data->tiles_left)) {
-        rec = q_pop(job_data->q);
-        if (rec) r = sam_write1(job_data->output_file, job_data->output_header, rec);
-        if (r <= 0) {
-            fprintf(stderr, "Problem writing record %s  : r=%d\n", bam_get_qname(rec),r);
-            exit(1);
+    while (!done) {
+        q_lock(job_data->q);
+        done = ((job_data->q->count == 0) && *(job_data->tiles_left) == 0);
+    if (done) break;
+        rec = _q_pop(job_data->q);
+        q_unlock(job_data->q);
+        if (rec) {
+            r = sam_write1(job_data->output_file, job_data->output_header, rec);
+            if (r <= 0) die("Problem writing record %s  : r=%d\n", bam_get_qname(rec),r);
+            bam_destroy1(rec);
         }
-        if (rec) bam_destroy1(rec);
     }
+
+    q_unlock(job_data->q);
+    if (opts->verbose) display("Output thread completed\n");
     return NULL;
+}
+
+/*
+ * This is where we process the BCL files to produce BAM file records
+ */
+struct processRecordResult_struct {
+    bam1_t **records;
+};
+
+struct processRecordJob_struct {
+    int start_cluster;
+    int end_cluster;
+    int tile;
+    filter_t *filter;
+    posfile_t *posfile;
+    char *id;
+    opts_t *opts;
+    va_t *cycleRange;
+    int surface;
+    va_t *bclReadArray;
+    queue_t *queue;
+};
+
+/*
+ * Create one BAM (or two for a paired read) record[s]
+ */
+static bam1_t **processRecord(void *arg, int cluster)
+{
+    struct processRecordJob_struct *job_struct = (struct processRecordJob_struct *)arg;
+
+    va_t *bases, *qualities, *bases_index, *qualities_index, *bases_index2, *qualities_index2;
+    bases = va_init(2,free); qualities = va_init(2,free);
+    bases_index = va_init(5,free); qualities_index = va_init(5,free); bases_index2 = va_init(5,free); qualities_index2 = va_init(5,free);
+    va_t *bclFileArray;
+    bool ispaired = false;
+
+    bool filtered = !filter_get(job_struct->filter,cluster); // actual flag is 'passed', but we want 'filtered out'
+    if (machineType == MT_NOVASEQ) filtered=false;  // NovaSeq is pre-filtered by this point
+
+    struct processRecordResult_struct *res;
+    bam1_t **results = malloc(sizeof(bam1_t *)*2);
+    results[0] = NULL;
+    results[1] = NULL;
+    opts_t *opts = job_struct->opts;
+    int surface = job_struct->surface;
+
+    char *readName = getReadName(job_struct->id, opts->lane, job_struct->tile, job_struct->posfile, cluster);
+
+    bclFileArray = getBclFileArray(job_struct->bclReadArray, "read1", surface);
+    getBases(bclFileArray, bases, qualities, 0, cluster);
+    bclFileArray = getBclFileArray(job_struct->bclReadArray, "read2", surface);
+    if (bclFileArray) {
+        getBases(bclFileArray, bases, qualities, 0, cluster);
+        ispaired = true;
+    }
+
+    // read each index and put into first or second read
+    for (int c=0; c < job_struct->cycleRange->end; c++) {
+        char *cname = getCycleName(c+1,true);
+        va_t *bclFileArray = getBclFileArray(job_struct->bclReadArray,cname,surface);
+        if (bclFileArray) {
+            if (c >= opts->bc_read->end) ia_push(opts->bc_read,1);   // supply a default
+            if (opts->bc_read->entries[c] == 2) getBases(bclFileArray, bases_index2, qualities_index2, 33, cluster);
+            else                                getBases(bclFileArray, bases_index, qualities_index, 33, cluster);
+        }
+        free(cname);
+    }
+
+    if (opts->no_filter || !filtered) {
+        int flags;
+        flags = setFlag(false,filtered,ispaired);
+        results[0] = makeRecord(flags, opts, readName, bases->entries[0], qualities->entries[0], bases_index, qualities_index);
+        if (ispaired) {
+            flags = setFlag(true,filtered,ispaired);
+            results[1] = makeRecord(flags, opts, readName, bases->entries[1], qualities->entries[1], bases_index2, qualities_index2);
+        }
+    }
+
+    va_free(bases); va_free(qualities);
+    va_free(bases_index); va_free(qualities_index);
+    va_free(bases_index2); va_free(qualities_index2);
+    free(readName);
+    return results;
+}
+
+/*
+ * Create a set of 'CLUSTERS_PER_THREAD' records
+ */
+static void *processRecords(void *arg)
+{
+    struct processRecordJob_struct *job_struct = (struct processRecordJob_struct *)arg;
+    struct processRecordResult_struct *res = malloc(sizeof(struct processRecordResult_struct));
+    res->records = malloc(sizeof(bam1_t *) * (job_struct->end_cluster - job_struct->start_cluster + 2) * 2);
+    res->records[0] = NULL;
+    bam1_t **records;
+    int n = 0;
+
+    for (int cluster = job_struct->start_cluster; cluster <= job_struct->end_cluster; cluster++) {
+        records = processRecord(arg, cluster);
+        if (records[0]) res->records[n++] = records[0];
+        if (records[1]) res->records[n++] = records[1];
+        free(records);
+    }
+    free(arg);
+    res->records[n] = NULL;
+    return res;
 }
 
 /*
@@ -1450,20 +1686,19 @@ static void *processTile(void *arg)
     va_t *cycleRange = job_data->cycleRange;
     va_t *tileIndex = job_data->tileIndex;
     opts_t *opts = job_data->opts;
+    queue_t *queue = job_data->q;
 
     va_t *bclReadArray;
     int filtered;
     int max_cluster = 0;
     int nRecords = 0;
-    bool novaSeq;
     int surface = bcl_tile2surface(tile);
 
+    hts_tpool *p = job_data->thread_p;
+    hts_tpool_process *q = job_data->thread_q;;
+    hts_tpool_result *r;
+
     if (opts->verbose) fprintf(stderr,"Processing Tile %d\n", tile);
-    posfile_t *posfile = openPositionFile(tile, tileIndex, opts);
-    if (posfile->errmsg) {
-        fprintf(stderr,"Can't find position file for Tile %d\n%s\n", tile, posfile->errmsg);
-        return NULL;
-    }
 
     filter_t *filter = openFilterFile(tile,tileIndex,opts);
     if (filter->errmsg) {
@@ -1472,61 +1707,73 @@ static void *processTile(void *arg)
     }
 
     if (tileIndex) max_cluster = findClusters(tile, tileIndex);
+    else           max_cluster = filter->total_clusters;
 
-    bclReadArray = openBclFiles(cycleRange, opts, tile, tileIndex, &novaSeq, filter);
+    posfile_t *posfile = openPositionFile(tile, tileIndex, opts);
+    if (posfile->errmsg) {
+        fprintf(stderr,"Can't find position file for Tile %d\n%s\n", tile, posfile->errmsg);
+        return NULL;
+    }
+    posfile_load(posfile, max_cluster, (machineType == MT_NOVASEQ) ? filter : NULL);
+    max_cluster = posfile->size;
+
+    bclReadArray = openBclFiles(cycleRange, opts, tile, tileIndex, filter, p, q);
     char *id = getId(opts);
 
-    bool ispaired = readArrayContains(bclReadArray, "read2");
+    if (opts->verbose) fprintf(stderr,"Tile %d : opened all BCL files\n", tile);
 
     //
     // write all the records
     //
-    while ( (filtered = filter_next(filter)) >= 0) {
-        if (tileIndex && filter->current_cluster > max_cluster) break;
-        filtered = !filtered;   // actual flag is 'passed', but we want 'filtered out'
-        posfile_next(posfile);
+    int cluster = 0;
 
-        char *readName = getReadName(id, opts->lane, tile, posfile->x, posfile->y);
-        va_t *bases, *qualities, *bases_index, *qualities_index, *bases_index2, *qualities_index2;
-        bases = va_init(2,free); qualities = va_init(2,free);
-        bases_index = va_init(5,free); qualities_index = va_init(5,free); bases_index2 = va_init(5,free); qualities_index2 = va_init(5,free);
+    while (cluster < max_cluster) {
 
-        getBases(bclReadArray, "read1", bases, qualities, false, filtered, surface);
-        if (ispaired) getBases(bclReadArray, "read2", bases, qualities, false, filtered, surface);
+        struct processRecordJob_struct *job_struct = malloc(sizeof(struct processRecordJob_struct));
+        job_struct->start_cluster = cluster;
+        job_struct->end_cluster = cluster+CLUSTERS_PER_THREAD-1;
+        if (job_struct->end_cluster >= max_cluster) job_struct->end_cluster = max_cluster - 1;
+        job_struct->tile = tile;
+        job_struct->filter = filter;
+        job_struct->posfile = posfile;
+        job_struct->id = id;
+        job_struct->opts = opts;
+        job_struct->cycleRange = cycleRange;
+        job_struct->surface = surface;
+        job_struct->bclReadArray = bclReadArray;
+        job_struct->queue = queue;
 
-        // read each index and put into first or second read
-        for (int c=0; c < cycleRange->end; c++) {
-            char *cname = getCycleName(c+1,true);
-            if (readArrayContains(bclReadArray,cname)) {
-                if (c >= opts->bc_read->end) ia_push(opts->bc_read,1);   // supply a default
-                if (opts->bc_read->entries[c] == 2) getBases(bclReadArray, cname, bases_index2, qualities_index2, true, filtered, surface);
-                else                                getBases(bclReadArray, cname, bases_index, qualities_index, true, filtered, surface);
+        int blk;
+
+        do {
+            blk = hts_tpool_dispatch2(p, q, processRecords, job_struct, 1);
+
+            // Check for results.
+            if ((r = hts_tpool_next_result(q))) {
+                struct processRecordResult_struct *res = (struct processRecordResult_struct *)hts_tpool_result_data(r);
+                for (int n=0; res->records[n]; n++) {
+                    while ( q_push(queue, res->records[n]) ) {
+                        if (opts->verbose) display("WARNING: Queue full\n");
+                        sleep(1);
+                    }
+                }
+                hts_tpool_delete_result(r, 1);
             }
-            free(cname);
+            if (blk == -1) { fprintf(stderr,"."); sleep(1); }
+
+        } while (blk == -1);
+
+        cluster += CLUSTERS_PER_THREAD;
+    }
+
+    // Wait for any input-queued up jobs or in-progress jobs to complete.
+    hts_tpool_process_flush(q);
+    while ((r = hts_tpool_next_result(q))) {
+        struct processRecordResult_struct *res = (struct processRecordResult_struct *)hts_tpool_result_data(r);
+        for (int n=0; res->records[n]; n++) {
+            while ( q_push(queue, res->records[n]) ) { if (opts->verbose) display("#"); sleep(1); }
         }
-
-        if (opts->no_filter || !filtered) {
-            int flags;
-            bam1_t *rec1 = NULL;
-            bam1_t *rec2 = NULL;
-            flags = setFlag(false,filtered,ispaired);
-            rec1 = makeRecord(flags, opts, readName, bases->entries[0], qualities->entries[0], bases_index, qualities_index, output_file, output_header);
-            if (ispaired) {
-                flags = setFlag(true,filtered,ispaired);
-                rec2 = makeRecord(flags, opts, readName, bases->entries[1], qualities->entries[1], bases_index2, qualities_index2, output_file, output_header);
-            }
-            nRecords++;
-            while ( q_push(job_data->q, rec1, rec2) ) {
-                //if (opts->verbose) fprintf(stderr,"WARNING: Queue full [%d]\n", tile);
-                sleep(1);
-            }
-        }
-
-        va_free(bases); va_free(qualities);
-        va_free(bases_index); va_free(qualities_index);
-        va_free(bases_index2); va_free(qualities_index2);
-        free(readName);
-
+        hts_tpool_delete_result(r, 0);
     }
 
     free(id);
@@ -1534,9 +1781,9 @@ static void *processTile(void *arg)
     filter_close(filter);
     posfile_close(posfile);
 
-    if (opts->verbose) fprintf(stderr,"%d records written\n", nRecords);
+    if (opts->verbose) display("Finished processing Tile: %d\n", tile);
 
-    if (pthread_mutex_lock(job_data->n_threads_mutex)) { fprintf(stderr,"mutex_lock failed\n"); exit(1); }
+    if (pthread_mutex_lock(job_data->n_threads_mutex)) die("mutex_lock failed\n");
     (*job_data->n_threads)--;
     (*job_data->tiles_left)--;
     pthread_mutex_unlock(job_data->n_threads_mutex);
@@ -1559,12 +1806,15 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
     int retcode = 0;
     pthread_t tid, output_tid;
 
+    hts_tpool *thread_p = hts_tpool_init(opts->pool_size);
+    hts_tpool_process *thread_q = hts_tpool_process_init(thread_p, 2 * opts->pool_size, 0);
+
     job_data_t *o_job_data = malloc(sizeof(job_data_t));
-    if (!o_job_data) { fprintf(stderr,"Can't allocate memory for output_thread job_data\n"); exit(1); }
+    if (!o_job_data) { die("Can't allocate memory for output_thread job_data\n"); }
 
     pthread_mutex_init(&n_threads_mutex,NULL);
     queue_t *q = malloc(sizeof(queue_t));
-    if (!q) { fprintf(stderr,"Can't allocate memory for results queue\n"); exit(1); }
+    if (!q) { die("Can't allocate memory for results queue\n"); }
 
     ia_t *tiles = getTileList(opts);
     va_t *cycleRange = getCycleRange(opts);;
@@ -1583,14 +1833,16 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
     }
 
     if (tiles->end == 0) fprintf(stderr, "There are no tiles to process\n");
+    if (pthread_mutex_lock(&n_threads_mutex)) die("mutex_lock failed\n");
     tiles_left = tiles->end;
+    pthread_mutex_unlock(&n_threads_mutex);
 
     /*
      * Loop to create input threads - one for each tile
      */
     for (int n=0; n < tiles->end; n++) {
         job_data_t *job_data = malloc(sizeof(job_data_t));
-        if (!job_data) { fprintf(stderr,"Can't allocate memory for job_data\n"); exit(1); }
+        if (!job_data) { die("Can't allocate memory for job_data\n"); }
         job_data->tile = tiles->entries[n];
         job_data->output_file = output_file;
         job_data->output_header = output_header;
@@ -1601,16 +1853,20 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
         job_data->n_threads = &n_threads;
         job_data->n_threads_mutex = &n_threads_mutex;
         job_data->tiles_left = &tiles_left;
+        job_data->thread_p = thread_p;
+        job_data->thread_q = thread_q;
 
-        // the -2 is to allow for the main thread and output thread
-        while (n_threads >= opts->max_threads-2) {
-            if (opts->verbose) fprintf(stderr,"Waiting for thread to become free\n");
+        // loop until a thread becomes free
+        for (;;) {
+            if (pthread_mutex_lock(job_data->n_threads_mutex)) die("mutex_lock failed\n");
+            if (n_threads < 1) break;
+            pthread_mutex_unlock(job_data->n_threads_mutex);
             sleep(1);
         }
+        pthread_mutex_unlock(job_data->n_threads_mutex);
 
         if ( (retcode = pthread_create(&tid, NULL, processTile, job_data))) {
-            fprintf(stderr,"ABORT: Can't create thread for tile %d: Error code %d\n", job_data->tile, retcode);
-            exit(1);
+            die("ABORT: Can't create thread for tile %d: Error code %d\n", job_data->tile, retcode);
         }
 
         if (pthread_mutex_lock(&n_threads_mutex)) { fprintf(stderr,"mutex_lock failed\n"); exit(1); }
@@ -1631,8 +1887,7 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
             o_job_data->tiles_left = &tiles_left;
 
             if ( (retcode = pthread_create(&output_tid, NULL, output_thread, o_job_data)) ) {
-                fprintf(stderr,"ABORT: Can't create output thread: Error code %d\n", retcode);
-                exit(1);
+                die("ABORT: Can't create output thread: Error code %d\n", retcode);
             }
             output_thread_created = true;
         }
@@ -1642,8 +1897,7 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
      * Wait here until output thread (and therefore all threads) have finished
      */
     if ( (retcode = pthread_join(output_tid,NULL)) ) {
-        fprintf(stderr,"ABORT: Can't join output thread: Error code %d\n", retcode);
-        exit(1);
+        die("ABORT: Can't join output thread: Error code %d\n", retcode);
     }
 
     free(o_job_data);
@@ -1651,6 +1905,10 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
     va_free(cycleRange);
     va_free(tileIndex);
     ia_free(tiles);
+
+    hts_tpool_process_destroy(thread_q);
+    hts_tpool_destroy(thread_p);
+
     return retcode;
 }
 
