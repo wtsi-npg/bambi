@@ -34,7 +34,7 @@ src_bambi_SOURCES = src/bambi.c \
                     src/parse_bam.h
 
 nobase_include_HEADERS = src/cram/cram_samtools.h src/cram/pooled_alloc.h src/cram/sam_header.h src/cram/string_alloc.h
-src_bambi_CFLAGS = -I/usr/include/libxml2 -I$(top_srcdir)/src
+src_bambi_CFLAGS = $(XML_CFLAGS) -I$(top_srcdir)/src
 src_bambi_LDADD = $(HTSLIB_HOME)/lib/libhts.a -ldl -lxml2 -lz -llzma -lbz2 -lpthread -lcurl -lcrypto -lgd -lm
 
 TESTS = test/t_array \
@@ -63,7 +63,7 @@ check_PROGRAMS = test/t_read2tags \
                  test/t_i2b \
                  test/t_sf
 
-TEST_CFLAGS = -I$(top_srcdir)/src -I/usr/include/libxml2 -DDATA_DIR=$(top_srcdir)/test/data
+TEST_CFLAGS = -I$(top_srcdir)/src $(XML_CFLAGS) -DDATA_DIR=$(top_srcdir)/test/data
 TEST_LDADD = $(HTSLIB_HOME)/lib/libhts.a -lz -ldl -lxml2 -lpthread -llzma -lbz2 -lcurl -lcrypto
 
 test_t_read2tags_SOURCES = test/t_read2tags.c src/read2tags.c src/array.c src/bamit.c src/parse.c src/hts_addendum.c
