@@ -1450,16 +1450,16 @@ static va_t *getBclFileArray(va_t *bclReadArray, char *readname, int surface)
  */
 static void getBases(va_t *bclFileArray, va_t *bases, va_t *qualities, int convert_qual, int cluster)
 {
-    int cycle=0;
-    char *b = calloc(1, bclFileArray->end+1);
-    char *q = calloc(1, bclFileArray->end+1);
-    cycle = 0;
-    for (int i=0; i < bclFileArray->end; i++) {
+    int i;
+    int end = bclFileArray->end;
+    char *b = malloc(end+1);
+    char *q = malloc(end+1);
+    for (i=0; i < end; i++) {
         bclfile_t *bcl = bclFileArray->entries[i];
-        b[cycle] = bcl->bases[cluster];
-        q[cycle] = bcl->quals[cluster] + convert_qual;
-        cycle++;
+        b[i] = bcl->bases[cluster];
+        q[i] = bcl->quals[cluster] + convert_qual;
     }
+    b[i]=0; q[i]=0;
     va_push(bases,b);
     va_push(qualities,q);
 }
@@ -1757,7 +1757,8 @@ static void *processTile(void *arg)
                         sleep(1);
                     }
                 }
-                hts_tpool_delete_result(r, 1);
+                free(res->records); free(res);
+                hts_tpool_delete_result(r, 0);
             }
             if (blk == -1) { fprintf(stderr,"."); sleep(1); }
 
@@ -1773,6 +1774,7 @@ static void *processTile(void *arg)
         for (int n=0; res->records[n]; n++) {
             while ( q_push(queue, res->records[n]) ) { if (opts->verbose) display("#"); sleep(1); }
         }
+        free(res->records); free(res);
         hts_tpool_delete_result(r, 0);
     }
 
@@ -1788,6 +1790,7 @@ static void *processTile(void *arg)
     (*job_data->tiles_left)--;
     pthread_mutex_unlock(job_data->n_threads_mutex);
 
+    free(job_data);
     return NULL;
 }
 
