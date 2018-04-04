@@ -34,6 +34,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <libxml/xpath.h>
 #include <time.h>
 #include <fcntl.h>
+#include <errno.h>
 #include <pthread.h>
 
 #include <cram/sam_header.h>
@@ -1353,24 +1354,6 @@ static void *bcl_thread(void *arg)
     return bcl;
 }
 
-static void *bcl_dispatcher(void *arg) {
-    struct bcl_opt *o = (struct bcl_opt *)arg;
-    cycleRangeEntry_t *cr = o->cr;
-    int surface = o->surface;
-    for (int  cycle = cr->first; cycle <= cr->last; cycle++) {
-        struct bcl_opt *o2 = malloc(sizeof(struct bcl_opt));
-        o2->cr = cr; o2->opts = o->opts; o2->tile = o->tile; o2->cycle = cycle; o2->surface = surface; o2->tileIndex = o->tileIndex;
-        o2->filter = o->filter;
-        if (hts_tpool_dispatch(o->p, o->q, bcl_thread, o2)) die("dispatch() died\n");
-    }
-
-    // Dispatch an sentinel job to mark the end
-    struct bcl_opt *o4 = malloc(sizeof(struct bcl_opt));
-    o4->cycle = -1;
-    if (hts_tpool_dispatch(o->p, o->q, bcl_thread, o4)) die("dispatch() died\n");
-    pthread_exit(NULL);
-}
-
 static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, va_t *tileIndex, filter_t *filter, hts_tpool *p, hts_tpool_process *q)
 {
     
@@ -1387,22 +1370,60 @@ static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, va_t *tileIn
 
             pthread_t tid;
             struct bcl_opt o = {p, q, cr, opts, tile, 0, surface, tileIndex, filter};
+            struct bcl_opt *o2 = NULL;
+            hts_tpool_result *r = NULL;
+            int cycle = cr->first;
+            int nonblock = 0;
+            while (cycle <= cr->last) {
+                int blocked = 0;
+                /* Dispatch as many jobs as possible */
+                while (!blocked && cycle <= cr->last) {
+                    if (!o2) o2 = malloc(sizeof(*o2));
+                    if (!o2) die("Out of memory");
+                    memcpy(o2, &o, sizeof(o));
+                    o2->cycle = cycle;
+                    blocked = hts_tpool_dispatch2(p, q, bcl_thread, o2, 1);
+                    if (!blocked) {
+                        o2 = NULL;
+                        cycle++;
+                    } else if (errno != EAGAIN) {
+                        die("Thread pool dispatch failed");
+                    }
+                }
+                /* Grab as many results as available */
+                if (blocked) {
+                    r = hts_tpool_next_result_wait(q);
+                } else {
+                    r = hts_tpool_next_result(q);
+                }
+                while (r != NULL) {
+                    bclfile_t *bcl = (bclfile_t *)hts_tpool_result_data(r);
+                    hts_tpool_delete_result(r, 0);
+                    va_push(ra->bclFileArray, bcl);
+                    r = hts_tpool_next_result(q);
+                }
+            }
+            assert(o2 == NULL && cycle > cr->last && r == NULL);
+            /* Dispatch a sentinel job to mark the end */
+            o2 = calloc(1, sizeof(*o2));
+            if (!o2) { die("Out of memory"); }
+            o2->cycle = -1;
+            if (hts_tpool_dispatch(p, q, bcl_thread, o2) < 0) {
+                die("Thread pool dispatch failed (sentinel)");
+            }
 
-            // Launch our job creation thread.
-            pthread_create(&tid, NULL, bcl_dispatcher, &o);
-
-            for (;;) {
-                hts_tpool_result *r = hts_tpool_next_result_wait(q);
+            /* Read all of the remaining results */
+            while ((r = hts_tpool_next_result_wait(q)) != NULL) {
                 bclfile_t *bcl = (bclfile_t *)hts_tpool_result_data(r);
                 hts_tpool_delete_result(r, 0);
                 if (!bcl) break;
                 va_push(ra->bclFileArray, bcl);
             }
+
             va_push(bclReadArray,ra);
 
             hts_tpool_process_flush(q);
             assert(hts_tpool_next_result(q) == NULL);
-            pthread_join(tid, NULL);
         }
     }
 
