@@ -1786,7 +1786,6 @@ static void *processTile(void *arg)
     if (opts->verbose) display("Finished processing Tile: %d\n", tile);
 
     if (pthread_mutex_lock(job_data->n_threads_mutex)) die("mutex_lock failed\n");
-    (*job_data->n_threads)--;
     (*job_data->tiles_left)--;
     pthread_mutex_unlock(job_data->n_threads_mutex);
 
@@ -1805,7 +1804,6 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
     static int tiles_left = 0;
     static pthread_mutex_t tiles_left_mutex;
 
-    bool output_thread_created = false;
     int retcode = 0;
     pthread_t tid, output_tid;
 
@@ -1841,6 +1839,21 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
     pthread_mutex_unlock(&n_threads_mutex);
 
     /*
+     * Create output thread
+     */
+    o_job_data->tile = 0;
+    o_job_data->output_file = output_file;
+    o_job_data->output_header = output_header;
+    o_job_data->opts = opts;
+    o_job_data->q = q;
+    o_job_data->n_threads = &n_threads;
+    o_job_data->tiles_left = &tiles_left;
+    
+    if ( (retcode = pthread_create(&output_tid, NULL, output_thread, o_job_data)) ) {
+        die("ABORT: Can't create output thread: Error code %d\n", retcode);
+    }
+
+    /*
      * Loop to create input threads - one for each tile
      */
     for (int n=0; n < tiles->end; n++) {
@@ -1859,41 +1872,7 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
         job_data->thread_p = thread_p;
         job_data->thread_q = thread_q;
 
-        // loop until a thread becomes free
-        for (;;) {
-            if (pthread_mutex_lock(job_data->n_threads_mutex)) die("mutex_lock failed\n");
-            if (n_threads < 1) break;
-            pthread_mutex_unlock(job_data->n_threads_mutex);
-            sleep(1);
-        }
-        pthread_mutex_unlock(job_data->n_threads_mutex);
-
-        if ( (retcode = pthread_create(&tid, NULL, processTile, job_data))) {
-            die("ABORT: Can't create thread for tile %d: Error code %d\n", job_data->tile, retcode);
-        }
-
-        if (pthread_mutex_lock(&n_threads_mutex)) { fprintf(stderr,"mutex_lock failed\n"); exit(1); }
-        n_threads++;
-        pthread_mutex_unlock(&n_threads_mutex);
-        pthread_detach(tid);
-
-        if (!output_thread_created) {
-            /*
-             * Create output thread
-             */
-            o_job_data->tile = 0;
-            o_job_data->output_file = output_file;
-            o_job_data->output_header = output_header;
-            o_job_data->opts = opts;
-            o_job_data->q = q;
-            o_job_data->n_threads = &n_threads;
-            o_job_data->tiles_left = &tiles_left;
-
-            if ( (retcode = pthread_create(&output_tid, NULL, output_thread, o_job_data)) ) {
-                die("ABORT: Can't create output thread: Error code %d\n", retcode);
-            }
-            output_thread_created = true;
-        }
+        processTile(job_data);
     }
 
     /*
