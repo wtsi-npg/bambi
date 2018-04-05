@@ -1557,38 +1557,6 @@ static bam1_t *makeRecord(int flags, opts_t *opts, char *readName,
 }
 
 /*
- * Read records from the queue and write them to the BAM file.
- * Exit when the queue is empty AND there are no more input threads running.
- */
-static void *output_thread(void *arg)
-{
-    int r = 1;
-    bool done = false;
-    bam1_t *rec;
-    volatile job_data_t *job_data = (job_data_t *)arg;
-    opts_t *opts = job_data->opts;
-    
-    if (opts->verbose) display("Started output thread\n");
-
-    while (!done) {
-        q_lock(job_data->q);
-        done = ((job_data->q->count == 0) && *(job_data->tiles_left) == 0);
-    if (done) break;
-        rec = _q_pop(job_data->q);
-        q_unlock(job_data->q);
-        if (rec) {
-            r = sam_write1(job_data->output_file, job_data->output_header, rec);
-            if (r <= 0) die("Problem writing record %s  : r=%d\n", bam_get_qname(rec),r);
-            bam_destroy1(rec);
-        }
-    }
-
-    q_unlock(job_data->q);
-    if (opts->verbose) display("Output thread completed\n");
-    return NULL;
-}
-
-/*
  * This is where we process the BCL files to produce BAM file records
  */
 struct processRecordResult_struct {
@@ -1747,53 +1715,66 @@ static void *processTile(void *arg)
     // write all the records
     //
     int cluster = 0;
+    struct processRecordJob_struct *job_struct = NULL;
 
     while (cluster < max_cluster) {
+        int blk = 0;   
+        while (!blk && cluster < max_cluster) {
+            if (!job_struct) job_struct = malloc(sizeof(*job_struct));
+            if (!job_struct) die("Out of memory");
+            job_struct->start_cluster = cluster;
+            job_struct->end_cluster = cluster+CLUSTERS_PER_THREAD-1;
+            if (job_struct->end_cluster >= max_cluster) job_struct->end_cluster = max_cluster - 1;
+            job_struct->tile = tile;
+            job_struct->filter = filter;
+            job_struct->posfile = posfile;
+            job_struct->id = id;
+            job_struct->opts = opts;
+            job_struct->cycleRange = cycleRange;
+            job_struct->surface = surface;
+            job_struct->bclReadArray = bclReadArray;
+            job_struct->queue = queue;
 
-        struct processRecordJob_struct *job_struct = malloc(sizeof(struct processRecordJob_struct));
-        job_struct->start_cluster = cluster;
-        job_struct->end_cluster = cluster+CLUSTERS_PER_THREAD-1;
-        if (job_struct->end_cluster >= max_cluster) job_struct->end_cluster = max_cluster - 1;
-        job_struct->tile = tile;
-        job_struct->filter = filter;
-        job_struct->posfile = posfile;
-        job_struct->id = id;
-        job_struct->opts = opts;
-        job_struct->cycleRange = cycleRange;
-        job_struct->surface = surface;
-        job_struct->bclReadArray = bclReadArray;
-        job_struct->queue = queue;
-
-        int blk;
-
-        do {
             blk = hts_tpool_dispatch2(p, q, processRecords, job_struct, 1);
-
-            // Check for results.
-            if ((r = hts_tpool_next_result(q))) {
-                struct processRecordResult_struct *res = (struct processRecordResult_struct *)hts_tpool_result_data(r);
-                for (int n=0; res->records[n]; n++) {
-                    while ( q_push(queue, res->records[n]) ) {
-                        if (opts->verbose) display("WARNING: Queue full\n");
-                        sleep(1);
-                    }
-                }
-                free(res->records); free(res);
-                hts_tpool_delete_result(r, 0);
+            if (!blk) {
+                cluster += CLUSTERS_PER_THREAD;
+                job_struct = NULL;
+            } else if (errno != EAGAIN) {
+                die("Thread pool dispatch failed");
             }
-            if (blk == -1) { fprintf(stderr,"."); sleep(1); }
+        }
 
-        } while (blk == -1);
-
-        cluster += CLUSTERS_PER_THREAD;
+        // Check for results.
+        if (blk) {
+            r = hts_tpool_next_result_wait(q);
+        } else {
+            r = hts_tpool_next_result(q);
+        }
+        if (r != NULL) {
+            struct processRecordResult_struct *res = (struct processRecordResult_struct *)hts_tpool_result_data(r);
+            for (int n=0; res->records[n]; n++) {
+                int ret = sam_write1(output_file, output_header, res->records[n]);
+                if (ret < 0) {
+                    die("Problem writing record %s  : r=%d\n", bam_get_qname(res->records[n]), ret);
+                }
+                bam_destroy1(res->records[n]);
+            }
+            free(res->records); free(res);
+            hts_tpool_delete_result(r, 0);
+        }
     }
 
     // Wait for any input-queued up jobs or in-progress jobs to complete.
     hts_tpool_process_flush(q);
-    while ((r = hts_tpool_next_result(q))) {
+    while (!hts_tpool_process_empty(q)) {
+        r = hts_tpool_next_result_wait(q);
         struct processRecordResult_struct *res = (struct processRecordResult_struct *)hts_tpool_result_data(r);
         for (int n=0; res->records[n]; n++) {
-            while ( q_push(queue, res->records[n]) ) { if (opts->verbose) display("#"); sleep(1); }
+            int ret = sam_write1(output_file, output_header, res->records[n]);
+            if (ret < 0) {
+                die("Problem writing record %s  : r=%d\n", bam_get_qname(res->records[n]), ret);
+            }
+            bam_destroy1(res->records[n]);
         }
         free(res->records); free(res);
         hts_tpool_delete_result(r, 0);
@@ -1817,7 +1798,7 @@ static void *processTile(void *arg)
 /*
  * process all the tiles and write all the BAM records
  */
-static int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
+static int createBAM(samFile *output_file, bam_hdr_t *output_header, hts_tpool *thread_p, opts_t *opts)
 {
     static int n_threads = 0;
     static pthread_mutex_t n_threads_mutex;
@@ -1828,21 +1809,13 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
     int retcode = 0;
     pthread_t tid, output_tid;
 
-    hts_tpool *thread_p = hts_tpool_init(opts->pool_size);
     hts_tpool_process *thread_q = hts_tpool_process_init(thread_p, 2 * opts->pool_size, 0);
 
-    job_data_t *o_job_data = malloc(sizeof(job_data_t));
-    if (!o_job_data) { die("Can't allocate memory for output_thread job_data\n"); }
-
     pthread_mutex_init(&n_threads_mutex,NULL);
-    queue_t *q = malloc(sizeof(queue_t));
-    if (!q) { die("Can't allocate memory for results queue\n"); }
 
     ia_t *tiles = getTileList(opts);
     va_t *cycleRange = getCycleRange(opts);;
     va_t *tileIndex = getTileIndex(opts);
-
-    q_init(q, opts->qlen);
 
     if (opts->verbose) {
         for (int n=0; n < cycleRange->end; n++) {
@@ -1860,21 +1833,6 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
     pthread_mutex_unlock(&n_threads_mutex);
 
     /*
-     * Create output thread
-     */
-    o_job_data->tile = 0;
-    o_job_data->output_file = output_file;
-    o_job_data->output_header = output_header;
-    o_job_data->opts = opts;
-    o_job_data->q = q;
-    o_job_data->n_threads = &n_threads;
-    o_job_data->tiles_left = &tiles_left;
-    
-    if ( (retcode = pthread_create(&output_tid, NULL, output_thread, o_job_data)) ) {
-        die("ABORT: Can't create output thread: Error code %d\n", retcode);
-    }
-
-    /*
      * Loop to create input threads - one for each tile
      */
     for (int n=0; n < tiles->end; n++) {
@@ -1886,7 +1844,6 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
         job_data->opts = opts;
         job_data->cycleRange = cycleRange;
         job_data->tileIndex = tileIndex;
-        job_data->q = q;
         job_data->n_threads = &n_threads;
         job_data->n_threads_mutex = &n_threads_mutex;
         job_data->tiles_left = &tiles_left;
@@ -1896,21 +1853,11 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
         processTile(job_data);
     }
 
-    /*
-     * Wait here until output thread (and therefore all threads) have finished
-     */
-    if ( (retcode = pthread_join(output_tid,NULL)) ) {
-        die("ABORT: Can't join output thread: Error code %d\n", retcode);
-    }
-
-    free(o_job_data);
-    q_destroy(q);
     va_free(cycleRange);
     va_free(tileIndex);
     ia_free(tiles);
 
     hts_tpool_process_destroy(thread_q);
-    hts_tpool_destroy(thread_p);
 
     return retcode;
 }
@@ -1923,50 +1870,61 @@ static int i2b(opts_t* opts)
     int retcode = 1;
     samFile *output_file = NULL;
     bam_hdr_t *output_header = NULL;
-    htsFormat *out_fmt = NULL;
+    htsFormat out_fmt = { 0 };
+    htsThreadPool hts_threads = { NULL, 0 };
     char mode[] = "wbC";
 
     while (1) {
+
+        /* Set up the thread pool */
+        hts_threads.pool = hts_tpool_init(opts->pool_size);
+        if (!hts_threads.pool) {
+            fprintf(stderr, "Couldn't set up thread pool\n");
+            break;
+        }
 
         /*
          * Open output file and header
          */
         if (opts->output_fmt) {
-            out_fmt = calloc(1,sizeof(htsFormat));
-            if (hts_parse_format(out_fmt, opts->output_fmt) < 0) {
+            if (hts_parse_format(&out_fmt, opts->output_fmt) < 0) {
                 fprintf(stderr,"Unknown output format: %s\n", opts->output_fmt);
                 break;
             }
         }
         mode[2] = opts->compression_level ? opts->compression_level : '\0';
-        output_file = hts_open_format(opts->output_file, mode, out_fmt);
-        free(out_fmt);
+        output_file = hts_open_format(opts->output_file, mode, &out_fmt);
         if (!output_file) {
             fprintf(stderr, "Could not open output file (%s)\n", opts->output_file);
             break;
         }
 
-        output_header = bam_hdr_init();
-        output_header->text = calloc(1,1); output_header->l_text=0;
+        if (hts_set_thread_pool(output_file, &hts_threads) < 0) {
+            fprintf(stderr, "Couldn't set thread pool on output file\n");
+            break;
+        }
 
+        output_header = bam_hdr_init();
         if (!output_header) {
             fprintf(stderr, "Failed to initialise output header\n");
             break;
         }
+        output_header->text = calloc(1,1); output_header->l_text=0;
 
-        if (addHeader(output_file, output_header, opts) != 0) {
+        if (!output_header->text || addHeader(output_file, output_header, opts) != 0) {
             fprintf(stderr,"Failed to write header\n");
             break;
         }
 
-        retcode = createBAM(output_file, output_header, opts);
+        retcode = createBAM(output_file, output_header, hts_threads.pool, opts);
         break;
     }
 
     // tidy up after us
     if (output_header) bam_hdr_destroy(output_header);
     if (output_file) sam_close(output_file);
-    
+    if (hts_threads.pool) hts_tpool_destroy(hts_threads.pool);
+
     return retcode;
 }
 
