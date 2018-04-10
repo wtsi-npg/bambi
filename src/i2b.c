@@ -1247,87 +1247,78 @@ struct bcl_opt {
     int surface;
     va_t *tileIndex;
     filter_t *filter;
+    va_t *bclFileArray;
+    pthread_mutex_t *lock;
 };
 
 static void *bcl_thread(void *arg)
 {
     struct bcl_opt *o = (struct bcl_opt *)arg;
     bclfile_t *bcl = NULL;
-    if (o->cycle != -1) bcl = openBclFile(o->opts->basecalls_dir, o->opts->lane, o->tile, o->cycle, o->surface, o->tileIndex, o->filter);
+    bcl = openBclFile(o->opts->basecalls_dir, o->opts->lane, o->tile, o->cycle, o->surface, o->tileIndex, o->filter);
+    if (pthread_mutex_lock(o->lock) < 0) die("Mutex lock failed\n");
+    assert(o->cycle - o->cr->first < o->bclFileArray->end);
+    assert(o->bclFileArray->entries[o->cycle - o->cr->first] == NULL);
+    o->bclFileArray->entries[o->cycle - o->cr->first] = bcl;
+    if (pthread_mutex_unlock(o->lock) < 0) die("Mutex unlock failed\n");
     free(arg);
-    return bcl;
+    return NULL;
 }
 
-static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, va_t *tileIndex, filter_t *filter, hts_tpool *p, hts_tpool_process *q)
+static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, va_t *tileIndex, filter_t *filter, hts_tpool *p)
 {
-    
-    va_t *bclReadArray = va_init(5,freeBCLReadArray);
+    pthread_mutex_t bcl_array_lock = PTHREAD_MUTEX_INITIALIZER;
+    va_t *bclReadArray = va_init(cycleRange->end * 2, freeBCLReadArray);
+    hts_tpool_process *q = hts_tpool_process_init(p, 2 * opts->pool_size, 1);
+    if (!q) die("hts_tpool_process_init failed\n");
 
     for (int n=0; n < cycleRange->end; n++) {
         for (int surface = 1; surface <= 2; surface++) {
             cycleRangeEntry_t *cr = cycleRange->entries[n];
             bclReadArrayEntry_t *ra = calloc(1, sizeof(bclReadArrayEntry_t));
+            if (!ra) die("Out of memory\n");
             ra->readname = strdup(cr->readname);
+            if (!ra->readname) die("Out of memory\n");
             ra->surface = surface;
             int nCycles = cr->last - cr->first + 1;
             ra->bclFileArray = va_init(nCycles, freeBCLFileArray);
 
-            struct bcl_opt o = {p, q, cr, opts, tile, 0, surface, tileIndex, filter};
-            struct bcl_opt *o2 = NULL;
-            hts_tpool_result *r = NULL;
-            int cycle = cr->first;
-            while (cycle <= cr->last) {
-                int blocked = 0;
-                /* Dispatch as many jobs as possible */
-                while (!blocked && cycle <= cr->last) {
-                    if (!o2) o2 = malloc(sizeof(*o2));
-                    if (!o2) die("Out of memory");
-                    memcpy(o2, &o, sizeof(o));
-                    o2->cycle = cycle;
-                    blocked = hts_tpool_dispatch2(p, q, bcl_thread, o2, 1);
-                    if (!blocked) {
-                        o2 = NULL;
-                        cycle++;
-                    } else if (errno != EAGAIN) {
-                        die("Thread pool dispatch failed");
-                    }
-                }
-                /* Grab as many results as available */
-                if (blocked) {
-                    r = hts_tpool_next_result_wait(q);
-                } else {
-                    r = hts_tpool_next_result(q);
-                }
-                while (r != NULL) {
-                    bclfile_t *bcl = (bclfile_t *)hts_tpool_result_data(r);
-                    hts_tpool_delete_result(r, 0);
-                    va_push(ra->bclFileArray, bcl);
-                    r = hts_tpool_next_result(q);
-                }
-            }
-            assert(o2 == NULL && cycle > cr->last && r == NULL);
-            /* Dispatch a sentinel job to mark the end */
-            o2 = calloc(1, sizeof(*o2));
-            if (!o2) { die("Out of memory"); }
-            o2->cycle = -1;
-            if (hts_tpool_dispatch(p, q, bcl_thread, o2) < 0) {
-                die("Thread pool dispatch failed (sentinel)");
-            }
-
-            /* Read all of the remaining results */
-            while ((r = hts_tpool_next_result_wait(q)) != NULL) {
-                bclfile_t *bcl = (bclfile_t *)hts_tpool_result_data(r);
-                hts_tpool_delete_result(r, 0);
-                if (!bcl) break;
-                va_push(ra->bclFileArray, bcl);
-            }
-
             va_push(bclReadArray,ra);
 
+            struct bcl_opt o = { p, q, cr, opts, tile, 0, surface, tileIndex, filter, ra->bclFileArray, &bcl_array_lock };
+
+            for (int cycle = cr->first; cycle <= cr->last; cycle++) {
+                va_push(ra->bclFileArray, NULL);
+            }
+            for (int cycle = cr->first; cycle <= cr->last; cycle++) {
+                struct bcl_opt *o2 = malloc(sizeof(*o2));
+                if (!o2) die("Out of memory");
+                memcpy(o2, &o, sizeof(o));
+                o2->cycle = cycle;
+                if (hts_tpool_dispatch(p, q, bcl_thread, o2) < 0) {
+                    die("Thread pool dispatch failed");
+                }
+            }
             hts_tpool_process_flush(q);
             assert(hts_tpool_next_result(q) == NULL);
         }
     }
+
+    // Wait for all the jobs to finish
+    hts_tpool_process_flush(q);
+    hts_tpool_process_destroy(q);
+
+    // Check we got all the bcl files
+    int missing = 0;
+    if (pthread_mutex_lock(&bcl_array_lock) < 0) die("Mutex lock failed\n");
+    for (int n=0; n < bclReadArray->end; n++) {
+        bclReadArrayEntry_t *ra = bclReadArray->entries[n];
+        for (int i = 0; i < ra->bclFileArray->end; i++) {
+            if (ra->bclFileArray->entries[i] == NULL) ++missing;
+        }
+    }
+    if (pthread_mutex_unlock(&bcl_array_lock) < 0) die("Mutex unlock failed\n");
+    if (missing > 0) die("Missing %d bcl files\b", missing);
 
     return bclReadArray;
 }
@@ -1803,7 +1794,7 @@ static void processTile(job_data_t *job_data)
     int surface = bcl_tile2surface(tile);
 
     hts_tpool *p = job_data->thread_p;
-    hts_tpool_process *q = job_data->thread_q;;
+    hts_tpool_process *q = job_data->thread_q;
     hts_tpool_result *r;
     char read_name_prefix[128];
     size_t read_name_prefix_len;
@@ -1827,7 +1818,7 @@ static void processTile(job_data_t *job_data)
     posfile_load(posfile, max_cluster, (machineType == MT_NOVASEQ) ? filter : NULL);
     max_cluster = posfile->size;
 
-    bclReadArray = openBclFiles(cycleRange, opts, tile, tileIndex, filter, p, q);
+    bclReadArray = openBclFiles(cycleRange, opts, tile, tileIndex, filter, p);
     char *id = getId(opts);
 
     if (opts->verbose) fprintf(stderr,"Tile %d : opened all BCL files\n", tile);
