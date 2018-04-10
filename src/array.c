@@ -116,8 +116,10 @@ void va_push(va_t *va, void *ent)
 void va_free(va_t *va)
 {
     if (!va) return;
-    for (int n=0; n < va->end; n++) {
-        va->free_entry(va->entries[n]);
+    if (va->free_entry != NULL) {
+        for (int n=0; n < va->end; n++) {
+            va->free_entry(va->entries[n]);
+        }
     }
     free(va->entries);
     free(va);
