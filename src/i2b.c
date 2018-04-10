@@ -55,107 +55,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 char *strptime(const char *s, const char *format, struct tm *tm);
 
-/*
- * A simple FIFO Queue
- */
-
-
 static int machineType = MT_UNKNOWN;    // used to determine BCL file format in openBclFile()
-
-/**************
- Simply Queue implementation
-**************/
-
-typedef struct {
-    pthread_mutex_t mutex;
-    bam1_t **q;
-    int first, last, count;
-    int qlen;
-} queue_t;
-
-/*
- * Initialise the Queue
- */
-static void q_init(queue_t *q, int qlen)
-{
-    pthread_mutex_init(&q->mutex,NULL);
-    q->first = 0; q->last = qlen-1; q->count = 0;
-    q->q = calloc(qlen, sizeof(bam1_t *));
-    q->qlen = qlen;
-}
-
-static inline void q_lock(queue_t *q)
-{
-    if (pthread_mutex_lock(&q->mutex)) die("q_lock() failed\n");
-}
-static inline void q_unlock(queue_t *q)
-{
-    pthread_mutex_unlock(&q->mutex);
-}
-
-/*
- * quick push single item, no validation
- * No need for locking here, it's already done by q_push()
- */
-static inline void _q_push(queue_t *q, bam1_t *rec)
-{
-    q->last = (q->last+1) % q->qlen;
-    q->q[ q->last ] = rec;
-    q->count++;
-}
-/*
- * Push one or two records onto the Queue
- * We have to push two records atomically to ensure our output BAM is collated.
- * Return 0 on success, 1 if the Queue is already full
- */
-static inline int q_push(queue_t *q, bam1_t *rec1)
-{
-    int retval = 1;
-    q_lock(q);
-    if (q->count+1 < q->qlen) {
-        if (rec1) _q_push(q,rec1);
-        retval = 0;
-    }
-    q_unlock(q);
-    return retval;
-}
-
-/*
- * Pop an item from the Queue.
- * Return the item, or NULL if the Queue is empty.
- */
-static inline bam1_t *_q_pop(queue_t *q)
-{
-    bam1_t *rec = NULL;
-    if (q->count > 0) {
-        rec = q->q[q->first];
-        q->first = (q->first+1) % q->qlen;
-        q->count--;
-    }
-    return rec;
-}
-
-static inline bam1_t *q_pop(queue_t *q)
-{
-    bam1_t *rec = NULL;
-    q_lock(q);
-    rec = _q_pop(q);
-    q_unlock(q);
-    return rec;
-}
-
-/*
- * destroy the queue
- */
-static void q_destroy(queue_t *q)
-{
-    if (q) free(q->q);
-    free(q);
-}
-
-/***********************
- End of Queue implementation
-************************/
 
 /*
  * Cycle range array
@@ -252,6 +152,12 @@ typedef struct {
 /*
  * Data to be passed / shared between tile threads
  */
+
+typedef struct {
+    char tag[2];
+    va_t *cycle_names; // char *
+} barcode_spec_t;
+
 typedef struct {
     unsigned int tile;
     samFile *output_file;
@@ -259,10 +165,8 @@ typedef struct {
     opts_t *opts;
     va_t *cycleRange;
     va_t *tileIndex;
-    queue_t *q;
-    int *n_threads;
-    int *tiles_left;
-    pthread_mutex_t *n_threads_mutex;
+    va_t *barcode_calls[2]; // of barcode_spec_t
+    va_t *barcode_quals[2]; // of barcode_spec_t
     hts_tpool *thread_p;
     hts_tpool_process *thread_q;
 } job_data_t;
@@ -1368,12 +1272,10 @@ static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, va_t *tileIn
             int nCycles = cr->last - cr->first + 1;
             ra->bclFileArray = va_init(nCycles, freeBCLFileArray);
 
-            pthread_t tid;
             struct bcl_opt o = {p, q, cr, opts, tile, 0, surface, tileIndex, filter};
             struct bcl_opt *o2 = NULL;
             hts_tpool_result *r = NULL;
             int cycle = cr->first;
-            int nonblock = 0;
             while (cycle <= cr->last) {
                 int blocked = 0;
                 /* Dispatch as many jobs as possible */
@@ -1433,22 +1335,36 @@ static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, va_t *tileIn
 /*
  * calculate and return the readname
  */
-static char *getReadName(char *id, int lane, int tile, posfile_t *posfile, int cluster)
-{
-    char *readName = calloc(1, 128);
+static size_t getReadName(char *readName, size_t sz, char *prefix, posfile_t *posfile, int cluster) {
     int x = posfile_get_x(posfile,cluster);
     int y = posfile_get_y(posfile,cluster);
-
-    if (id && *id) {
-        sprintf(readName, "%s:%d:%d:%d:%d", id, lane, tile, x, y);
-    } else {
-        sprintf(readName, "%d:%d:%d:%d", lane, tile, x, y);
-    }
-    if (strlen(readName) > 127) {
+    size_t l;
+    l = snprintf(readName, sz, "%s:%d:%d", prefix, x, y);
+    if (l >= sz) {
         fprintf(stderr,"readName too long: %s\n", readName);
         exit(1);
     }
-    return readName;
+    return l;
+}
+
+/*
+ * calculate and return the readname prefix for a tile
+ */
+static size_t getReadNamePrefix(char *readName, size_t sz, char *id, int lane, int tile)
+{
+    size_t l;
+
+    if (id && *id) {
+        l = snprintf(readName, sz, "%s:%d:%d", id, lane, tile);
+    } else {
+        l = snprintf(readName, sz, "%d:%d", lane, tile);
+    }
+    
+    if (l >= sz) {
+        fprintf(stderr,"Tile read name prefix too long: %s\n", readName);
+        exit(1);
+    }
+    return l;
 }
 
 /*
@@ -1463,26 +1379,6 @@ static va_t *getBclFileArray(va_t *bclReadArray, char *readname, int surface)
         }
     }
     return NULL;
-}
-
-/*
- * read all the bases and qualities for a given bclFileArray (ie readname: 'read1', 'read2', 'readIndex', etc)
- * Profiling shows that this is where all the time is being taken, so it really needs to be optimal
- */
-static void getBases(va_t *bclFileArray, va_t *bases, va_t *qualities, int convert_qual, int cluster)
-{
-    int i;
-    int end = bclFileArray->end;
-    char *b = malloc(end+1);
-    char *q = malloc(end+1);
-    for (i=0; i < end; i++) {
-        bclfile_t *bcl = bclFileArray->entries[i];
-        b[i] = bcl->bases[cluster];
-        q[i] = bcl->quals[cluster] + convert_qual;
-    }
-    b[i]=0; q[i]=0;
-    va_push(bases,b);
-    va_push(qualities,q);
 }
 
 /*
@@ -1504,63 +1400,17 @@ static int setFlag(bool second, bool filtered, bool ispaired)
 }
 
 /*
- * Add an aux tag to a BAM record, if it doesn't already exist
- * If it does, concatenate it to the existing tag data
- */
-static void update_aux(bam1_t *bam, char *auxtag, char *data, char *tag_separator)
-{
-    uint8_t *s = bam_aux_get(bam,auxtag);
-    if (s) {
-        // update existing tag
-        char *new_data = calloc(1, strlen(bam_aux2Z(s)) + (tag_separator ? strlen(tag_separator) : 0) + strlen(data) + 4);
-        strcpy(new_data, bam_aux2Z(s));
-        if (tag_separator) strcat(new_data, tag_separator);
-        strcat(new_data, data);
-        bam_aux_update_str(bam, auxtag, strlen(new_data)+1, new_data);
-        free(new_data);
-    } else {
-        // add new tag
-        bam_aux_append(bam, auxtag, 'Z', strlen(data)+1, (uint8_t *)data);
-    }
-}
-
-/*
- * Create a BAM record
- */
-static bam1_t *makeRecord(int flags, opts_t *opts, char *readName, 
-                 char *bases, char *qualities, va_t *ib, va_t *iq)
-{
-    bam1_t *bam = bam_init1();
-
-    int r = bam_construct_seq(&bam, 0, readName, strlen(readName),
-                                flags, -1, 0, 0, 0, 0, (uint32_t*)"", -1, 0, 0, strlen(bases), bases, qualities);
-    if (r < 0) {
-        fprintf(stderr,"bam_construct_seq() failed\n");
-        exit(1);
-    }
-
-    // add read group
-    bam_aux_append(bam, "RG", 'Z', strlen(opts->read_group_id)+1, (uint8_t *)opts->read_group_id);
-
-    if (ib->end > opts->barcode_tag->end) {
-        fprintf(stderr, "Not enough barcode tags. This is probably a dual index run with only one barcode tag specified\n");
-        exit(1);
-    }
-
-    // add index tags
-    for (int n=0; n < ib->end; n++) {
-        update_aux(bam, opts->barcode_tag->entries[n], ib->entries[n], opts->separator ? INDEX_SEPARATOR : NULL);
-        update_aux(bam, opts->quality_tag->entries[n], iq->entries[n], opts->separator ? QUAL_SEPARATOR : NULL);
-    }
-
-    return bam;
-}
-
-/*
  * This is where we process the BCL files to produce BAM file records
  */
 struct processRecordResult_struct {
-    bam1_t **records;
+    bam1_t *records;
+    unsigned char *data;
+    size_t num_records;
+};
+
+struct barcode_bcl_files {
+    char tag[2];           // tag type
+    va_t *bcl_files_array; // bcl files with the tag data
 };
 
 struct processRecordJob_struct {
@@ -1570,129 +1420,401 @@ struct processRecordJob_struct {
     filter_t *filter;
     posfile_t *posfile;
     char *id;
+    size_t id_len;
     opts_t *opts;
     va_t *cycleRange;
     int surface;
     va_t *bclReadArray;
-    queue_t *queue;
+    va_t *read_files[2];
+    va_t *bc_calls_tags[2];
+    va_t *bc_quals_tags[2];
+    char *read_name_prefix;
+    size_t read_name_prefix_len;
+    size_t read_group_tag_len;
+    size_t read_len[2];
+    size_t total_bc_tag_len[2];
+    size_t max_data_len[2];
 };
 
+
 /*
- * Create one BAM (or two for a paired read) record[s]
+ * Fill out bam1_core_t values for each record and set the bam1_t data
+ * pointer to a suitable location in data_block.  We also add the read name
+ * here.  The bam struct is calloc'd so we only need to set the non-zero parts.
  */
-static bam1_t **processRecord(void *arg, int cluster)
-{
-    struct processRecordJob_struct *job_struct = (struct processRecordJob_struct *)arg;
+static void bam_fill_core(bam1_t *recs, unsigned char *data_block,
+                          struct processRecordJob_struct *job,
+                          int cluster_from, int cluster_to, int nreads) {
+    int data_len = job->max_data_len[0] + job->max_data_len[1];
+    const unsigned short unmapped_bin = 4680; // From the SAM specification
 
-    va_t *bases, *qualities, *bases_index, *qualities_index, *bases_index2, *qualities_index2;
-    bases = va_init(2,free); qualities = va_init(2,free);
-    bases_index = va_init(5,free); qualities_index = va_init(5,free); bases_index2 = va_init(5,free); qualities_index2 = va_init(5,free);
-    va_t *bclFileArray;
-    bool ispaired = false;
+    for (int cluster = cluster_from, i = 0; cluster < cluster_to; cluster++, i+=nreads) {
+        unsigned char *data[2];
+        size_t name_len, extranul;
+        bool filtered = (machineType == MT_NOVASEQ ? false    // NovaSeq is pre-filtered by this point
+                         : !filter_get(job->filter, cluster)); // actual flag is 'passed', but we want 'filtered out'
 
-    bool filtered = !filter_get(job_struct->filter,cluster); // actual flag is 'passed', but we want 'filtered out'
-    if (machineType == MT_NOVASEQ) filtered=false;  // NovaSeq is pre-filtered by this point
+        data[0] = data_block + (cluster - job->start_cluster) * data_len;
+        data[1] = data[0] + job->max_data_len[0];
 
-    struct processRecordResult_struct *res;
-    bam1_t **results = malloc(sizeof(bam1_t *)*2);
-    results[0] = NULL;
-    results[1] = NULL;
-    opts_t *opts = job_struct->opts;
-    int surface = job_struct->surface;
-
-    char *readName = getReadName(job_struct->id, opts->lane, job_struct->tile, job_struct->posfile, cluster);
-
-    bclFileArray = getBclFileArray(job_struct->bclReadArray, "read1", surface);
-    getBases(bclFileArray, bases, qualities, 0, cluster);
-    bclFileArray = getBclFileArray(job_struct->bclReadArray, "read2", surface);
-    if (bclFileArray) {
-        getBases(bclFileArray, bases, qualities, 0, cluster);
-        ispaired = true;
-    }
-
-    // read each index and put into first or second read
-    for (int c=0; c < job_struct->cycleRange->end; c++) {
-        char *cname = getCycleName(c+1,true);
-        va_t *bclFileArray = getBclFileArray(job_struct->bclReadArray,cname,surface);
-        if (bclFileArray) {
-            if (c >= opts->bc_read->end) ia_push(opts->bc_read,1);   // supply a default
-            if (opts->bc_read->entries[c] == 2) getBases(bclFileArray, bases_index2, qualities_index2, 33, cluster);
-            else                                getBases(bclFileArray, bases_index, qualities_index, 33, cluster);
+        name_len = getReadName((char *) data[0], job->read_name_prefix_len + 28, job->read_name_prefix, job->posfile, cluster) + 1; // +1 for NUL on end
+        extranul = (name_len & 3) != 0 ? (4 - (name_len & 3)) : 0;
+        for (int rd = 0; rd < nreads; rd++) {
+            assert(recs[i + rd].l_data == 0);
+            recs[i + rd].core.tid = recs[i + rd].core.mtid = -1;
+            recs[i + rd].core.pos = recs[i + rd].core.mpos = -1;
+            recs[i + rd].core.bin = unmapped_bin;
+            recs[i + rd].core.l_qname = name_len + extranul;
+            recs[i + rd].core.flag = setFlag(rd > 0, filtered, nreads > 1);
+            recs[i + rd].core.l_extranul = extranul;
+            recs[i + rd].core.l_qseq = job->read_len[rd];
+            recs[i + rd].data = data[rd];
+            recs[i + rd].m_data = job->max_data_len[rd];
+            for (recs[i + rd].l_data = name_len; recs[i + rd].l_data < name_len + extranul; recs[i + rd].l_data++) {
+                recs[i + rd].data[recs[i + rd].l_data] = '\0';
+            }
         }
-        free(cname);
+        // Copy name to read 2
+        if (nreads > 1) memcpy(recs[i+1].data, recs[i].data, name_len);
     }
+}
 
-    if (opts->no_filter || !filtered) {
-        int flags;
-        flags = setFlag(false,filtered,ispaired);
-        results[0] = makeRecord(flags, opts, readName, bases->entries[0], qualities->entries[0], bases_index, qualities_index);
-        if (ispaired) {
-            flags = setFlag(true,filtered,ispaired);
-            results[1] = makeRecord(flags, opts, readName, bases->entries[1], qualities->entries[1], bases_index2, qualities_index2);
+/*
+ * Add base calls and quality values to BAM records.
+ * We do all the clusters for a given cycle in the inner loop so that we
+ * march forward through the bcl bases[] and quals[] arrays.  This should
+ * be more cache-efficicent than the other way round.
+ */
+
+static void bam_add_calls_quals(bam1_t *recs,
+                                struct processRecordJob_struct *job,
+                                int cluster_from, int cluster_to, int nreads) {
+    // Table to convert calls from ASCII to BAM nibble encoding
+    static const char L[256] = {
+        15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,
+        15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,
+        15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,
+        15,15,15,15,15,15,15,15,15,15,15,15,15, 0,15,15,
+        15, 1,14, 2,13,15,15, 4,11,15,15,12,15, 3,15,15,
+        15,15, 5, 6, 8,15, 7, 9,15,10,15,15,15,15,15,15,
+        15, 1,14, 2,13,15,15, 4,11,15,15,12,15, 3,15,15,
+        15,15, 5, 6, 8,15, 7, 9,15,10,15,15,15,15,15,15,
+        15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,
+        15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,
+        15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,
+        15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,
+        15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,
+        15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,
+        15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,
+        15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15
+    };
+    int nrecs = (cluster_to - cluster_from) * nreads;
+
+    // paranoia check - will base calls be in the right place?
+    for (int i = 0; i < nrecs; i++) {
+        assert(bam_get_seq(&recs[i]) == &recs[i].data[recs[i].l_data]);
+    }
+    // paranoia check - enough room for base calls and qualities?
+    for (int rd = 0; rd < nreads; rd++) {
+        for (int i = 0; i < nrecs; i+=nreads) {
+            assert(recs[i].l_data + ((job->read_files[rd]->end + 1) >> 1) + job->read_files[rd]->end <= recs[i].m_data);
         }
     }
 
-    va_free(bases); va_free(qualities);
-    va_free(bases_index); va_free(qualities_index);
-    va_free(bases_index2); va_free(qualities_index2);
-    free(readName);
-    return results;
+    for (int rd = 0; rd < nreads; rd++) {
+        int cycle;
+        // Bam packs two bases into each byte.
+        for (cycle = 0; cycle < job->read_files[rd]->end - 1; cycle+=2) {
+            bclfile_t *bcl1 = job->read_files[rd]->entries[cycle];
+            bclfile_t *bcl2 = job->read_files[rd]->entries[cycle + 1];
+
+            for (int cluster = cluster_from, i = rd; cluster < cluster_to; cluster++, i+=nreads) {
+                unsigned char bases = (L[(unsigned char) bcl1->bases[cluster]] << 4
+                                       | L[(unsigned char) bcl2->bases[cluster]]);
+                recs[i].data[recs[i].l_data++] = bases;
+            }
+        }
+
+        // Deal with odd number of bases
+        if (cycle < job->read_files[rd]->end) {
+            bclfile_t *bcl1 = job->read_files[rd]->entries[cycle];
+            for (int cluster = cluster_from, i = rd; cluster < cluster_to; cluster++, i+=nreads) {
+                unsigned char base = L[(unsigned char) bcl1->bases[cluster]] << 4;
+                recs[i].data[recs[i].l_data++] = base;
+            }
+        }
+
+        // paranoia check - will quality values be in the right place?
+        for (int i = rd; i < nrecs; i+=nreads) {
+            assert(bam_get_qual(&recs[i]) == &recs[i].data[recs[i].l_data]);
+        }
+
+        // Quality values are much simpler
+        for (cycle = 0; cycle < job->read_files[rd]->end; cycle++) {
+            bclfile_t *bcl = job->read_files[rd]->entries[cycle];
+            for (int cluster = cluster_from, i = rd; cluster < cluster_to; cluster++, i+=nreads) {
+                recs[i].data[recs[i].l_data++] = bcl->quals[cluster];
+            }
+        }
+    }
+}
+
+/*
+ * Add read group (RG) tags to all records.
+ */
+
+static void bam_add_rg_tags(bam1_t *recs,
+                            struct processRecordJob_struct *job,
+                            int cluster_from, int cluster_to, int nreads) {
+    int nrecs = (cluster_to - cluster_from) * nreads;
+
+    // Note: job->read_group_tag_len includes the RGZ and trailing NUL
+    for (int i = 0; i < nrecs; i++) {
+        // paranoia check - enough room for RG tag?
+        assert(recs[i].l_data + job->read_group_tag_len <= recs[i].m_data);
+        memcpy(&recs[i].data[recs[i].l_data], "RGZ", 3);
+        memcpy(&recs[i].data[recs[i].l_data + 3], job->opts->read_group_id, job->read_group_tag_len - 3);
+        recs[i].l_data += job->read_group_tag_len;
+    }
+}
+
+/*
+ * Common barcode tag writing code
+ */
+static void bam_write_barcode_tag(bam1_t *recs, struct barcode_bcl_files *bcls,
+                                  int cluster_from, int cluster_to, int rd,
+                                  int nrecs, int nreads, bool calls_not_quals,
+                                  const char *separator, size_t separator_len) {
+     // Add tag type and 'Z'
+    for (int i = rd; i < nrecs; i += nreads) {
+        memcpy(&recs[i].data[recs[i].l_data], bcls->tag, 2);
+        recs[i].data[recs[i].l_data + 2] = 'Z';
+        recs[i].l_data += 3;
+    }
+
+    // Barcode is one or more segments, optionally joined by separators
+    for (int part = 0; part < bcls->bcl_files_array->end; part++) {
+        va_t *bcl_files = bcls->bcl_files_array->entries[part];
+        if (part > 0 && separator_len > 0) {
+            for (int i = rd; i < nrecs; i += nreads) {
+                memcpy(&recs[i].data[recs[i].l_data], separator, separator_len);
+                recs[i].l_data += separator_len;
+            }
+        }
+        if (calls_not_quals) {
+            // Basecalls payload
+            for (int cycle = 0; cycle < bcl_files->end; cycle++) {
+                bclfile_t *bcl = bcl_files->entries[cycle];
+                for (int cluster = cluster_from, i = rd; cluster < cluster_to; cluster++, i+=nreads) {
+                    recs[i].data[recs[i].l_data++] = bcl->bases[cluster];
+                }
+            }
+        } else {
+            // Quality values payload
+            for (int cycle = 0; cycle < bcl_files->end; cycle++) {
+                bclfile_t *bcl = bcl_files->entries[cycle];
+                for (int cluster = cluster_from, i = rd; cluster < cluster_to; cluster++, i+=nreads) {
+                    recs[i].data[recs[i].l_data++] = bcl->quals[cluster] + 33;
+                }
+            }
+        }
+    }
+    // Add a NUL terminator
+    for (int i = rd; i < nrecs; i += nreads) {
+        recs[i].data[recs[i].l_data++] = '\0';
+    }
+}
+
+/*
+ * Add barcode tags.
+ */
+
+static void bam_add_barcode_tags(bam1_t *recs,
+                                 struct processRecordJob_struct *job,
+                                 int cluster_from, int cluster_to, int nreads) {
+    size_t index_separator_len = strlen(INDEX_SEPARATOR);
+    size_t qual_separator_len = strlen(QUAL_SEPARATOR);
+    int nrecs = (cluster_to - cluster_from) * nreads;
+
+    // paranoia check - enough room for barcode tags?
+    for (int rd = 0; rd < nreads; rd++) {
+        for (int i = rd; i < nrecs; i += nreads) {
+            assert(recs[i].l_data + job->total_bc_tag_len[rd] <= recs[i].m_data);
+        }
+    }
+
+    for (int rd = 0; rd < nreads; rd++) {
+        // Alternate between calls and qualities.
+        // It's a bit more complicated but puts the two closer together in the
+        // output, and better matches what older versions of i2b produced.
+        int bc_tag = 0;
+        int bq_tag = 0;
+
+        while (bc_tag < job->bc_calls_tags[rd]->end || bq_tag < job->bc_quals_tags[rd]->end) {
+            if (bc_tag < job->bc_calls_tags[rd]->end) {
+                // Do the calls
+                bam_write_barcode_tag(recs,
+                                      job->bc_calls_tags[rd]->entries[bc_tag],
+                                      cluster_from, cluster_to,
+                                      rd, nrecs, nreads, true,
+                                      INDEX_SEPARATOR,
+                                      job->opts->separator ? index_separator_len : 0);
+                bc_tag++;
+            }
+
+            if (bq_tag < job->bc_quals_tags[rd]->end) {
+                // Do the quality values
+                bam_write_barcode_tag(recs,
+                                      job->bc_quals_tags[rd]->entries[bq_tag],
+                                      cluster_from, cluster_to,
+                                      rd, nrecs, nreads, false,
+                                      QUAL_SEPARATOR,
+                                      job->opts->separator ? qual_separator_len : 0);
+                bq_tag++;
+            }
+        }
+    }
+}
+
+/*
+ * Build BAM records for a group of clusters.
+ */
+
+static void processRecordGroup(struct processRecordJob_struct *job, int cluster_from, int cluster_to, struct processRecordResult_struct *res) {
+    int nreads = job->read_files[1] != NULL ? 2 : 1;
+    int nrecs = (cluster_to - cluster_from) * nreads;
+    bam1_t *recs = &res->records[(cluster_from - job->start_cluster) * nreads];
+    int i;
+
+    // Read names and core bam struct.  Also set up data pointers.
+    bam_fill_core(recs, res->data, job, cluster_from, cluster_to, nreads);
+
+    // Base calls and quality values
+    bam_add_calls_quals(recs, job, cluster_from, cluster_to, nreads);
+
+    // paranoia check - will aux tags be in the right place?
+    for (i = 0; i < nrecs; i++) {
+        assert(bam_get_aux(&recs[i]) == &recs[i].data[recs[i].l_data]);
+    }
+
+    // Add RG aux tag
+    bam_add_rg_tags(recs, job, cluster_from, cluster_to, nreads);
+
+    // Add barcode tags
+    bam_add_barcode_tags(recs, job, cluster_from, cluster_to, nreads);
 }
 
 /*
  * Create a set of 'CLUSTERS_PER_THREAD' records
  */
+
+// Number of clusters to process at a time in processRecordGroup().
+// Shouldn't be too big so that the working data fits nicely into (hopefully L1) cache.
+#define RECORD_GROUP_SIZE 128
 static void *processRecords(void *arg)
 {
     struct processRecordJob_struct *job_struct = (struct processRecordJob_struct *)arg;
     struct processRecordResult_struct *res = malloc(sizeof(struct processRecordResult_struct));
-    res->records = malloc(sizeof(bam1_t *) * (job_struct->end_cluster - job_struct->start_cluster + 2) * 2);
-    res->records[0] = NULL;
-    bam1_t **records;
-    int n = 0;
-
-    for (int cluster = job_struct->start_cluster; cluster <= job_struct->end_cluster; cluster++) {
-        records = processRecord(arg, cluster);
-        if (records[0]) res->records[n++] = records[0];
-        if (records[1]) res->records[n++] = records[1];
-        free(records);
+    int is_paired = job_struct->read_files[1] != NULL;
+    int num_clusters = job_struct->end_cluster + 1 - job_struct->start_cluster;
+    if (!res) die("Out of memory");
+    res->num_records = (is_paired ? 2 : 1) * num_clusters;
+    res->records = calloc(res->num_records, sizeof(bam1_t));
+    if (!res->records) die("Out of memory");
+    res->data = malloc(num_clusters * (job_struct->max_data_len[0] + job_struct->max_data_len[1]));
+    if (!res->data) die("Out of memory");
+ 
+    for (int cluster = job_struct->start_cluster; cluster <= job_struct->end_cluster; cluster+=RECORD_GROUP_SIZE) {
+        int end = cluster + RECORD_GROUP_SIZE <= job_struct->end_cluster + 1 ? cluster + RECORD_GROUP_SIZE : job_struct->end_cluster + 1;
+        processRecordGroup(job_struct, cluster, end, res);
     }
-    free(arg);
-    res->records[n] = NULL;
+    for (int rd = 0; rd < (is_paired ? 2 : 1); rd++) {
+        va_free(job_struct->bc_calls_tags[rd]);
+        va_free(job_struct->bc_quals_tags[rd]);
+    }
+    free(job_struct);
     return res;
+}
+
+/*
+ * Free a struct barcode_bcl_files.
+ */
+
+static void free_barcode_bcl_files(void *item) {
+    struct barcode_bcl_files *bbf = (struct barcode_bcl_files *) item;
+    if (!bbf) return;
+    va_free(bbf->bcl_files_array);
+    free(bbf);
+}
+
+/*
+ * Look up the BCL files corresponding to barcode tags.  Also counts the
+ * size of the tags in bytes for memory allocation purposes.
+ *
+ * Note that currently being unable to find the BCL files is not an error.
+ */
+
+static va_t *get_barcode_bcl_files(va_t *barcode_specs, va_t *bcl_read_array, int surface, size_t separator_len, size_t *total_tag_len) {
+    va_t *bc_bcl_files = va_init(barcode_specs->end + 1, free_barcode_bcl_files);
+
+    for (int tagidx = 0; tagidx < barcode_specs->end; tagidx++) {
+        barcode_spec_t *spec = barcode_specs->entries[tagidx];
+        struct barcode_bcl_files *tag_bcls = malloc(sizeof(*tag_bcls));
+        if (!tag_bcls) die("Out of memory");
+        memcpy(tag_bcls->tag, spec->tag, 2);
+        tag_bcls->bcl_files_array = va_init(spec->cycle_names->end, NULL);
+
+        for (int seg = 0; seg < spec->cycle_names->end; seg++) {
+            char *name = spec->cycle_names->entries[seg];
+            va_t *bcl_files = getBclFileArray(bcl_read_array, name, surface);
+            if (bcl_files) {
+                va_push(tag_bcls->bcl_files_array, bcl_files);
+                *total_tag_len += bcl_files->end;
+            }
+        }
+
+        if (tag_bcls->bcl_files_array->end > 0) {
+            va_push(bc_bcl_files, tag_bcls);
+            // Count two-byte tag, tag type (Z), separators and trailing NUL in length
+            *total_tag_len += 4 + (tag_bcls->bcl_files_array->end - 1) * separator_len;
+        } else {
+            va_free(tag_bcls->bcl_files_array);
+            free(tag_bcls);
+        }
+    }
+    return bc_bcl_files;
 }
 
 /*
  * Write all the BAM records for a given tile
  * Records are written to the global FIFO queue
  */
-static void *processTile(void *arg)
+static void processTile(job_data_t *job_data)
 {
-    job_data_t *job_data = (job_data_t *)arg;
     int tile = job_data->tile;
     samFile *output_file = job_data->output_file;
     bam_hdr_t *output_header = job_data->output_header;
     va_t *cycleRange = job_data->cycleRange;
     va_t *tileIndex = job_data->tileIndex;
     opts_t *opts = job_data->opts;
-    queue_t *queue = job_data->q;
 
     va_t *bclReadArray;
-    int filtered;
     int max_cluster = 0;
-    int nRecords = 0;
     int surface = bcl_tile2surface(tile);
 
     hts_tpool *p = job_data->thread_p;
     hts_tpool_process *q = job_data->thread_q;;
     hts_tpool_result *r;
+    char read_name_prefix[128];
+    size_t read_name_prefix_len;
+    size_t index_separator_len = strlen(INDEX_SEPARATOR);
+    size_t qual_separator_len = strlen(QUAL_SEPARATOR);
 
     if (opts->verbose) fprintf(stderr,"Processing Tile %d\n", tile);
 
     filter_t *filter = openFilterFile(tile,tileIndex,opts);
     if (filter->errmsg) {
-        fprintf(stderr,"Can't find filter file for tile %d\n%s\n", tile, filter->errmsg);
-        return NULL;
+        die("Can't find filter file for tile %d\n%s\n", tile, filter->errmsg);
     }
 
     if (tileIndex) max_cluster = findClusters(tile, tileIndex);
@@ -1700,8 +1822,7 @@ static void *processTile(void *arg)
 
     posfile_t *posfile = openPositionFile(tile, tileIndex, opts);
     if (posfile->errmsg) {
-        fprintf(stderr,"Can't find position file for Tile %d\n%s\n", tile, posfile->errmsg);
-        return NULL;
+        die("Can't find position file for Tile %d\n%s\n", tile, posfile->errmsg);
     }
     posfile_load(posfile, max_cluster, (machineType == MT_NOVASEQ) ? filter : NULL);
     max_cluster = posfile->size;
@@ -1710,6 +1831,9 @@ static void *processTile(void *arg)
     char *id = getId(opts);
 
     if (opts->verbose) fprintf(stderr,"Tile %d : opened all BCL files\n", tile);
+
+    // This part of the read name is the same for all clusters in this tile
+    read_name_prefix_len = getReadNamePrefix(read_name_prefix, sizeof(read_name_prefix), id, opts->lane, tile);
 
     //
     // write all the records
@@ -1729,11 +1853,50 @@ static void *processTile(void *arg)
             job_struct->filter = filter;
             job_struct->posfile = posfile;
             job_struct->id = id;
+            job_struct->id_len = id ? strlen(id) : 0;
             job_struct->opts = opts;
             job_struct->cycleRange = cycleRange;
             job_struct->surface = surface;
             job_struct->bclReadArray = bclReadArray;
-            job_struct->queue = queue;
+            job_struct->read_name_prefix = read_name_prefix;
+            job_struct->read_name_prefix_len = read_name_prefix_len;
+            job_struct->read_group_tag_len = opts->read_group_id ? strlen(opts->read_group_id) + 4 : 0;
+            /* Find bcl file arrays for reads 1 (always), 2 (if present) */
+            job_struct->read_files[0] = getBclFileArray(bclReadArray, "read1", surface);
+            if (!job_struct->read_files[0]) die("Couldn't find read1 bcl file data");
+            job_struct->read_files[1] = getBclFileArray(bclReadArray, "read2", surface);
+            /* Get read lengths */
+            job_struct->read_len[0] = job_struct->read_files[0]->end;
+            job_struct->read_len[1] = job_struct->read_files[1] ? job_struct->read_files[1]->end : 0;
+            /* 
+             * Find bcl file arrays for barcodes (if present) and work out
+             * how long in each read
+             */
+            job_struct->total_bc_tag_len[0] = 0;
+            job_struct->total_bc_tag_len[1] = 0;
+            for (int rd = 0; rd < (job_struct->read_files[1] != NULL ? 2 : 1); rd++) {
+                job_struct->bc_calls_tags[rd] = get_barcode_bcl_files(job_data->barcode_calls[rd], bclReadArray, surface, opts->separator ? index_separator_len : 0, &job_struct->total_bc_tag_len[rd]);
+                job_struct->bc_quals_tags[rd] = get_barcode_bcl_files(job_data->barcode_quals[rd], bclReadArray, surface, opts->separator ? qual_separator_len : 0, &job_struct->total_bc_tag_len[rd]);
+            }
+
+            /*
+             * Work out worst-case memory neeeded for the variable parts of
+             * the bam records (28 on name is for ":-2147483647:-2147483647\0\0\0\0")
+             */
+            job_struct->max_data_len[0] = (job_struct->read_name_prefix_len + 28  // name
+                                           + ((job_struct->read_len[0] + 1) >> 1) // bases
+                                           + job_struct->read_len[0]              // quals
+                                           + job_struct->read_group_tag_len       // RG tag
+                                           + job_struct->total_bc_tag_len[0]);    // Barcodes
+            if (job_struct->read_files[1]) {
+                job_struct->max_data_len[1] = (job_struct->read_name_prefix_len + 28  // name
+                                               + ((job_struct->read_len[1] + 1) >> 1) // bases
+                                               + job_struct->read_len[1]              // quals
+                                               + job_struct->read_group_tag_len       // RG tag
+                                               + job_struct->total_bc_tag_len[1]);    // Barcodes
+            } else {
+                job_struct->max_data_len[1] = 0;
+            }
 
             blk = hts_tpool_dispatch2(p, q, processRecords, job_struct, 1);
             if (!blk) {
@@ -1752,14 +1915,16 @@ static void *processTile(void *arg)
         }
         if (r != NULL) {
             struct processRecordResult_struct *res = (struct processRecordResult_struct *)hts_tpool_result_data(r);
-            for (int n=0; res->records[n]; n++) {
-                int ret = sam_write1(output_file, output_header, res->records[n]);
+            for (int n=0; n < res->num_records; n++) {
+                if (!opts->no_filter && (res->records[n].core.flag & BAM_FQCFAIL)) continue;
+                int ret = sam_write1(output_file, output_header, &res->records[n]);
                 if (ret < 0) {
-                    die("Problem writing record %s  : r=%d\n", bam_get_qname(res->records[n]), ret);
+                    die("Problem writing record %s  : r=%d\n", bam_get_qname(&res->records[n]), ret);
                 }
-                bam_destroy1(res->records[n]);
             }
-            free(res->records); free(res);
+            free(res->records);
+            free(res->data);
+            free(res);
             hts_tpool_delete_result(r, 0);
         }
     }
@@ -1769,14 +1934,16 @@ static void *processTile(void *arg)
     while (!hts_tpool_process_empty(q)) {
         r = hts_tpool_next_result_wait(q);
         struct processRecordResult_struct *res = (struct processRecordResult_struct *)hts_tpool_result_data(r);
-        for (int n=0; res->records[n]; n++) {
-            int ret = sam_write1(output_file, output_header, res->records[n]);
+        for (int n=0; n < res->num_records; n++) {
+            if (!opts->no_filter && (res->records[n].core.flag & BAM_FQCFAIL)) continue;
+            int ret = sam_write1(output_file, output_header, &res->records[n]);
             if (ret < 0) {
-                die("Problem writing record %s  : r=%d\n", bam_get_qname(res->records[n]), ret);
+                die("Problem writing record %s  : r=%d\n", bam_get_qname(&res->records[n]), ret);
             }
-            bam_destroy1(res->records[n]);
         }
-        free(res->records); free(res);
+        free(res->records);
+        free(res->data);
+        free(res);
         hts_tpool_delete_result(r, 0);
     }
 
@@ -1787,12 +1954,51 @@ static void *processTile(void *arg)
 
     if (opts->verbose) display("Finished processing Tile: %d\n", tile);
 
-    if (pthread_mutex_lock(job_data->n_threads_mutex)) die("mutex_lock failed\n");
-    (*job_data->tiles_left)--;
-    pthread_mutex_unlock(job_data->n_threads_mutex);
-
     free(job_data);
-    return NULL;
+}
+
+/*
+ * Free a barcode_spec_t struct.
+ */
+
+void free_barcode_spec(void *item) {
+    barcode_spec_t *spec = (barcode_spec_t *) item;
+    if (!spec) return;
+    va_free(spec->cycle_names);
+    free(spec);
+}
+
+/*
+ * Sort barcodes by tag type and destination read.  Pre-sorting saves some
+ * work when we tag the reads.
+ */
+
+void getBarcodeSpecs(va_t *specs[2], va_t *tags_array, ia_t *bc_read) {
+    for (int i = 0; i < tags_array->end; i++) {
+        char *tag = tags_array->entries[i];
+        int rd = (i < bc_read->end ? bc_read->entries[i] : 1) == 2 ? 1 : 0;
+        char *name = getCycleName(i + 1, true);
+        barcode_spec_t *spec = NULL;
+        int j;
+
+        // Find if the tag type has been seen already.
+        // N-squared complexity, but the number of tags is small.
+        for (j = 0; j < specs[rd]->end; j++) {
+            spec = specs[rd]->entries[j];
+            if (memcmp(spec->tag, tag, 2) == 0) break;
+        }
+
+        if (j == specs[rd]->end) { // New tag type
+            spec = malloc(sizeof(*spec));
+            if (!spec) die("Out of memory");
+            memcpy(spec->tag, tag, 2);
+            spec->cycle_names = va_init(4, free);
+            va_push(specs[rd], spec);
+        }
+
+        // Add to list of barcode segments for this tag type.
+        va_push(spec->cycle_names, name);
+    }
 }
 
 /*
@@ -1800,22 +2006,22 @@ static void *processTile(void *arg)
  */
 static int createBAM(samFile *output_file, bam_hdr_t *output_header, hts_tpool *thread_p, opts_t *opts)
 {
-    static int n_threads = 0;
-    static pthread_mutex_t n_threads_mutex;
-
-    static int tiles_left = 0;
-    static pthread_mutex_t tiles_left_mutex;
-
     int retcode = 0;
-    pthread_t tid, output_tid;
 
     hts_tpool_process *thread_q = hts_tpool_process_init(thread_p, 2 * opts->pool_size, 0);
-
-    pthread_mutex_init(&n_threads_mutex,NULL);
 
     ia_t *tiles = getTileList(opts);
     va_t *cycleRange = getCycleRange(opts);;
     va_t *tileIndex = getTileIndex(opts);
+    va_t *barcode_calls[2];
+    va_t *barcode_quals[2];
+
+    barcode_calls[0] = va_init(4, free_barcode_spec);
+    barcode_calls[1] = va_init(4, free_barcode_spec);
+    barcode_quals[0] = va_init(4, free_barcode_spec);
+    barcode_quals[1] = va_init(4, free_barcode_spec);
+    getBarcodeSpecs(barcode_calls, opts->barcode_tag, opts->bc_read);
+    getBarcodeSpecs(barcode_quals, opts->quality_tag, opts->bc_read);
 
     if (opts->verbose) {
         for (int n=0; n < cycleRange->end; n++) {
@@ -1828,9 +2034,6 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, hts_tpool *
     }
 
     if (tiles->end == 0) fprintf(stderr, "There are no tiles to process\n");
-    if (pthread_mutex_lock(&n_threads_mutex)) die("mutex_lock failed\n");
-    tiles_left = tiles->end;
-    pthread_mutex_unlock(&n_threads_mutex);
 
     /*
      * Loop to create input threads - one for each tile
@@ -1844,15 +2047,20 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, hts_tpool *
         job_data->opts = opts;
         job_data->cycleRange = cycleRange;
         job_data->tileIndex = tileIndex;
-        job_data->n_threads = &n_threads;
-        job_data->n_threads_mutex = &n_threads_mutex;
-        job_data->tiles_left = &tiles_left;
+        job_data->barcode_calls[0] = barcode_calls[0];
+        job_data->barcode_calls[1] = barcode_calls[1];
+        job_data->barcode_quals[0] = barcode_quals[0];
+        job_data->barcode_quals[1] = barcode_quals[1];
         job_data->thread_p = thread_p;
         job_data->thread_q = thread_q;
 
         processTile(job_data);
     }
 
+    va_free(barcode_calls[0]);
+    va_free(barcode_calls[1]);
+    va_free(barcode_quals[0]);
+    va_free(barcode_quals[1]);
     va_free(cycleRange);
     va_free(tileIndex);
     ia_free(tiles);
