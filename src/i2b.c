@@ -837,21 +837,27 @@ static va_t *getTileIndex(opts_t *opts)
     if (machineType != MT_NEXTSEQ) return tileIndex;
     char *fname = calloc(1,strlen(opts->basecalls_dir)+64);
     sprintf(fname, "%s/L%03d/s_%d.bci", opts->basecalls_dir, opts->lane, opts->lane);
-    int fhandle = open(fname,O_RDONLY);
-    if (fhandle < 0) die("Can't open BCI file %s\n", fname);
+    FILE *fhandle = fopen(fname, "rb");
+    if (fhandle == NULL) die("Can't open BCI file %s\n", fname);
     tileIndex = va_init(100,free);
     int n;
     do {
         tileIndexEntry_t *ti = calloc(1, sizeof(tileIndexEntry_t));
-        n = read(fhandle, &ti->tile, 4);
-        n = read(fhandle, &ti->clusters, 4);
-        if (n == 4) {
+        if (!ti) die("Out of memory");
+        n = fread(&ti->tile, 4, 1, fhandle);
+        if (n == 1) n = fread(&ti->clusters, 4, 1, fhandle);
+        if (n == 1) {
             va_push(tileIndex,ti);
         } else {
             free(ti);
         }
-    } while (n == 4);
-    close(fhandle);
+    } while (n == 1);
+    if (ferror(fhandle)) {
+        die("Error reading %s : %s\n", fname, strerror(errno));
+    }
+    if (fclose(fhandle) < 0) {
+        die("Error closing %s : %s\n", fname, strerror(errno));
+    }
     free(fname);
     return tileIndex;
 }

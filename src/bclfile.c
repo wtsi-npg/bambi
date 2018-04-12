@@ -49,8 +49,8 @@ static int uncompressBlock(char* abSrc, int nLenSrc, char* abDst, int nLenDst )
     z_stream zInfo ={0};
     zInfo.total_in=  zInfo.avail_in=  nLenSrc;
     zInfo.total_out= zInfo.avail_out= nLenDst;
-    zInfo.next_in= abSrc;
-    zInfo.next_out= abDst;
+    zInfo.next_in= (unsigned char *) abSrc;
+    zInfo.next_out= (unsigned char *) abDst;
 
     int nErr, nRet= -1;
     nErr= inflateInit2( &zInfo, 15+32 );               // zlib function
@@ -77,7 +77,7 @@ bclfile_t *bclfile_init(void)
     bclfile_t *bclfile = calloc(1, sizeof(bclfile_t));
     bclfile->base_ptr = 0;
     bclfile->total_clusters = 0;
-    bclfile->fhandle = -1;
+    bclfile->fhandle = NULL;
     bclfile->gzhandle = NULL;
     bclfile->is_cached = 0;
     bclfile->machine_type = MT_UNKNOWN;
@@ -97,17 +97,17 @@ bclfile_t *bclfile_init(void)
  */
 static void _bclfile_open_miseq(bclfile_t *bcl)
 {
-    int r, n;
+    int r;
     
-    bcl->fhandle = open(bcl->filename, O_RDONLY);
-    if (bcl->fhandle == -1) die("Can't open BCL file %s\n", bcl->filename);
+    bcl->fhandle = fopen(bcl->filename, "rb");
+    if (bcl->fhandle == NULL) die("Can't open BCL file %s\n", bcl->filename);
 
-    r = read(bcl->fhandle, (void *)&bcl->total_clusters, 4);
+    r = fread(&bcl->total_clusters, 1, 4, bcl->fhandle);
     if (r != 4) die("failed to read header from bcl file '%s'\n", bcl->filename);
 
     char *buffer = malloc(bcl->total_clusters);
     if (!buffer) die("Can't malloc buffer %d for file %s\n", bcl->total_clusters, bcl->filename);
-    r = read(bcl->fhandle, buffer, bcl->total_clusters);
+    r = fread(buffer, 1, bcl->total_clusters, bcl->fhandle);
     if (r != bcl->total_clusters) die("failed to read buffer from bcl file '%s'\n", bcl->filename);
     
     free(bcl->bases); bcl->bases = malloc(bcl->total_clusters);
@@ -127,7 +127,7 @@ static void _bclfile_open_miseq(bclfile_t *bcl)
 
 static void _bclfile_open_hiseqx(bclfile_t *bcl)
 {
-    int r, n;
+    int r;
     
     bcl->gzhandle = gzopen(bcl->filename, "r");
     if (!bcl->gzhandle) die("Can't open BCL file %s\n", bcl->filename);
@@ -164,46 +164,45 @@ static void _bclfile_open_nextseq(bclfile_t *bcl)
 static void _bclfile_open_novaseq(bclfile_t *bclfile)
 {
     int r, n;
+    bool happy = false;
 
-    bclfile->fhandle = open(bclfile->filename, O_RDONLY);
-    if (bclfile->fhandle == -1) {
+    bclfile->fhandle = fopen(bclfile->filename, "rb");
+    if (bclfile->fhandle == NULL) {
         die("Can't open BCL file %s\n", bclfile->filename);
     }
 
     // File is open. Read and parse header.
 
     while (true) {
-        r = read(bclfile->fhandle, (void *)&bclfile->version, sizeof(bclfile->version)); if (r<=0) break;
-        r = read(bclfile->fhandle, (void *)&bclfile->header_size, sizeof(bclfile->header_size)); if (r<=0) break;
-        r = read(bclfile->fhandle, (void *)&bclfile->bits_per_base, sizeof(bclfile->bits_per_base)); if (r<=0) break;
-        r = read(bclfile->fhandle, (void *)&bclfile->bits_per_qual, sizeof(bclfile->bits_per_qual)); if (r<=0) break;
-        r = read(bclfile->fhandle, (void *)&bclfile->nbins, sizeof(bclfile->nbins)); if (r<=0) break;
+        r = fread(&bclfile->version, sizeof(bclfile->version), 1, bclfile->fhandle); if (r!=1) break;
+        r = fread(&bclfile->header_size, sizeof(bclfile->header_size), 1, bclfile->fhandle); if (r!=1) break;
+        r = fread(&bclfile->bits_per_base, sizeof(bclfile->bits_per_base), 1, bclfile->fhandle); if (r!=1) break;
+        r = fread(&bclfile->bits_per_qual, sizeof(bclfile->bits_per_qual), 1, bclfile->fhandle); if (r!=1) break;
+        r = fread(&bclfile->nbins, sizeof(bclfile->nbins), 1, bclfile->fhandle); if (r!=1) break;
         for (n=0; n < bclfile->nbins; n++) {
             uint32_t qbin, qscore;
-            r = read(bclfile->fhandle, (void *)&qbin, sizeof(qbin)); if (r<=0) break;
-            r = read(bclfile->fhandle, (void *)&qscore, sizeof(qscore)); if (r<=0) break;
+            r = fread(&qbin, sizeof(qbin), 1, bclfile->fhandle); if (r!=1) break;
+            r = fread(&qscore, sizeof(qscore), 1, bclfile->fhandle); if (r!=1) break;
             bclfile->qbin[qbin] = qscore;
         }
-        r = read(bclfile->fhandle, (void *)&bclfile->ntiles, sizeof(bclfile->ntiles)); if (r<=0) break;
+        r = fread(&bclfile->ntiles, sizeof(bclfile->ntiles), 1, bclfile->fhandle); if (r!=1) break;
         for (n=0; n < bclfile->ntiles; n++) {
             tilerec_t *tilerec = calloc(1, sizeof(tilerec_t));
-            uint32_t x;
-            r = read(bclfile->fhandle, (void *)&x, sizeof(x)); if (r<=0) break;
-            tilerec->tilenum = x;
-            r = read(bclfile->fhandle, (void *)&x, sizeof(x)); if (r<=0) break;
-            tilerec->nclusters = x;
-            r = read(bclfile->fhandle, (void *)&x, sizeof(x)); if (r<=0) break;
-            tilerec->uncompressed_blocksize = x;
-            r = read(bclfile->fhandle, (void *)&x, sizeof(x)); if (r<=0) break;
-            tilerec->compressed_blocksize = x;
+            uint32_t x[4];
+            r = fread(x, sizeof(x[0]), 4, bclfile->fhandle); if (r!=4) break;
+            tilerec->tilenum = x[0];
+            tilerec->nclusters = x[1];
+            tilerec->uncompressed_blocksize = x[2];
+            tilerec->compressed_blocksize = x[3];
             va_push(bclfile->tiles, tilerec);
             if (!bclfile->current_tile) bclfile->current_tile = tilerec;
         }
-        r = read(bclfile->fhandle, (void *)&bclfile->pfFlag, sizeof(bclfile->pfFlag));
+        r = fread(&bclfile->pfFlag, sizeof(bclfile->pfFlag), 1, bclfile->fhandle); if (r!=1) break;
+        happy = true;
         break;
     }
 
-    if (r <= 0) {
+    if (!happy) {
         die("failed to read header from bcl file '%s'\n", bclfile->filename);
     }
 
@@ -236,9 +235,14 @@ bclfile_t *bclfile_open(char *fname, MACHINE_TYPE mt)
 int bclfile_seek_cluster(bclfile_t *bcl, int cluster)
 {
     if (bcl->gzhandle) {
-        gzseek(bcl->gzhandle, (z_off_t)(4 + cluster), SEEK_SET);
+        if (gzseek(bcl->gzhandle, (z_off_t)(4 + cluster), SEEK_SET) < 0) {
+            int e;
+            die("gzseek failed: %s\n", gzerror(bcl->gzhandle, &e));
+        }
     } else {
-        lseek(bcl->fhandle, (off_t)(4 + cluster), SEEK_SET);
+        if (fseeko(bcl->fhandle, (off_t)(4 + cluster), SEEK_SET) < 0) {
+            die("fseeko failed: %s", strerror(errno));
+        }
     }
     return 0;
 }
@@ -280,7 +284,9 @@ int bclfile_seek_tile(bclfile_t *bcl, int tile, filter_t *filter)
     bcl->current_tile = ti;
 
     // Read and uncompress the record for this tile
-    lseek(bcl->fhandle, (off_t)offset, SEEK_SET);
+    if (fseeko(bcl->fhandle, (off_t)offset, SEEK_SET) < 0) {
+        die("Couldn't seek: %s\n", strerror(errno));
+    }
     uncompressed_block = malloc(ti->uncompressed_blocksize);
     if (!uncompressed_block) {
         fprintf(stderr,"bclfile_seek_tile(%d): failed to malloc uncompressed_block\n", tile);
@@ -291,7 +297,7 @@ int bclfile_seek_tile(bclfile_t *bcl, int tile, filter_t *filter)
         fprintf(stderr,"bclfile_seek_tile(%d): failed to malloc compressed_block\n", tile);
         return -1;
     }
-    r = read(bcl->fhandle, (void *)compressed_block, ti->compressed_blocksize);
+    r = fread(compressed_block, 1, ti->compressed_blocksize, bcl->fhandle);
     if (r != ti->compressed_blocksize) {
         fprintf(stderr,"bclfile_seek_tile(%d): failed to read block: returned %d\n", tile, r);
         return -1;
@@ -345,7 +351,7 @@ void bclfile_close(bclfile_t *bclfile)
 {
     if (bclfile->is_cached) return;
     if (bclfile->gzhandle) if (gzclose(bclfile->gzhandle) != Z_OK) die("Couldn't gzclose BCL file [%s]\n", bclfile->filename);
-    if (bclfile->fhandle != -1) if (close(bclfile->fhandle)) die("Couldn't close BCL file [%s] Handle %d\n", bclfile->filename, bclfile->fhandle);
+    if (bclfile->fhandle != NULL) if (fclose(bclfile->fhandle)) die("Couldn't close BCL file [%s] Handle %d\n", bclfile->filename, bclfile->fhandle);
     free(bclfile->filename);
     free(bclfile->errmsg);
     va_free(bclfile->tiles);

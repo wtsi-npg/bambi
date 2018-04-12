@@ -36,12 +36,22 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 posfile_t *posfile_open(char *fname)
 {
     posfile_t *posfile = calloc(1, sizeof(posfile_t));
+    if (!posfile) {
+        fprintf(stderr, "Out of memory");
+        exit(-1);
+    }
     posfile->current_block = 0;
+    posfile->file_name = strdup(fname);
     posfile->errmsg = NULL;
     posfile->file_type = UNKNOWN_POS;
-    posfile->fhandle = -1;
+    posfile->fhandle = NULL;
     posfile->x = NULL;
     posfile->y = NULL;
+
+    if (!posfile->file_name) {
+        fprintf(stderr, "Out of memory");
+        exit(-1);
+    }
 
     // Should we handle compressed (.gz) files?
 
@@ -57,19 +67,19 @@ posfile_t *posfile_open(char *fname)
         posfile->errmsg = strdup("posfile_open(): Unknown file type\n");
         return posfile;
     }
-    posfile->fhandle = open(fname,O_RDONLY);
+    posfile->fhandle = fopen(fname, "rb");
 
-    if (posfile->fhandle == -1) {
+    if (posfile->fhandle == NULL) {
         posfile->errmsg = strdup(strerror(errno));
         return posfile;
     }
 
     if (posfile->file_type == CLOCS) {
         int n;
-        n = read(posfile->fhandle,(void *)&posfile->version,1);
-        n = read(posfile->fhandle,(void *)&posfile->total_blocks,4);
-        n = read(posfile->fhandle,(void *)&posfile->unread_clusters,1);
-        if (n<0) {
+        n = fread(&posfile->version,1, 1, posfile->fhandle);
+        if (n == 1) n = fread(&posfile->total_blocks, 4, 1, posfile->fhandle);
+        if (n == 1) n = fread(&posfile->unread_clusters,1, 1, posfile->fhandle);
+        if (n != 1) {
             fprintf(stderr,"failed to read header from %s\n", fname);
             exit(1);
         }
@@ -78,14 +88,14 @@ posfile_t *posfile_open(char *fname)
 
     if (posfile->file_type == LOCS) {
         int n;
+        uint32_t x[3];
         // first 8 bytes are unused
-        n = read(posfile->fhandle,(void *)&posfile->total_blocks,4);
-        n = read(posfile->fhandle,(void *)&posfile->total_blocks,4);
-        n = read(posfile->fhandle,(void *)&posfile->total_blocks,4);
-        if (n<0) {
+        n = fread(x, 4, 3, posfile->fhandle);
+        if (n != 3) {
             fprintf(stderr,"failed to read header from %s\n", fname);
             exit(1);
         }
+        posfile->total_blocks = x[2];
     }
     return posfile;
 }
@@ -101,10 +111,11 @@ void posfile_seek(posfile_t *posfile, int cluster)
         exit(1);
     }
 
-    off_t r = lseek(posfile->fhandle, pos, SEEK_SET);
-    if (r != pos) {
-        fprintf(stderr,"Trying to seek to %d (cluster %d) but returned %d\n", (int)pos, cluster, (int)r);
+    int r = fseeko(posfile->fhandle, pos, SEEK_SET);
+    if (r < 0) {
+        fprintf(stderr,"Trying to seek on %s to %ld (cluster %d) but returned %d\n", posfile->file_name, (long) pos, cluster, r);
         perror("posfile_seek() failed");
+        exit(1);
     }
 }
 
@@ -112,9 +123,13 @@ void posfile_close(posfile_t *posfile)
 {
     free(posfile->errmsg);
     free(posfile->x); free(posfile->y);
-    if (posfile->fhandle >= 0) {
-        if(close(posfile->fhandle)) { fprintf(stderr,"Can't close posfile"); exit(1); }
+    if (posfile->fhandle) {
+        if(fclose(posfile->fhandle)) {
+            fprintf(stderr,"Can't close posfile %s : %s", posfile->file_name, strerror(errno));
+            exit(1);
+        }
     }
+    free(posfile->file_name);
     free(posfile);
 }
 
@@ -122,7 +137,7 @@ static void locs_load(posfile_t *posfile, filter_t *filter)
 {
     float dx, dy;
     int i,j,f;
-    int bufsize = posfile->total_blocks * 4 * 2;
+    size_t bufsize = posfile->total_blocks * 4 * 2;
     char *buffer = malloc(bufsize);
 
     free(posfile->x); posfile->x = malloc(posfile->total_blocks * sizeof(int));
@@ -132,9 +147,9 @@ static void locs_load(posfile_t *posfile, filter_t *filter)
         exit(1);
     }
 
-    int n = read(posfile->fhandle, buffer, bufsize);
+    size_t n = fread(buffer, 1, bufsize, posfile->fhandle);
     if (n != bufsize) {
-        fprintf(stderr,"locs_load(): expected %d, read %d\n", bufsize, n);
+        fprintf(stderr,"locs_load(%s): expected %zd, read %zd\n", posfile->file_name, bufsize, n);
         exit(1);
     }
 
@@ -169,19 +184,26 @@ void clocs_load(posfile_t *posfile, int bufsize, filter_t *filter)
 
     for (;;) {
         while (posfile->unread_clusters == 0 && (posfile->current_block < posfile->total_blocks)) {
-            if (read(posfile->fhandle, (void *)&posfile->unread_clusters, 1) != 1) break;
+            if (fread(&posfile->unread_clusters, 1, 1, posfile->fhandle) != 1) break;
             posfile->current_block++;
         }
 
         if (posfile->unread_clusters == 0) break;
         posfile->unread_clusters--;
 
-        int n;
-        n = read(posfile->fhandle, (void *)&dx, 1);    
-        n = read(posfile->fhandle, (void *)&dy, 1);
-        if (n<0) {
-            fprintf(stderr,"something has gone wrong in clocs_load()\n");
-            exit(1);
+        size_t n;
+        n = fread(&dx, 1, 1, posfile->fhandle);
+        if (n == 1) n = fread(&dy, 1, 1, posfile->fhandle);
+        if (n != 1) {
+            if (ferror(posfile->fhandle)) {
+                fprintf(stderr,"clocs_load(%s): %s\n", posfile->file_name, strerror(errno));
+                exit(1);
+            } else {
+                fprintf(stderr,"clocs_load(%s): Warning: reached end of file with %u clusters and %u blocks unread\n",
+                        posfile->file_name, (int) posfile->unread_clusters,
+                        posfile->total_blocks - posfile->current_block);
+                break;
+            }
         }
 
         if (j >= bufsize) {

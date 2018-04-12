@@ -32,7 +32,8 @@ typedef enum { UNKNOWN_POS, POS, LOCS, CLOCS } POS_FILE_TYPE;
 
 typedef struct {
     POS_FILE_TYPE file_type;
-    int fhandle;
+    FILE *fhandle;
+    char *file_name;
     char *errmsg;
     uint8_t version;
     uint32_t total_blocks;

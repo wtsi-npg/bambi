@@ -28,38 +28,49 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <assert.h>
 
 #include "bambi.h"
 #include "filterfile.h"
 
 filter_t *filter_open(char *fname)
 {
-    uint32_t empty;
-
     filter_t *filter = calloc(1, sizeof(filter_t));
+    if (!filter) {
+        fprintf(stderr, "Out of memory");
+        exit(1);
+    }
     filter->total_clusters = 0;
     filter->current_cluster = 0;
     filter->buffer = NULL;
-    filter->fhandle = open(fname,O_RDONLY);
-    if (filter->fhandle == -1) {
+    filter->buffer_size = 0;
+    filter->fhandle = fopen(fname, "rb");
+    if (filter->fhandle == NULL) {
         filter->errmsg = strdup(strerror(errno));
     } else {
         int n;
+        uint32_t x[3];
         filter->errmsg=NULL;
-        n = read(filter->fhandle,(void *)&empty,4);
-        n = read(filter->fhandle,(void *)&filter->version,4);
-        n = read(filter->fhandle,(void *)&filter->total_clusters,4);
-        if (n<0) {
+        n = fread(x, 4, 3, filter->fhandle);
+        if (n != 3) {
             fprintf(stderr,"failed to read header from %s\n", fname);
             exit(1);
         }
+        // x[0] is ignored
+        filter->version = x[1];
+        filter->total_clusters = x[2];
     }
     return filter;
 }
 
 void filter_close(filter_t *filter)
 {
-    if (filter->fhandle!=-1) if (close(filter->fhandle)) { fprintf(stderr,"Can't close filter file\n"); exit(1); }
+    if (filter->fhandle!=NULL) {
+        if (fclose(filter->fhandle)) {
+            fprintf(stderr, "Can't close filter file\n");
+            exit(1);
+        }
+    }
     free(filter->errmsg);
     free(filter->buffer);
     free(filter);
@@ -68,31 +79,33 @@ void filter_close(filter_t *filter)
 void filter_seek(filter_t *filter, int cluster)
 {
     off_t pos = 12 + cluster;
-    off_t n = lseek(filter->fhandle, pos, SEEK_SET);
-    if (n != pos) {
-        fprintf(stderr,"filter_seek(%d) failed: returned %d instead of %d\n", cluster, (int)n, (int)pos);
+    int n = fseeko(filter->fhandle, pos, SEEK_SET);
+    if (n < 0) {
+        fprintf(stderr, "filter_seek(%d) failed: %s\n", cluster, strerror(errno));
         exit(1);
     }
 }
 
-void filter_load(filter_t *filter, int64_t clusters)
+void filter_load(filter_t *filter, size_t clusters)
 {
     free(filter->buffer);
     filter->buffer = malloc(clusters);
     if (!filter->buffer) {
-        fprintf(stderr, "filter_load(): Can't allocate %ld bytes for buffer\n", clusters);
+        fprintf(stderr, "filter_load(): Can't allocate %zd bytes for buffer\n", clusters);
         exit(1);
     }
-    int64_t n = read(filter->fhandle, filter->buffer, clusters);
+    size_t n = fread(filter->buffer, 1, clusters, filter->fhandle);
     if (n != clusters) {
-        fprintf(stderr, "filter_load(): Expected %ld clusters, read %ld\n", clusters, n);
+        fprintf(stderr, "filter_load(): Expected %ld clusters, read %zd\n", clusters, n);
         exit(1);
     }
     filter->total_clusters = clusters;
+    filter->buffer_size = clusters;
 }
 
-char filter_get(filter_t *filter, int64_t n)
+char filter_get(filter_t *filter, size_t n)
 {
+    assert(n < filter->buffer_size);
     return filter->buffer[n] & 0x01;
 }
 
@@ -100,7 +113,7 @@ int filter_next(filter_t *filter)
 {
     unsigned char next;
 
-    if (read(filter->fhandle, (void *)&next, 1) != 1) {
+    if (fread(&next, 1, 1, filter->fhandle) != 1) {
         return -1;
     }
 

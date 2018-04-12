@@ -36,7 +36,7 @@ typedef struct {
     
 typedef struct {
     MACHINE_TYPE machine_type;
-    int fhandle;
+    FILE *fhandle;
     gzFile gzhandle;
     char *errmsg;
     int is_cached;
