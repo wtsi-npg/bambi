@@ -1834,8 +1834,8 @@ static void processTile(job_data_t *job_data)
 
     while (cluster < max_cluster) {
         int blk = 0;   
-        while (!blk && cluster < max_cluster) {
-            if (!job_struct) job_struct = malloc(sizeof(*job_struct));
+        if (!job_struct) {
+            job_struct = malloc(sizeof(*job_struct));
             if (!job_struct) die("Out of memory");
             job_struct->start_cluster = cluster;
             job_struct->end_cluster = cluster+CLUSTERS_PER_THREAD-1;
@@ -1888,14 +1888,14 @@ static void processTile(job_data_t *job_data)
             } else {
                 job_struct->max_data_len[1] = 0;
             }
+        }
 
-            blk = hts_tpool_dispatch2(p, q, processRecords, job_struct, 1);
-            if (!blk) {
-                cluster += CLUSTERS_PER_THREAD;
-                job_struct = NULL;
-            } else if (errno != EAGAIN) {
-                die("Thread pool dispatch failed");
-            }
+        blk = hts_tpool_dispatch2(p, q, processRecords, job_struct, 1);
+        if (!blk) {
+            cluster += CLUSTERS_PER_THREAD;
+            job_struct = NULL;
+        } else if (errno != EAGAIN) {
+            die("Thread pool dispatch failed");
         }
 
         // Check for results.
