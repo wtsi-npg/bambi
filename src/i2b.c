@@ -39,6 +39,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <cram/sam_header.h>
 #include <htslib/thread_pool.h>
+#include <htslib/khash.h>
 
 #include "posfile.h"
 #include "filterfile.h"
@@ -52,6 +53,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define DEFAULT_MAX_BARCODES 10
 #define QUEUELEN "1000000"
 #define CLUSTERS_PER_THREAD 25000
+
+// BCL file cache
+KHASH_MAP_INIT_INT(bcl_cache, bclfile_t *);
+typedef struct lockable_bcl_cache {
+    pthread_mutex_t lock;
+    khash_t(bcl_cache) *cache;
+} lockable_bcl_cache;
 
 char *strptime(const char *s, const char *format, struct tm *tm);
 
@@ -167,6 +175,7 @@ typedef struct {
     va_t *tileIndex;
     va_t *barcode_calls[2]; // of barcode_spec_t
     va_t *barcode_quals[2]; // of barcode_spec_t
+    lockable_bcl_cache *bcl_cache;
     hts_tpool *thread_p;
     hts_tpool_process *thread_q;
 } job_data_t;
@@ -1191,13 +1200,64 @@ static filter_t *openFilterFile(int tile, va_t *tileIndex, opts_t *opts)
     return filter;
 }
 
+static  bclfile_t *get_cached_bclfile(lockable_bcl_cache *bcl_cache, int lane, int cycle, int surface) {
+    khint32_t key;
+    khiter_t i;
+    bclfile_t *bcl = NULL;
+    assert(lane >= 0 && lane < 1024);
+    assert(surface > 0 && surface <= 2);
+    assert(cycle >= 0 && cycle < 1048576);
+    key = ((cycle << 11) | (lane << 1) | (surface - 1));
+    if (pthread_mutex_lock(&bcl_cache->lock) < 0) die("pthread_mutex_lock failed\n");
+     i = kh_get(bcl_cache, bcl_cache->cache, key);
+     if (i < kh_end(bcl_cache->cache)) bcl = kh_value(bcl_cache->cache, i);
+     if (pthread_mutex_unlock(&bcl_cache->lock) < 0) die("pthread_mutex_unlock failed\n");
+     return bcl;
+}
+
+static void insert_bclfile_to_cache(bclfile_t *bcl, lockable_bcl_cache *bcl_cache, int lane, int cycle, int surface) {
+    khint32_t key;
+    khiter_t i;
+    int ret = 0;
+    assert(lane >= 0 && lane < 1024);
+    assert(surface > 0 && surface <= 2);
+    assert(cycle >= 0 && cycle < 1048576);
+    key = ((cycle << 11) | (lane << 1) | (surface - 1));
+    if (pthread_mutex_lock(&bcl_cache->lock) < 0) die("pthread_mutex_lock failed\n");
+    i = kh_put(bcl_cache, bcl_cache->cache, key, &ret);
+    if (ret < 0) die("Out of memory");
+    assert(ret > 0);
+    bcl->is_cached = 1; // Prevent premature close
+    kh_value(bcl_cache->cache, i) = bcl;
+    if (pthread_mutex_unlock(&bcl_cache->lock) < 0) die("pthread_mutex_unlock failed\n");
+}
+
+static void clear_bcl_cache(lockable_bcl_cache *bcl_cache) {
+    khiter_t k;
+    // Locking shouldn't be necessary as all threads ought to have shut down
+    // by the time this is called, but it won't do any harm.
+    pthread_mutex_lock(&bcl_cache->lock);
+    for (k = kh_begin(bcl_cache->cache); k != kh_end(bcl_cache->cache); ++k) {
+        bclfile_t *bcl;
+        if (!kh_exist(bcl_cache->cache, k)) continue;
+        bcl = kh_value(bcl_cache->cache, k);
+        bcl->is_cached = 0;
+        bclfile_close(bcl);
+        kh_value(bcl_cache->cache, k) = NULL;
+    }
+    kh_destroy(bcl_cache, bcl_cache->cache);
+    bcl_cache->cache = NULL;
+    pthread_mutex_unlock(&bcl_cache->lock);
+}
+
 /*
  * Open a single bcl file
  */
 static bclfile_t *openBclFile(char *basecalls, int lane, int tile, int cycle, int surface, va_t *tileIndex, filter_t *filter)
 {
-    bclfile_t *bcl;
+    bclfile_t *bcl = NULL;
     char *fname = calloc(1, strlen(basecalls)+128);
+    if (!fname) die("Out of memory");
 
     if (machineType==MT_NEXTSEQ) {
         sprintf(fname, "%s/L%03d/%04d.bcl.bgzf", basecalls, lane, cycle);
@@ -1226,8 +1286,6 @@ static bclfile_t *openBclFile(char *basecalls, int lane, int tile, int cycle, in
     free(fname);
 
     bcl->surface = surface;
-    if (tileIndex) bclfile_load_tile(bcl, findClusterNumber(tile,tileIndex), filter);
-    if (machineType == MT_NOVASEQ) bclfile_load_tile(bcl, tile, filter);
 
     return bcl;
 }
@@ -1248,6 +1306,7 @@ struct bcl_opt {
     va_t *tileIndex;
     filter_t *filter;
     va_t *bclFileArray;
+    lockable_bcl_cache *bcl_cache;
     pthread_mutex_t *lock;
 };
 
@@ -1255,7 +1314,28 @@ static void *bcl_thread(void *arg)
 {
     struct bcl_opt *o = (struct bcl_opt *)arg;
     bclfile_t *bcl = NULL;
-    bcl = openBclFile(o->opts->basecalls_dir, o->opts->lane, o->tile, o->cycle, o->surface, o->tileIndex, o->filter);
+    if (o->bcl_cache) {
+        bcl = get_cached_bclfile(o->bcl_cache, o->opts->lane, o->cycle, o->surface);
+    }
+    if (!bcl) {
+        bcl = openBclFile(o->opts->basecalls_dir, o->opts->lane, o->tile, o->cycle, o->surface, o->tileIndex, o->filter);
+        if (o->bcl_cache) {
+            insert_bclfile_to_cache(bcl, o->bcl_cache, o->opts->lane, o->cycle, o->surface);
+        }
+    }
+
+    switch (machineType) {
+        case MT_NEXTSEQ:
+            assert(o->tileIndex);
+            bclfile_load_tile(bcl, findClusterNumber(o->tile, o->tileIndex), o->filter);
+            break;
+        case MT_NOVASEQ:
+            bclfile_load_tile(bcl, o->tile, o->filter);
+            break;
+        default:
+            break;
+    }
+
     if (pthread_mutex_lock(o->lock) < 0) die("Mutex lock failed\n");
     assert(o->cycle - o->cr->first < o->bclFileArray->end);
     assert(o->bclFileArray->entries[o->cycle - o->cr->first] == NULL);
@@ -1265,7 +1345,7 @@ static void *bcl_thread(void *arg)
     return NULL;
 }
 
-static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, va_t *tileIndex, filter_t *filter, hts_tpool *p)
+static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, va_t *tileIndex, filter_t *filter, hts_tpool *p, lockable_bcl_cache *bcl_cache)
 {
     pthread_mutex_t bcl_array_lock = PTHREAD_MUTEX_INITIALIZER;
     va_t *bclReadArray = va_init(cycleRange->end * 2, freeBCLReadArray);
@@ -1285,7 +1365,7 @@ static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, va_t *tileIn
 
             va_push(bclReadArray,ra);
 
-            struct bcl_opt o = { p, q, cr, opts, tile, 0, surface, tileIndex, filter, ra->bclFileArray, &bcl_array_lock };
+            struct bcl_opt o = { p, q, cr, opts, tile, 0, surface, tileIndex, filter, ra->bclFileArray, bcl_cache, &bcl_array_lock };
 
             for (int cycle = cr->first; cycle <= cr->last; cycle++) {
                 va_push(ra->bclFileArray, NULL);
@@ -1818,7 +1898,7 @@ static void processTile(job_data_t *job_data)
     posfile_load(posfile, max_cluster, (machineType == MT_NOVASEQ) ? filter : NULL);
     max_cluster = posfile->size;
 
-    bclReadArray = openBclFiles(cycleRange, opts, tile, tileIndex, filter, p);
+    bclReadArray = openBclFiles(cycleRange, opts, tile, tileIndex, filter, p, job_data->bcl_cache);
     char *id = getId(opts);
 
     if (opts->verbose) fprintf(stderr,"Tile %d : opened all BCL files\n", tile);
@@ -2006,6 +2086,11 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, hts_tpool *
     va_t *tileIndex = getTileIndex(opts);
     va_t *barcode_calls[2];
     va_t *barcode_quals[2];
+    lockable_bcl_cache bcl_cache = { PTHREAD_MUTEX_INITIALIZER, NULL };
+    if (machineType == MT_NOVASEQ) {
+        bcl_cache.cache = kh_init(bcl_cache);
+        if (!bcl_cache.cache) die("Out of memory");
+    }
 
     barcode_calls[0] = va_init(4, free_barcode_spec);
     barcode_calls[1] = va_init(4, free_barcode_spec);
@@ -2042,11 +2127,15 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, hts_tpool *
         job_data->barcode_calls[1] = barcode_calls[1];
         job_data->barcode_quals[0] = barcode_quals[0];
         job_data->barcode_quals[1] = barcode_quals[1];
+        job_data->bcl_cache = bcl_cache.cache ? &bcl_cache : NULL;
         job_data->thread_p = thread_p;
         job_data->thread_q = thread_q;
 
         processTile(job_data);
     }
+
+    if (bcl_cache.cache)
+        clear_bcl_cache(&bcl_cache);
 
     va_free(barcode_calls[0]);
     va_free(barcode_calls[1]);

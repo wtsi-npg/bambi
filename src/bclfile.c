@@ -79,6 +79,7 @@ bclfile_t *bclfile_init(void)
     bclfile->total_clusters = 0;
     bclfile->fhandle = -1;
     bclfile->gzhandle = NULL;
+    bclfile->is_cached = 0;
     bclfile->machine_type = MT_UNKNOWN;
     bclfile->current_base = 0;
     bclfile->filename = NULL;
@@ -342,6 +343,7 @@ int bclfile_seek_tile(bclfile_t *bcl, int tile, filter_t *filter)
 
 void bclfile_close(bclfile_t *bclfile)
 {
+    if (bclfile->is_cached) return;
     if (bclfile->gzhandle) if (gzclose(bclfile->gzhandle) != Z_OK) die("Couldn't gzclose BCL file [%s]\n", bclfile->filename);
     if (bclfile->fhandle != -1) if (close(bclfile->fhandle)) die("Couldn't close BCL file [%s] Handle %d\n", bclfile->filename, bclfile->fhandle);
     free(bclfile->filename);
