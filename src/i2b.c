@@ -1386,7 +1386,6 @@ static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, va_t *tileIn
                 }
             }
             hts_tpool_process_flush(q);
-            assert(hts_tpool_next_result(q) == NULL);
         }
     }
 
@@ -2007,7 +2006,6 @@ static void processTile(job_data_t *job_data)
     }
 
     // Wait for any input-queued up jobs or in-progress jobs to complete.
-    hts_tpool_process_flush(q);
     while (!hts_tpool_process_empty(q)) {
         r = hts_tpool_next_result_wait(q);
         struct processRecordResult_struct *res = (struct processRecordResult_struct *)hts_tpool_result_data(r);
