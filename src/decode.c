@@ -124,7 +124,7 @@ static bc_details_t *bcd_init(void)
 }
 
 /*
- * Print matrics file header
+ * Print metrics file header
  */
 static void print_header(FILE* f, opts_t* opts, bool metrics) {
     // print header

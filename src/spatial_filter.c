@@ -1343,7 +1343,7 @@ static void usage(FILE *usagefp)
 	fprintf(usagefp, "                  Filter filename e.g. 8088.filter\n");
 	fprintf(usagefp, "                  no default: must be supplied\n");
 	fprintf(usagefp, "                  or\n");
-	fprintf(usagefp, "                  comma separated list of filter files (for crate filter only).\n");
+	fprintf(usagefp, "                  comma separated list of filter files (for apply filter only).\n");
     fprintf(usagefp, "                  There must be a corresponding list of RG IDs (see --rg)\n\n");
 	fprintf(usagefp, "\n");
 	fprintf(usagefp, "    create filter:\n");
@@ -1363,7 +1363,7 @@ static void usage(FILE *usagefp)
 	fprintf(usagefp, "                 default %-6.4f\n", REGION_DELETION_THRESHOLD);
 	fprintf(usagefp, "      -t prefix\n");
 	fprintf(usagefp, "                 generate tileviz files in this directory\n");
-    fprintf(usagefp, "      -R --rg    List of RG IDs. Must correspond to list of filter files\n");
+    fprintf(usagefp, "      -R --rg    Comma separated list of RG IDs. Must correspond to list of filter files\n");
 	fprintf(usagefp, "\n");
 	fprintf(usagefp, "    apply filter:\n");
 	fprintf(usagefp, "      -o         output\n");
