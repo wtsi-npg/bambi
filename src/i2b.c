@@ -168,6 +168,7 @@ typedef struct {
 
 typedef struct {
     unsigned int tile;
+    unsigned int next_tile;
     samFile *output_file;
     bam_hdr_t *output_header;
     opts_t *opts;
@@ -1281,7 +1282,7 @@ static bclfile_t *openBclFile(char *basecalls, int lane, int tile, int cycle, in
         sprintf(fname, "%s/L%03d/C%d.1/s_%d_%04d.bcl", basecalls, lane, cycle, lane, tile);
     }
 
-    bcl = bclfile_open(fname, machineType);
+    bcl = bclfile_open(fname, machineType, tile);
 
     if (bcl->errmsg) {
         bclfile_close(bcl);
@@ -1309,6 +1310,7 @@ struct bcl_opt {
     int tile;
     int cycle;
     int surface;
+    int next_tile;
     va_t *tileIndex;
     filter_t *filter;
     va_t *bclFileArray;
@@ -1333,10 +1335,10 @@ static void *bcl_thread(void *arg)
     switch (machineType) {
         case MT_NEXTSEQ:
             assert(o->tileIndex);
-            bclfile_load_tile(bcl, findClusterNumber(o->tile, o->tileIndex), o->filter);
+            bclfile_load_tile(bcl, findClusterNumber(o->tile, o->tileIndex), o->filter, -1);
             break;
         case MT_NOVASEQ:
-            bclfile_load_tile(bcl, o->tile, o->filter);
+            bclfile_load_tile(bcl, o->tile, o->filter, o->next_tile);
             break;
         default:
             break;
@@ -1351,7 +1353,7 @@ static void *bcl_thread(void *arg)
     return NULL;
 }
 
-static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, va_t *tileIndex, filter_t *filter, hts_tpool *p, lockable_bcl_cache *bcl_cache)
+static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, int next_tile, va_t *tileIndex, filter_t *filter, hts_tpool *p, lockable_bcl_cache *bcl_cache)
 {
     pthread_mutex_t bcl_array_lock = PTHREAD_MUTEX_INITIALIZER;
     va_t *bclReadArray = va_init(cycleRange->end * 2, freeBCLReadArray);
@@ -1371,7 +1373,7 @@ static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, va_t *tileIn
 
             va_push(bclReadArray,ra);
 
-            struct bcl_opt o = { p, q, cr, opts, tile, 0, surface, tileIndex, filter, ra->bclFileArray, bcl_cache, &bcl_array_lock };
+            struct bcl_opt o = { p, q, cr, opts, tile, 0, surface, next_tile, tileIndex, filter, ra->bclFileArray, bcl_cache, &bcl_array_lock };
 
             for (int cycle = cr->first; cycle <= cr->last; cycle++) {
                 va_push(ra->bclFileArray, NULL);
@@ -1868,6 +1870,7 @@ static va_t *get_barcode_bcl_files(va_t *barcode_specs, va_t *bcl_read_array, in
 static void processTile(job_data_t *job_data)
 {
     int tile = job_data->tile;
+    int next_tile = job_data->next_tile;
     samFile *output_file = job_data->output_file;
     bam_hdr_t *output_header = job_data->output_header;
     va_t *cycleRange = job_data->cycleRange;
@@ -1903,7 +1906,7 @@ static void processTile(job_data_t *job_data)
     posfile_load(posfile, max_cluster, (machineType == MT_NOVASEQ) ? filter : NULL);
     max_cluster = posfile->size;
 
-    bclReadArray = openBclFiles(cycleRange, opts, tile, tileIndex, filter, p, job_data->bcl_cache);
+    bclReadArray = openBclFiles(cycleRange, opts, tile, next_tile, tileIndex, filter, p, job_data->bcl_cache);
     char *id = getId(opts);
 
     if (opts->verbose) fprintf(stderr,"Tile %d : opened all BCL files\n", tile);
@@ -2122,6 +2125,7 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, hts_tpool *
         job_data_t *job_data = malloc(sizeof(job_data_t));
         if (!job_data) { die("Can't allocate memory for job_data\n"); }
         job_data->tile = tiles->entries[n];
+        job_data->next_tile = n + 1 < tiles->end ? tiles->entries[n + 1] : -1;
         job_data->output_file = output_file;
         job_data->output_header = output_header;
         job_data->opts = opts;

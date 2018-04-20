@@ -93,7 +93,7 @@ int main(int argc, char**argv)
 
     // BCL tests
 
-    bclfile = bclfile_open(MKNAME(DATA_DIR,"/s_1_1101.bcl.gz"), MT_HISEQX);
+    bclfile = bclfile_open(MKNAME(DATA_DIR,"/s_1_1101.bcl.gz"), MT_HISEQX, -1);
     if (bclfile->errmsg) {
         fprintf(stderr,"Error opening file: %s\n", bclfile->errmsg);
         failure++;
@@ -111,12 +111,12 @@ int main(int argc, char**argv)
 
     // CBCL tests
 
-    bclfile = bclfile_open(MKNAME(DATA_DIR,"/novaseq/Data/Intensities/BaseCalls/L001/C1.1/L001_1.cbcl"), MT_NOVASEQ);
+    bclfile = bclfile_open(MKNAME(DATA_DIR,"/novaseq/Data/Intensities/BaseCalls/L001/C1.1/L001_1.cbcl"), MT_NOVASEQ, 1101);
     if (bclfile->errmsg) {
         fprintf(stderr,"Error opening file: %s\n", bclfile->errmsg);
         failure++;
     }
-    bclfile_load_tile(bclfile,1101,NULL);
+    bclfile_load_tile(bclfile,1101,NULL,-1);
     icheckEqual("machine type", MT_NOVASEQ, bclfile->machine_type);
     icheckEqual("version", 1, bclfile->version);
     icheckEqual("header_size", 65, bclfile->header_size);
