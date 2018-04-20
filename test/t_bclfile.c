@@ -19,14 +19,32 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 */
 
-#include "../src/bclfile.c"
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include "bclfile.h"
 
 #define xMKNAME(d,f) #d f
 #define MKNAME(d,f) xMKNAME(d,f)
+
+void display(const char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  vfprintf(stderr, fmt, ap);
+  va_end(ap);
+}
+
+void die(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap,fmt);
+    fflush(stdout);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+    fflush(stderr);
+    exit(EXIT_FAILURE);
+}
 
 int verbose = 0;
 
@@ -75,65 +93,31 @@ int main(int argc, char**argv)
 
     // BCL tests
 
-    bclfile = bclfile_open(MKNAME(DATA_DIR,"/s_1_1101.bcl"));
+    bclfile = bclfile_open(MKNAME(DATA_DIR,"/s_1_1101.bcl.gz"), MT_HISEQX);
     if (bclfile->errmsg) {
         fprintf(stderr,"Error opening file: %s\n", bclfile->errmsg);
         failure++;
     }
     icheckEqual("Total clusters", 2609912, bclfile->total_clusters);
-    icheckEqual("Current cluster", 0, bclfile->current_cluster);
+    icheckEqual("Current cluster", 0, bclfile->base_ptr);
 
-    bclfile_next(bclfile);
-    ccheckEqual("Base", 'N', bclfile->base);
-    icheckEqual("Quality", 0, bclfile->quality);
-    icheckEqual("current cluster", 1, bclfile->current_cluster);
+    ccheckEqual("Base", 'N', bclfile_base(bclfile,0));
+    icheckEqual("Quality", 0, bclfile_quality(bclfile,0));
 
-    for (n=0; n<306; n++) {
-        bclfile_next(bclfile);
-    }
-    ccheckEqual("307 Base", 'A', bclfile->base);
-    icheckEqual("307 Quality", 30, bclfile->quality);
-    icheckEqual("307 current cluster", 307, bclfile->current_cluster);
-    icheckEqual("307 Total clusters", 2609912, bclfile->total_clusters);
-
-    while (bclfile_next(bclfile) == 0);
-    ccheckEqual("last Base", 'G', bclfile->base);
-    icheckEqual("last Quality", 20, bclfile->quality);
-    icheckEqual("last current cluster", 2609912, bclfile->current_cluster);
-    icheckEqual("last Total clusters", 2609912, bclfile->total_clusters);
+    ccheckEqual("307 Base", 'A', bclfile_base(bclfile,306));
+    icheckEqual("307 Quality", 30, bclfile_quality(bclfile,306));
 
     bclfile_close(bclfile);
 
-    // SCL tests
-
-    bclfile = bclfile_open(MKNAME(DATA_DIR,"/s_1_1101.scl"));
-    if (bclfile->errmsg) {
-        fprintf(stderr,"Error opening file: %s\n", bclfile->errmsg);
-        failure++;
-    }
-    icheckEqual("SCL File Type", BCL_SCL, bclfile->file_type);
-    icheckEqual("SCL Total clusters", 2609912, bclfile->total_clusters);
-    icheckEqual("SCL Current cluster", 0, bclfile->current_cluster);
-
-    bclfile_next(bclfile);
-    ccheckEqual("SCL First Base", 'A', bclfile->base);
-
-    for (n=0; n<306; n++) {
-        bclfile_next(bclfile);
-    }
-    ccheckEqual("SCL 307 Base", 'T', bclfile->base);
-
-    while (bclfile_next(bclfile) == 0);
-    ccheckEqual("SCL Last Base", 'C', bclfile->base);
-
     // CBCL tests
 
-    bclfile = bclfile_open(MKNAME(DATA_DIR,"/novaseq/Data/Intensities/BaseCalls/L001/C1.1/L001_1.cbcl"));
+    bclfile = bclfile_open(MKNAME(DATA_DIR,"/novaseq/Data/Intensities/BaseCalls/L001/C1.1/L001_1.cbcl"), MT_NOVASEQ);
     if (bclfile->errmsg) {
         fprintf(stderr,"Error opening file: %s\n", bclfile->errmsg);
         failure++;
     }
-    icheckEqual("CBCL file type", BCL_CBCL, bclfile->file_type);
+    bclfile_load_tile(bclfile,1101,NULL);
+    icheckEqual("machine type", MT_NOVASEQ, bclfile->machine_type);
     icheckEqual("version", 1, bclfile->version);
     icheckEqual("header_size", 65, bclfile->header_size);
     icheckEqual("bits_per_base", 2, bclfile->bits_per_base);
@@ -146,13 +130,14 @@ int main(int argc, char**argv)
         fprintf(stderr,"%d\t%d\t%d\t%d\t%d\n", t->tilenum, t->nclusters, t->uncompressed_blocksize, t->compressed_blocksize, bclfile->pfFlag);
     }
 
-    bclfile_next(bclfile); ccheckEqual("CBCL First Base", 'T', bclfile->base);
-    bclfile_next(bclfile); ccheckEqual("CBCL Second Base", 'G', bclfile->base);
-    bclfile_next(bclfile); ccheckEqual("CBCL Third Base", 'N', bclfile->base);
-    while (bclfile_next(bclfile) == 0);
-    ccheckEqual("CBCL Last Base", 'G', bclfile->base);
+    ccheckEqual("CBCL First Base", 'T', bclfile_base(bclfile,0));
+    ccheckEqual("CBCL Second Base", 'G', bclfile_base(bclfile,1));
+    ccheckEqual("CBCL Third Base", 'N', bclfile_base(bclfile,2));
+    ccheckEqual("CBCL Last Base", 'G', bclfile_base(bclfile,27));
 
-    icheckEqual("CBCL current_block_size", 14, bclfile->current_block_size);
+    icheckEqual("CBCL Number of bases", 28, bclfile->bases_size);
+
+    bclfile_close(bclfile);
 
     printf("bclfile tests: %s\n", failure ? "FAILED" : "Passed");
     return failure ? EXIT_FAILURE : EXIT_SUCCESS;
