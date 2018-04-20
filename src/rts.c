@@ -25,10 +25,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string.h>
 #include <search.h>
 
-#include <rts.h>
+#include "bambi.h"
+#include "rts.h"
+#include "hash_table.h"
+#include "array.h"
 
 static Header *_hdr = NULL;
-static char *filterData = NULL;
+static HashTable *_filter_hash = NULL;
 
 // The Perl 'chomp()' function is too useful not to recreate it here...
 static void chomp(char *line)
@@ -38,16 +41,40 @@ static void chomp(char *line)
     return;
 }
 
+inline int getHdrReadLength(int read) { return _hdr->readLength[read]; }
+inline int getHdrnregions(void) { return _hdr->nregions; }
 //
 // Filter methods
 //
 
-void readHeader(FILE *fp, Header *hdr)
+// Allocate memory for the filter file, then slurp the whole thing
+static void readFilterData(FILE *fp, Header *hdr)
+{
+    int i, n=0;
+    for (i=0; i < hdr->nreads; i++) n += hdr->readLength[i];
+    if ((hdr->ntiles * n * hdr->nregions)) {
+        hdr->filterData = malloc(hdr->ntiles * n * hdr->nregions);
+        if (fread(hdr->filterData, hdr->ntiles * n * hdr->nregions, 1, fp) != 1) {
+            die("Error reading filter file\n");
+        }
+    }
+}
+
+
+Header *readHeader(char *fname)
 {
     int len = 1024;
     char line[1024];
     int i;
     char *p;
+    Header *hdr;
+    FILE *fp;
+
+    hdr = malloc(sizeof(Header));
+    if (!hdr) die("readHeader(): Can't allocate memory for %s\n", fname);
+
+    fp = fopen(fname, "rb");
+    if (!fp) die("readHeader(): Can't open %s\n", fname);
 
     p=fgets(line, len, fp); chomp(line); hdr->region_magic = strdup(line);
     p=fgets(line, len, fp); hdr->coord_shift = atoi(line);
@@ -86,6 +113,11 @@ void readHeader(FILE *fp, Header *hdr)
     for (i=0; i < hdr->ncomments; i++) {
         p=fgets(line, len, fp); chomp(line); hdr->comments[i] = strdup(line);
     }
+
+    readFilterData(fp, hdr);
+
+    fclose(fp);
+    return hdr;
 }
 
 void writeHeader(FILE *fp, Header *hdr)
@@ -116,20 +148,6 @@ void addHeaderComment(Header *hdr, char *comment)
     hdr->comments[hdr->ncomments++] = strdup(comment);
 }
 
-// Allocate memory for the filter file, then slurp the whole thing
-void readFilterData(FILE *fp, Header *hdr)
-{
-	int i, n=0;
-	for (i=0; i < hdr->nreads; i++) n += hdr->readLength[i];
-	if ((hdr->ntiles * n * hdr->nregions)) {
-            filterData = malloc(hdr->ntiles * n * hdr->nregions);
-            if (fread(filterData, hdr->ntiles * n * hdr->nregions, 1, fp) != 1) 
-                    { fprintf(stderr,"Error reading filter file\n"); exit(1); }
-        }
-
-	_hdr = hdr;
-}
-
 static int keyComp(const void *k1, const void *k2)
 {
 	int key = *(int *)k1;
@@ -146,11 +164,11 @@ char* getFilterData(int tile, int read, int cycle, int region)
     itile = ((int*)pitile - _hdr->tileArray);
     for (i=0; i < read; i++) previousReadLength += _hdr->readLength[i];
 	offset = itile * _hdr->totalReadLength * _hdr->nregions + (previousReadLength + cycle) * _hdr->nregions + region;
-	return filterData + offset;
+	return _hdr->filterData + offset;
 }
 
 // which region is x in?
-int x2region(int x, int region_size)
+int inline x2region(int x, int region_size)
 {
     int coord_shift = (_hdr ? _hdr->coord_shift : COORD_SHIFT);
     int coord_factor = (_hdr ? _hdr->coord_factor : COORD_FACTOR);
@@ -159,8 +177,37 @@ int x2region(int x, int region_size)
 }
 
 // which region is (x,y) in?
-int xy2region(int x, int y, int region_size, int nregions_x, int nregions_y)
+inline int xy2region(int x, int y)
 {
-    return x2region(x, region_size) * nregions_y + x2region(y, region_size);
+    return x2region(x, _hdr->region_size) * _hdr->nregions_y + x2region(y, _hdr->region_size);
 }
+
+Header *getHdr(char *rgid)
+{
+    if (!rgid) rgid = "null";
+    HashItem *hi = HashTableSearch(_filter_hash, rgid, 0);
+    if (hi) return hi->data.p;
+    return NULL;
+}
+
+int setCurrentHdr(char *rgid)
+{
+    _hdr = getHdr(rgid);
+    return _hdr != NULL;
+}
+
+void openFilters(va_t *fnames, va_t *rgids)
+{
+    _filter_hash = HashTableCreate(0, HASH_DYNAMIC_SIZE | HASH_FUNC_JENKINS);
+
+    for (int n = 0; n < fnames->end; n++) {
+        HashData hd;
+        char *fname = fnames->entries[n];
+        char *rgid = rgids ? rgids->entries[n] : "null";
+        Header *hdr = readHeader(fname);
+        hd.p = hdr;
+        HashTableAdd(_filter_hash, rgid, 0, hd, NULL);
+    }
+}
+
 

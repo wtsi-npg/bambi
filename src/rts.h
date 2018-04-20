@@ -58,6 +58,7 @@ typedef struct {
     char *cmdLine;
     int ncomments;
     char *comments[N_COMMENTS];
+    char *filterData;
 } Header;
 
 // An internal structure used to create the filter file
@@ -75,11 +76,14 @@ typedef struct {
 // Filter methods
 void writeHeader(FILE *fp, Header *hdr);
 void addHeaderComment(Header *hdr, char *comment);
-void readHeader(FILE *fp, Header *hdr);
-void readFilterData(FILE *fp, Header *hdr);
-char* getFilterData(int tile, int read, int cycle, int region);
-
+void openFilters(va_t *filters, va_t *rgids);
+//Header *readHeader(char *fname);
+int setCurrentHdr(char *rgid);
+char *getFilterData(int tile, int read, int cycle, int region);
+Header *getHdr(char *rgid);
 int x2region(int x, int region_size);
-int xy2region(int x, int y, int region_size, int nregions_x, int nregions_y);
+int xy2region(int x, int y);
+int getHdrReadLength(int read);
+int getHdrnregions(void);
 
 #endif /* RTS_H_INCLUDED */
