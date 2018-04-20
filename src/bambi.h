@@ -21,12 +21,20 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef __BAMBI_H__
 #define __BAMBI_H__
 
-#define INDEX_SEPARATOR "-"
-#define QUAL_SEPARATOR " "
-
 #include "config.h"
 #include "hts_addendum.h"
 #include "array.h"
+
+#define INDEX_SEPARATOR "-"
+#define QUAL_SEPARATOR " "
+
+// Machine Type is used by i2b 
+typedef enum { MT_UNKNOWN,
+               MT_MISEQ,           // MiSeq and HiSeq 2000/2500
+               MT_NEXTSEQ,         // MiniSeq and NextSeq 500/550
+               MT_HISEQX,          // HiSeq X and HiSeq 3000/4000
+               MT_NOVASEQ          // NovaSeq
+             } MACHINE_TYPE;
 
 const char *bambi_version(void);
 void parse_tags(va_t *tags, char *arg);

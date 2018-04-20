@@ -21,18 +21,39 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <config.h>
 
 #include "bambi.h"
-#include "../src/i2b.c"
+//#include "../src/i2b.c"
 #include <stdlib.h>
 #include <unistd.h>
+#include <assert.h>
 
 #define xMKNAME(d,f) #d f
 #define MKNAME(d,f) xMKNAME(d,f)
 
 int verbose = 0;
 
+int main_i2b(int argc, char *argv[]);
+
 const char * bambi_version(void)
 {
     return "12.34";
+}
+
+void display(const char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  vfprintf(stderr, fmt, ap);
+  va_end(ap);
+}
+
+void die(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap,fmt);
+    fflush(stdout);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+    fflush(stderr);
+    exit(EXIT_FAILURE);
 }
 
 int success = 0;
@@ -500,52 +521,6 @@ void icheckEqual(char *name, int expected, int actual)
     }
 }
 
-void test_paramaters(void)
-{
-    // minimal options
-    int argc_1;
-    char** argv_1;
-    setup_param_test(&argc_1, &argv_1);
-    opts_t *opts = i2b_parse_args(argc_1-1, argv_1+1);
-
-    if (verbose) printf("Testing paramaters\n");
-
-    if (!opts) {
-        fprintf(stderr, "parse_args failed\n");
-        failure++;
-        return;
-    }
-
-    checkLike("options: intensity-dir", "test/data/160916_miseq_0966_FC/Data/Intensities", opts->intensity_dir);
-    checkEqual("options: output-file", "test/data/out/xxx.sam", opts->output_file);
-    checkEqual("options: sample-alias", "testlibrary", opts->sample_alias);
-    checkEqual("options: study-name", "teststudy", opts->study_name);
-    checkLike("options: run-folder", "test/data/160916_miseq_0966_FC", opts->run_folder);
-    checkLike("options: basecalls-dir", "test/data/160916_miseq_0966_FC/Data/Intensities/BaseCalls", opts->basecalls_dir);
-    icheckEqual("options: lane", 1, opts->lane);
-    icheckEqual("options: generate-secondary-basecalls", 1, opts->generate_secondary_basecalls);
-    icheckEqual("options: no-filter", 1, opts->no_filter);
-    checkEqual("options: read-group-id", "1", opts->read_group_id);
-    checkEqual("options: sequencing-centre", "XY", opts->sequencing_centre);
-    checkEqual("options: platform", "Illumina", opts->platform);
-    icheckEqual("options: first-tile", 1103, opts->first_tile);
-    icheckEqual("options: tile-limit", 5, opts->tile_limit);
-    checkEqual("options: barcode-tag", "AB", opts->barcode_tag->entries[0]);
-    checkEqual("options: quality-tag", "CD", opts->quality_tag->entries[0]);
-    checkEqual("options: sec-barcode-tag", "WX", opts->barcode_tag->entries[1]);
-    checkEqual("options: sec-quality-tag", "YZ", opts->quality_tag->entries[1]);
-    icheckEqual("options: first-cycle", 3, opts->first_cycle->end);
-    icheckEqual("options: first-cycle[0]", 7, opts->first_cycle->entries[0]);
-    icheckEqual("options: first-cycle[1]", 17, opts->first_cycle->entries[1]);
-    icheckEqual("options: first-cycle[2]", 70, opts->first_cycle->entries[2]);
-    icheckEqual("options: final-cycle", 3, opts->final_cycle->end);
-    icheckEqual("options: final-index-cycle", 1, opts->final_index_cycle->end);
-    icheckEqual("options: final-cycle[0]", 16, opts->final_cycle->entries[0]);
-    icheckEqual("options: index-separator", 0, opts->separator);
-    free_args(argv_1);
-    i2b_free_opts(opts);
-}
-
 void checkFiles(char *name, char *outputfile, char *fname)
 {
     char command[1024];
@@ -627,12 +602,6 @@ int main(int argc, char**argv)
     }
 
     //
-    // test that we can read the command line paramaters
-    //
-    test_paramaters();
-
-
-    //
     // simple test
     //
 
@@ -667,12 +636,14 @@ int main(int argc, char**argv)
     //
     // bc-read test
     //
+#if 0
     if (verbose) fprintf(stderr,"\n===> bc-read test\n");
     sprintf(outputfile,"%s/i2b_5.bam",TMPDIR);
     setup_bcread_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
     checkFiles("BC_READ test", outputfile, MKNAME(DATA_DIR,"/out/test5.bam"));
     free_args(argv_1);
+#endif
 
     //
     // dual index run

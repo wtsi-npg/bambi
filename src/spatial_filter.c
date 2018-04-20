@@ -42,6 +42,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "hash_table.h"
 #include "rts.h"
 #include "parse_bam.h"
+#include "array.h"
+#include "parse.h"
 
 #define PHRED_QUAL_OFFSET  33  // phred quality values offset
 
@@ -95,7 +97,8 @@ enum colours { COLOUR_LEVEL_0,
 int *colour_table = NULL;
 
 typedef struct {
-	char *filter;
+	va_t *filters;
+    va_t *rgids;
 	char *snp_file;
 	char *in_bam_file;
 	HashTable *snp_hash;
@@ -286,7 +289,8 @@ static void freeRTS(opts_t *s, int ntiles, RegionTable ***rts)
 static void free_opts(opts_t *opts)
 {
     if (!opts) return;
-    free(opts->filter);
+    va_free(opts->filters);
+    va_free(opts->rgids);
     free(opts->snp_file);
     free(opts->in_bam_file);
     free(opts->tileArray);
@@ -909,7 +913,7 @@ static void setRegionState(opts_t *s, int ntiles, size_t nreads, RegionTable ***
 * remove individual tiles with less than MIN_TILE_READ_COUNT reads
 */
 
-static int removeBadTiles(Header *hdr)
+static void removeBadTiles(Header *hdr)
 {
     int ngood_tiles = 0;
     size_t nreads = 0, tile_threshold = 0, threshold = 0;
@@ -917,7 +921,7 @@ static int removeBadTiles(Header *hdr)
 
 	if (0 >= hdr->ntiles) {
         display("No data in filter\n");
-		return ngood_tiles;
+		return;
     }
     
     for (itile=0; itile < hdr->ntiles; itile++) {
@@ -932,7 +936,7 @@ static int removeBadTiles(Header *hdr)
     
 	if (0 < nreads && nreads < threshold) {
         display("Discarding filter nreads %lu < %lu\n", nreads, threshold);
-		return ngood_tiles;
+		return;
     }
 
     for (itile=0; itile < hdr->ntiles; itile++) {
@@ -944,7 +948,7 @@ static int removeBadTiles(Header *hdr)
         }
     }
 
-    return ngood_tiles;
+    hdr->ntiles = ngood_tiles;
 }
 
 /*
@@ -956,8 +960,8 @@ static void printFilter(opts_t *s, int ntiles, RegionTable ***rts)
 	int itile, read, cycle, iregion;
 	Header hdr;
 
-    fp = fopen(s->filter, "w+");
-	if (!fp) die("Can't open filter file %s: %s\n", s->filter, strerror(errno));
+    fp = fopen(s->filters->entries[0], "w+");
+	if (!fp) die("Can't open filter file %s: %s\n", s->filters->entries[0], strerror(errno));
 
 	hdr.region_magic = strdup(REGION_MAGIC);
 	hdr.coord_shift = COORD_SHIFT; 
@@ -1239,49 +1243,55 @@ static RegionTable ***makeRegionTable(opts_t *s, BAMit_t *fp_bam, int *bam_ntile
  *	   -1 for failure
  */
 static int filter_bam(opts_t *s, BAMit_t *fp_in_bam, BAMit_t *fp_out_bam,
-               int ntiles, size_t *bam_nreads, size_t *bam_nfiltered)
+               size_t *bam_nreads, size_t *bam_nfiltered)
 {
 	int lane = -1;
 	size_t nreads = 0;
 	int nfiltered = 0;
-
+    char *rgid;
 	bam1_t *bam;
+    bool ignore = false;
 
 	/* loop over reads in the input bam file */
 	while (1) {
-		if (0 >= ntiles) {
-            /* no filter just copy reads to output bam file */
+        /* apply filter */
 
-            bam = BAMit_next(fp_in_bam);
-            if (!bam) {
-                break;	/* break on end of BAM file */
-            }
+        int bam_lane = -1, bam_tile = -1, bam_read = -1, bam_x = -1, bam_y = -1;
+        ignore = false;
+
+        bam = parse_bam_readinfo(fp_in_bam, &bam_lane, &bam_tile, &bam_x, &bam_y, &bam_read, NULL);
+        if (!bam) {
+            break;	/* break on end of BAM file */
+        }
+
+/*
+        if (lane == -1) {
+            lane = bam_lane;
+        }
+        if (bam_lane != lane) {
+            die("Error: Inconsistent lane: have %d previously it was %d.\n", bam_lane, lane);
+        }
+*/
+
+        // select filter file depending on RG tag
+        if ( (s->rgids->end == 1) && (strcmp(s->rgids->entries[0],"null")==0)) {
+            rgid = "null";
         } else {
-            /* apply filter */
+            uint8_t *p = bam_aux_get(bam,"RG");
+            rgid = p ? bam_aux2Z(p) : "null";
+        }
 
-   		    int bam_lane = -1, bam_tile = -1, bam_read = -1, bam_x = -1, bam_y = -1;
- 
-            bam = parse_bam_readinfo(fp_in_bam, &bam_lane, &bam_tile, &bam_x, &bam_y, &bam_read, NULL);
-            if (!bam) {
-                break;	/* break on end of BAM file */
-            }
-
-            if (lane == -1) {
-                lane = bam_lane;
-            }
-            if (bam_lane != lane) {
-                die("Error: Inconsistent lane: have %d previously it was %d.\n", bam_lane, lane);
-            }
-
-            int iregion = xy2region(bam_x, bam_y, s->region_size, s->nregions_x, s->nregions_y);
+        if (setCurrentHdr(rgid)) {
+            int iregion = xy2region(bam_x, bam_y);
             char* state = getFilterData(bam_tile, 0, 0, iregion);
             if (state != NULL) {
                 int read, cycle, bad_cycle_count = 0;
                 for (read = 0; read < N_READS; read++) {
-                    for (cycle = 0; cycle < s->read_length[read]; cycle++) {
+                    int maxCycle = getHdrReadLength(read);
+                    for (cycle = 0; cycle < maxCycle; cycle++) {
                         if (*state & REGION_STATE_MASK)
                             bad_cycle_count++;
-                        state += s->nregions;
+                        state += getHdrnregions();
                     }
                 }
 
@@ -1290,14 +1300,15 @@ static int filter_bam(opts_t *s, BAMit_t *fp_in_bam, BAMit_t *fp_out_bam,
                     if (s->qcfail) 
                         bam->core.flag |= BAM_FQCFAIL;
                     else
-                        continue;
+                        ignore = true;
                 }
             }
         }
-
         nreads++;
 
-		if (0 > sam_write1(fp_out_bam->f, fp_out_bam->h, bam)) die("Error: writing bam file\n");
+		if (!ignore) {
+            if (0 > sam_write1(fp_out_bam->f, fp_out_bam->h, bam)) die("Error: writing bam file\n");
+        }
 	}
 
 	bam_destroy1(bam);
@@ -1331,6 +1342,9 @@ static void usage(FILE *usagefp)
 	fprintf(usagefp, "      -F --filter file\n");
 	fprintf(usagefp, "                  Filter filename e.g. 8088.filter\n");
 	fprintf(usagefp, "                  no default: must be supplied\n");
+	fprintf(usagefp, "                  or\n");
+	fprintf(usagefp, "                  comma separated list of filter files (for apply filter only).\n");
+    fprintf(usagefp, "                  There must be a corresponding list of RG IDs (see --rg)\n\n");
 	fprintf(usagefp, "\n");
 	fprintf(usagefp, "    create filter:\n");
 	fprintf(usagefp, "      -s --snp_file file\n");
@@ -1349,6 +1363,7 @@ static void usage(FILE *usagefp)
 	fprintf(usagefp, "                 default %-6.4f\n", REGION_DELETION_THRESHOLD);
 	fprintf(usagefp, "      -t prefix\n");
 	fprintf(usagefp, "                 generate tileviz files in this directory\n");
+    fprintf(usagefp, "      -R --rg    Comma separated list of RG IDs. Must correspond to list of filter files\n");
 	fprintf(usagefp, "\n");
 	fprintf(usagefp, "    apply filter:\n");
 	fprintf(usagefp, "      -o         output\n");
@@ -1408,9 +1423,9 @@ static void calculateFilter(opts_t *opts)
 
     setRegionState(opts, ntiles, nreads, rts);
 
-    if (!opts->filter) {
+    if (!opts->filters) {
         display("Writing filter to stdout\n");
-        opts->filter = "/dev/stdout";
+        va_push(opts->filters,"/dev/stdout");
     }
     printFilter(opts, ntiles, rts);
 
@@ -1428,21 +1443,20 @@ static void applyFilter(opts_t *s)
 	char out_mode[5] = "wb";
 	char *out_bam_file = NULL;
 	char *apply_stats_file = NULL;
-	int ntiles;
 	size_t nreads = 0;
 	size_t nfiltered = 0;
-	Header hdr;
 	FILE *fp;
     int read;
 
-	fp = fopen(s->filter, "rb");
-	if (!fp) die("Can't open filter file %s\n", s->filter);
-	readHeader(fp, &hdr);
-	readFilterData(fp, &hdr);
-	fclose(fp);
+    openFilters(s->filters,s->rgids);
 
     /* remove bad tiles from region table */
-    ntiles = removeBadTiles(&hdr);
+    for (int n=0; n < s->rgids->end; n++) {
+        char *rgid = s->rgids->entries[n];
+        Header *hdr = getHdr(rgid);
+        if (!hdr) die("Can't find filter file for %s\n", rgid);
+        removeBadTiles(hdr);
+    }
 
     // Create output BAM filename
     out_bam_file = smalloc(strlen(s->working_dir) + strlen(s->output) + 16);
@@ -1462,6 +1476,7 @@ static void applyFilter(opts_t *s)
     }
     strcat(apply_stats_file, s->apply_stats_out);
 
+/*
     s->region_size = hdr.region_size;
 	s->nregions    = hdr.nregions;
 	s->nregions_x  = hdr.nregions_x;
@@ -1469,6 +1484,7 @@ static void applyFilter(opts_t *s)
 
     for (read=0;read<hdr.nreads;read++)
         s->read_length[read] = hdr.readLength[read];
+*/
 
 	fp_input_bam = BAMit_open(s->in_bam_file, 'r', s->input_fmt, 0);
 	if (NULL == fp_input_bam) {
@@ -1484,15 +1500,19 @@ static void applyFilter(opts_t *s)
     bam_hdr_destroy(fp_output_bam->h); fp_output_bam->h = bam_hdr_dup(fp_input_bam->h);
 
 	char concat_cmd[2048];
-	strcpy(concat_cmd, hdr.cmdLine);
-	strcat(concat_cmd, " ; ");
+    for (int n=0; n < s->rgids->end; n++) {
+        char *rgid = s->rgids->entries[n];
+        Header *hdr = getHdr(rgid);
+	    strcpy(concat_cmd, hdr->cmdLine);
+	    strcat(concat_cmd, " ; ");
+    }
 	strcat(concat_cmd, s->argv_list);
 	bam_header_add_pg("spf", "spatial_filter", "A program to apply a spatial filter", concat_cmd, fp_output_bam->h);
     if (sam_hdr_write(fp_output_bam->f, fp_output_bam->h) < 0) die("Can't write %s header\n", out_bam_file);
 	free(out_bam_file);
 
 
-	if (-1 == filter_bam(s, fp_input_bam, fp_output_bam, ntiles, &nreads, &nfiltered)) {
+	if (-1 == filter_bam(s, fp_input_bam, fp_output_bam, &nreads, &nfiltered)) {
 		die("ERROR: failed to filter bam file %s\n", s->in_bam_file);
 	}
 
@@ -1515,54 +1535,55 @@ static void applyFilter(opts_t *s)
     }
 }
 
-static void dumpFilterFile(char *filename, int verbose)
+static void dumpFilterFile(opts_t *opts)
 {
-	FILE *fp;
-	Header hdr;
+	Header *hdr;
 	int i;
 
-	if (!filename) die("dumpFilterFile: no filter filename given\n");
-	fp = fopen(filename, "r");
-	if (!fp) die("dumpFilterFile: Can't open file %s\n", filename);
-	readHeader(fp,&hdr);
-	printf("Magic:          %s\n", hdr.region_magic);
-	printf("Coord Shift:    %-5d\n", hdr.coord_shift);
-	printf("Coord Factor:   %-5d\n", hdr.coord_shift);
-	printf("Region Size:    %-5d\n", hdr.region_size);
-	printf("Num Regions:    %-5d\n", hdr.nregions);
-	printf("Num Tiles:      %-5d\n", hdr.ntiles);
-	for (i=0; i < hdr.ntiles; i++) printf("%-5d %-12lu", hdr.tileArray[i], hdr.tileReadCountArray[i]);
+    openFilters(opts->filters, opts->rgids);
+	hdr = getHdr(NULL);
+    setCurrentHdr(NULL);
+
+	printf("Magic:          %s\n", hdr->region_magic);
+	printf("Coord Shift:    %-5d\n", hdr->coord_shift);
+	printf("Coord Factor:   %-5d\n", hdr->coord_shift);
+	printf("Region Size:    %-5d\n", hdr->region_size);
+	printf("Num Regions:    %-5d\n", hdr->nregions);
+	printf("Num Tiles:      %-5d\n", hdr->ntiles);
+	for (i=0; i < hdr->ntiles; i++) printf("%-5d %-12lu", hdr->tileArray[i], hdr->tileReadCountArray[i]);
 	printf("\n");
 	printf("Read Length:    ");
-	for (i=0; i < hdr.nreads; i++) printf("%-5d ", hdr.readLength[i]);
+	for (i=0; i < hdr->nreads; i++) printf("%-5d ", hdr->readLength[i]);
 	printf("\n");
-	printf("Command Line:   %s\n", hdr.cmdLine);
-	for (i=0; i < hdr.ncomments; i++) {
-		if (i) printf("                %s\n", hdr.comments[i]);
-		else   printf("Comments:       %s\n", hdr.comments[i]);
+	printf("Command Line:   %s\n", hdr->cmdLine);
+	for (i=0; i < hdr->ncomments; i++) {
+		if (i) printf("                %s\n", hdr->comments[i]);
+		else   printf("Comments:       %s\n", hdr->comments[i]);
 	}
 
-	if (verbose) {
+	if (opts->verbose) {
         int tile, read, cycle, region;
-   	    readFilterData(fp, &hdr);
-        for (tile=0; tile<hdr.ntiles; tile++)
-            for (read=0; read<hdr.nreads; read++)
-                for (cycle=0; cycle<hdr.readLength[read]; cycle++) {
-                    char* state = getFilterData(hdr.tileArray[tile], read, cycle, 0);
+        for (tile=0; tile<hdr->ntiles; tile++)
+            for (read=0; read<hdr->nreads; read++)
+                for (cycle=0; cycle<hdr->readLength[read]; cycle++) {
+                    char* state = getFilterData(hdr->tileArray[tile], read, cycle, 0);
                     if (state != NULL) {
-                        for (region=0; region<hdr.nregions; region++) {
+                        for (region=0; region<hdr->nregions; region++) {
                             if (*state & REGION_STATE_MASK)
-                                printf("filtering tile=%d read=%d cycle=%d region=%d\n", hdr.tileArray[tile], read, cycle, region);
+                                printf("filtering tile=%d read=%d cycle=%d region=%d\n", hdr->tileArray[tile], read, cycle, region);
                             state++;
                         }
                     }
                 }
     }
 
-    free(hdr.tileArray);
-    free(hdr.tileReadCountArray);
+}
 
-	fclose(fp);
+va_t *parseList(char *arg)
+{
+    va_t *va = va_init(5,free);
+    parse_tags(va,arg);
+    return va;
 }
 
 /*
@@ -1572,15 +1593,15 @@ opts_t* spatial_filter_parse_args(int argc, char *argv[])
 {
     if (argc == 1) { usage(stdout); return NULL; }
 
-    const char *optstring = "vdcafuDF:b:e:o:l:i:p:s:r:x:y:t:z:qh?";
+    const char *optstring = "vdcafuDF:b:e:o:l:i:p:s:r:R:x:y:t:z:qh?";
 
 	static const struct option lopts[] = {
         {"snp_file", 1, 0, 's'},
         {"snp-file", 1, 0, 's'},
         {"help", 0, 0, 'h'},
         {"filter", 1, 0, 'F'},
+        {"rg", 1, 0, 'R'},
         {"verbose", 0, 0, 'v'},
-        {"region_size", 1, 0, 'r'},
         {"region-size", 1, 0, 'r'},
         {"region_mismatch_threshold", 1, 0, 'z'},
         {"region_insertion_threshold", 1, 0, 'b'},
@@ -1603,6 +1624,8 @@ opts_t* spatial_filter_parse_args(int argc, char *argv[])
 	opts->region_mismatch_threshold = REGION_MISMATCH_THRESHOLD;
 	opts->region_insertion_threshold = REGION_INSERTION_THRESHOLD;
 	opts->region_deletion_threshold = REGION_DELETION_THRESHOLD;
+    opts->filters = NULL;
+    opts->rgids = NULL;
 
     int opt;
     int ncmd = 0;
@@ -1617,7 +1640,8 @@ opts_t* spatial_filter_parse_args(int argc, char *argv[])
 			case 'f': opts->qcfail = 1;		              break;
 			case 'o': opts->output = strdup(optarg);      break;
 			case 's': opts->snp_file = strdup(optarg);    break;
-			case 'F': opts->filter = strdup(optarg);      break;
+			case 'F': opts->filters = parseList(optarg);  break;
+            case 'R': opts->rgids = parseList(optarg);    break;
 			case 'r': opts->region_size = atoi(optarg);   break;
 			case 'z': opts->region_mismatch_threshold = atof(optarg); break;
 			case 'b': opts->region_insertion_threshold = atof(optarg); break;
@@ -1656,7 +1680,7 @@ opts_t* spatial_filter_parse_args(int argc, char *argv[])
 
 	if (!opts->in_bam_file && !opts->dumpFilter) die("Error: no BAM file specified\n");
 
-    if (!opts->filter && (opts->dumpFilter || opts->apply)) die("Error: no filter file specified\n");
+    if (!opts->filters && (opts->dumpFilter || opts->apply)) die("Error: no filter file specified\n");
 
 	if (opts->calculate) {
    	    if (opts->region_size < 1) die("Error: invalid region size\n");
@@ -1666,6 +1690,9 @@ opts_t* spatial_filter_parse_args(int argc, char *argv[])
 
     if (!opts->apply_stats_out) opts->apply_stats_out = strdup("/dev/stderr");
     if (!opts->output) opts->output = strdup("/dev/stdout");
+
+    if (!opts->rgids) opts->rgids = parseList("null");
+    if (opts->rgids->end != opts->filters->end) die("Not the same number of filter files and RG IDs\n");
 
     return opts;
 }
@@ -1679,14 +1706,10 @@ static int spatial_filter(opts_t *opts)
 	}
 
 	/* Dump the filter file */
-	if (opts->dumpFilter) dumpFilterFile(opts->filter, opts->verbose);
+	if (opts->dumpFilter) dumpFilterFile(opts);
 
 	/* calculate the filter */
-    if (opts->calculate) {
-        /* read the snp_file */
-        opts->snp_hash = readSnpFile(opts);
-        calculateFilter(opts);
-    }
+    if (opts->calculate) calculateFilter(opts);
 
 	/* apply the  filter */
 	if (opts->apply) applyFilter(opts);

@@ -74,22 +74,17 @@ int main(int argc, char**argv)
         fprintf(stderr,"Error opening file: %s\n", posfile->errmsg);
         failure++;
     }
+    posfile_load(posfile,0,NULL);
+
     icheckEqual("Version", 1, posfile->version);
     icheckEqual("Total blocks", 65600, posfile->total_blocks);
 
-    posfile_next(posfile);
-    icheckEqual("next X", 1235, posfile_get_x(posfile));
-    icheckEqual("next Y", 1989, posfile_get_y(posfile));
-    icheckEqual("current block", 247, posfile->current_block);
+    icheckEqual("next X", 1235, posfile_get_x(posfile,0));
+    icheckEqual("next Y", 1989, posfile_get_y(posfile,0));
 
-    for (n=0; n<306; n++) {
-        posfile_next(posfile);
-    }
-    icheckEqual("307 x", 1279, posfile_get_x(posfile));
-    icheckEqual("307 y", 2120, posfile_get_y(posfile));
-    icheckEqual("307  block", 330, posfile->current_block);
+    icheckEqual("307 x", 1279, posfile_get_x(posfile,306));
+    icheckEqual("307 y", 2120, posfile_get_y(posfile,306));
 
-    while (posfile_next(posfile) == 0);
     posfile_close(posfile);
 
     /*
@@ -100,19 +95,16 @@ int main(int argc, char**argv)
         fprintf(stderr,"Error opening file: %s\n", posfile->errmsg);
         failure++;
     }
+    posfile_load(posfile,0,NULL);
 
-    icheckEqual("LOCS: Total blocks", 235085, posfile->total_blocks);
+    icheckEqual("LOCS: Total blocks", 500, posfile->total_blocks);
     icheckEqual("LOCS: current block", 0, posfile->current_block);
 
-    posfile_next(posfile);
-    icheckEqual("LOCS: first X", 16440, posfile_get_x(posfile));
-    icheckEqual("LOCS: first Y", 1321, posfile_get_y(posfile));
-    icheckEqual("LOCS: current block (2)", 1, posfile->current_block);
+    icheckEqual("LOCS: first X", 6568, posfile_get_x(posfile,0));
+    icheckEqual("LOCS: first Y", 21421, posfile_get_y(posfile,0));
 
-    while (posfile_next(posfile)==0);
-
-    icheckEqual("LOCS: last x", 14847, posfile_get_x(posfile));
-    icheckEqual("LOCS: last y", 1715, posfile_get_y(posfile));
+    icheckEqual("LOCS: last x", 19845, posfile_get_x(posfile,499));
+    icheckEqual("LOCS: last y", 7503, posfile_get_y(posfile,499));
 
     posfile_close(posfile);
 

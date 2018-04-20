@@ -33,6 +33,17 @@ const char * bambi_version(void)
     return "12.34";
 }
 
+void die(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap,fmt);
+    fflush(stdout);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+    fflush(stderr);
+    exit(EXIT_FAILURE);
+}
+
 int success = 0;
 int failure = 0;
 

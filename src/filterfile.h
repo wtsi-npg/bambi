@@ -24,18 +24,21 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdint.h>
 
 typedef struct {
-    int fhandle;
+    FILE *fhandle;
     char *errmsg;
     uint32_t version;
     uint32_t total_clusters;
     int current_cluster;
-    int current_pf_cluster;
+    size_t buffer_size;
+    char *buffer;
 } filter_t;
 
 filter_t *filter_open(char *fname);
 int filter_next(filter_t *filter);
 void filter_close(filter_t *filter);
 void filter_seek(filter_t *filter, int cluster);
+void filter_load(filter_t *filter, size_t n);
+char filter_get(filter_t *filter, size_t cluster);
 
 #endif
 

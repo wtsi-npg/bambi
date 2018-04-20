@@ -22,6 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define __POSFILE_H__
 
 #include <stdint.h>
+#include "filterfile.h"
 
 #define CLOCS_BLOCK_SIZE 25
 #define CLOCS_IMAGE_WIDTH 2048
@@ -31,22 +32,24 @@ typedef enum { UNKNOWN_POS, POS, LOCS, CLOCS } POS_FILE_TYPE;
 
 typedef struct {
     POS_FILE_TYPE file_type;
-    int fhandle;
+    FILE *fhandle;
+    char *file_name;
     char *errmsg;
     uint8_t version;
     uint32_t total_blocks;
     int current_block;
     uint8_t unread_clusters;
-    int x,y;
+    int *x;
+    int *y;
+    int size;
 } posfile_t;
 
 posfile_t *posfile_open(char *fname);
-int posfile_next(posfile_t *posfile);
 void posfile_close(posfile_t *posfile);
 void posfile_seek(posfile_t *posfile, int cluster);
-
-static inline int posfile_get_x(posfile_t *posfile) { return posfile->x; }
-static inline int posfile_get_y(posfile_t *posfile) { return posfile->y; }
+void posfile_load(posfile_t *posfile, int bufsize, filter_t *filter);
+static inline int posfile_get_x(posfile_t *posfile, int cluster) { return posfile->x[cluster]; }
+static inline int posfile_get_y(posfile_t *posfile, int cluster) { return posfile->y[cluster]; }
 
 #endif
 

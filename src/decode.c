@@ -110,8 +110,21 @@ typedef struct {
     uint64_t reads, pf_reads, perfect, pf_perfect, one_mismatch, pf_one_mismatch;
 } bc_details_t;
 
+static bc_details_t *bcd_init(void)
+{
+    bc_details_t *bcd = calloc(1, sizeof(bc_details_t));
+    bcd->seq = NULL;
+    bcd->idx1 = NULL;
+    bcd->idx2 = NULL;
+    bcd->name = strdup("0");
+    bcd->lib = strdup("");
+    bcd->sample = strdup("");
+    bcd->desc = strdup("");
+    return bcd;
+}
+
 /*
- * Print matrics file header
+ * Print metrics file header
  */
 static void print_header(FILE* f, opts_t* opts, bool metrics) {
     // print header
@@ -496,7 +509,7 @@ int writeMetrics(va_t *barcodeArray, HashTable *tagHopHash, opts_t *opts)
             fprintf(g, "TOTAL_TAG_HOP_READS=%"PRIu64", ", total_hop_reads);
             fprintf(g, "MAX_READ_ON_A_TAG=%"PRIu64", ", max_reads);
             fprintf(g, "TOTAL_TAG_HOPS=%d, ", (tagHopArray ? tagHopArray->end : 0));
-            fprintf(g, "PCT_TAG_HOPS=%f\n", (float)total_hop_reads / total_reads * 100);
+            fprintf(g, "PCT_TAG_HOPS=%f\n", total_reads ? ((float)total_hop_reads / total_reads * 100) : 0.00) ;
             print_header(g, opts, false);
 
             if (tagHopArray) {
@@ -543,18 +556,12 @@ static void split_index(char *seq, int dual_tag, char **idx1_ptr, char **idx2_pt
  */
 static va_t *loadBarcodeFile(opts_t *opts)
 {
+    int lineno = 0;
     int idx1_len=0, idx2_len=0;
     va_t *barcodeArray = va_init(100,free_bcd);
 
     // initialise first entry for null metrics
-    bc_details_t *bcd = calloc(1, sizeof(bc_details_t));
-    bcd->seq = NULL;
-    bcd->idx1 = NULL;
-    bcd->idx2 = NULL;
-    bcd->name = strdup("0");
-    bcd->lib = strdup("");
-    bcd->sample = strdup("");
-    bcd->desc = strdup("");
+    bc_details_t *bcd = bcd_init();
     va_push(barcodeArray,bcd);
 
     FILE *fh = fopen(opts->barcode_name,"r");
@@ -565,6 +572,7 @@ static va_t *loadBarcodeFile(opts_t *opts)
     
     char *buf = NULL;
     size_t n;
+    lineno++;
     if (getline(&buf,&n,fh) < 0) {    // burn first line which is a header
         fprintf(stderr,"ERROR: problem reading barcode file\n");
         return NULL;
@@ -572,14 +580,17 @@ static va_t *loadBarcodeFile(opts_t *opts)
     free(buf); buf=NULL;
 
     while (getline(&buf, &n, fh) > 0) {
+        lineno++;
         char *s;
         if (buf[strlen(buf)-1] == '\n') buf[strlen(buf)-1]=0;   // remove trailing lf
-        bc_details_t *bcd = calloc(1,sizeof(bc_details_t));
-        s = strtok(buf,"\t");  bcd->seq     = strdup(s);
-        s = strtok(NULL,"\t"); bcd->name    = strdup(s);
-        s = strtok(NULL,"\t"); bcd->lib     = strdup(s);
-        s = strtok(NULL,"\t"); bcd->sample  = strdup(s);
-        s = strtok(NULL,"\t"); bcd->desc    = strdup(s);
+        bc_details_t *bcd = bcd_init();
+        s = strtok(buf,"\t");  if (!s) die("Can't read sequence from tag file: Line %d\n", lineno);
+        bcd->seq     = strdup(s);
+        s = strtok(NULL,"\t"); if (!s) die("Can't read name from tag file: Line %d\n", lineno);
+        bcd->name    = strdup(s);
+        s = strtok(NULL,"\t"); if (s) bcd->lib     = strdup(s);
+        s = strtok(NULL,"\t"); if (s) bcd->sample  = strdup(s);
+        s = strtok(NULL,"\t"); if (s) bcd->desc    = strdup(s);
 
         split_index(bcd->seq, opts->dual_tag, &bcd->idx1, &bcd->idx2);
 
