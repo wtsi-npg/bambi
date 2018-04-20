@@ -1,3 +1,9 @@
+	[0.11.0]
+	fixed divide-by-zero bug in tag hops report
+	decode copes with taglist files with empty columns
+	spatial_filter supports multiple filter files applied by RG ID
+	refactoring of threadpool code and other performance enhancements
+
 	[0.10.1]
 	tag hops metrics file - unneeded columns removed; always create this file if dual index is detected (will only contain header values)
 
