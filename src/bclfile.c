@@ -30,6 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <fcntl.h>
 #include <errno.h>
 #include <libgen.h>
+#include <htslib/hts_endian.h>
 
 #include "bclfile.h"
 
@@ -187,48 +188,60 @@ static off_t find_tile_offset(bclfile_t *bcl, int tile, tilerec_t **ti_out)
 
 static void _bclfile_open_novaseq(bclfile_t *bclfile, int tile)
 {
-    int r, n;
-    bool happy = false;
+    int r;
+    uint32_t n, m;
+    uint8_t buffer[4096];
+    const uint32_t qbins_in_buffer = sizeof(buffer) / (2 * 4);
+    const uint32_t tiles_in_buffer = sizeof(buffer) / (4 * 4);
 
     bclfile->fhandle = fopen(bclfile->filename, "rb");
     if (bclfile->fhandle == NULL) {
         die("Can't open BCL file %s\n", bclfile->filename);
     }
-
+#if (USE_POSIX_FADVISE > 0)
+    // posix_fadvise() and buffered I/O don't go well together, so switch
+    // to unbuffered mode.  Makes reading the header slightly less efficient
+    // but shouldn't matter for the rest of the file.
+    setvbuf(bclfile->fhandle, NULL, _IONBF, 0);
+#endif
     // File is open. Read and parse header.
 
-    while (true) {
-        r = fread(&bclfile->version, sizeof(bclfile->version), 1, bclfile->fhandle); if (r!=1) break;
-        r = fread(&bclfile->header_size, sizeof(bclfile->header_size), 1, bclfile->fhandle); if (r!=1) break;
-        r = fread(&bclfile->bits_per_base, sizeof(bclfile->bits_per_base), 1, bclfile->fhandle); if (r!=1) break;
-        r = fread(&bclfile->bits_per_qual, sizeof(bclfile->bits_per_qual), 1, bclfile->fhandle); if (r!=1) break;
-        r = fread(&bclfile->nbins, sizeof(bclfile->nbins), 1, bclfile->fhandle); if (r!=1) break;
-        for (n=0; n < bclfile->nbins; n++) {
-            uint32_t qbin, qscore;
-            r = fread(&qbin, sizeof(qbin), 1, bclfile->fhandle); if (r!=1) break;
-            r = fread(&qscore, sizeof(qscore), 1, bclfile->fhandle); if (r!=1) break;
+    r = fread(buffer, 2+4+1+1+4, 1, bclfile->fhandle);
+    if (r != 1) goto fail;
+    bclfile->version = le_to_u16(buffer);
+    bclfile->header_size = le_to_u32(buffer + 2);
+    bclfile->bits_per_base = buffer[6];
+    bclfile->bits_per_qual = buffer[7];
+    bclfile->nbins = le_to_u32(buffer + 8);
+    for (n = 0; n < bclfile->nbins;) {
+        uint32_t last_n = bclfile->nbins < n + qbins_in_buffer ? bclfile->nbins : n + qbins_in_buffer;
+        r = fread(buffer, 8, last_n - n, bclfile->fhandle);
+        if (r != last_n - n) goto fail;
+        for (m = 0; n < last_n; n++, m += 8) {
+            uint32_t qbin = le_to_u32(buffer + m);
+            uint32_t qscore = le_to_u32(buffer + m + 4);
             bclfile->qbin[qbin] = qscore;
         }
-        r = fread(&bclfile->ntiles, sizeof(bclfile->ntiles), 1, bclfile->fhandle); if (r!=1) break;
-        for (n=0; n < bclfile->ntiles; n++) {
+    }
+    r = fread(&bclfile->ntiles, sizeof(bclfile->ntiles), 1, bclfile->fhandle);
+    if (r!=1) goto fail;
+    for (n = 0; n < bclfile->ntiles; ) {
+        uint32_t last_n = bclfile->ntiles < n + tiles_in_buffer ? bclfile->ntiles : n + tiles_in_buffer;
+        r = fread(buffer, 16, last_n - n, bclfile->fhandle);
+        if (r != last_n - n) goto fail;
+        for (m = 0; n < last_n; m += 16, n++) {
             tilerec_t *tilerec = calloc(1, sizeof(tilerec_t));
-            uint32_t x[4];
-            r = fread(x, sizeof(x[0]), 4, bclfile->fhandle); if (r!=4) break;
-            tilerec->tilenum = x[0];
-            tilerec->nclusters = x[1];
-            tilerec->uncompressed_blocksize = x[2];
-            tilerec->compressed_blocksize = x[3];
+            if (!tilerec) die("Out of memory\n");
+            tilerec->tilenum = le_to_u32(buffer + m);
+            tilerec->nclusters = le_to_u32(buffer + m + 4);
+            tilerec->uncompressed_blocksize = le_to_u32(buffer + m + 8);
+            tilerec->compressed_blocksize = le_to_u32(buffer + m + 12);
             va_push(bclfile->tiles, tilerec);
             if (!bclfile->current_tile) bclfile->current_tile = tilerec;
         }
-        r = fread(&bclfile->pfFlag, sizeof(bclfile->pfFlag), 1, bclfile->fhandle); if (r!=1) break;
-        happy = true;
-        break;
     }
-
-    if (!happy) {
-        die("failed to read header from bcl file '%s'\n", bclfile->filename);
-    }
+    r = fread(&bclfile->pfFlag, sizeof(bclfile->pfFlag), 1, bclfile->fhandle);
+    if (r!=1) goto fail;
 
     if (bclfile->bits_per_base != 2) {
         die("CBCL file '%s' has bits_per_base %d : expecting 2\n", (bclfile->filename), bclfile->bits_per_base);
@@ -245,6 +258,9 @@ static void _bclfile_open_novaseq(bclfile_t *bclfile, int tile)
         }
     }
 #endif
+    return;
+ fail:
+    die("failed to read header from bcl file '%s'\n", bclfile->filename);
 }
 
 bclfile_t *bclfile_open(char *fname, MACHINE_TYPE mt, int tile)
