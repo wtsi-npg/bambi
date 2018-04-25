@@ -1242,12 +1242,9 @@ static RegionTable ***makeRegionTable(opts_t *s, BAMit_t *fp_bam, int *bam_ntile
  * Returns: 0 written for success
  *	   -1 for failure
  */
-static int filter_bam(opts_t *s, BAMit_t *fp_in_bam, BAMit_t *fp_out_bam,
-               size_t *bam_nreads, size_t *bam_nfiltered)
+static int filter_bam(opts_t *s, BAMit_t *fp_in_bam, BAMit_t *fp_out_bam)
 {
 	int lane = -1;
-	size_t nreads = 0;
-	int nfiltered = 0;
     char *rgid;
 	bam1_t *bam;
     bool ignore = false;
@@ -1263,15 +1260,6 @@ static int filter_bam(opts_t *s, BAMit_t *fp_in_bam, BAMit_t *fp_out_bam,
         if (!bam) {
             break;	/* break on end of BAM file */
         }
-
-/*
-        if (lane == -1) {
-            lane = bam_lane;
-        }
-        if (bam_lane != lane) {
-            die("Error: Inconsistent lane: have %d previously it was %d.\n", bam_lane, lane);
-        }
-*/
 
         // select filter file depending on RG tag
         if ( (s->rgids->end == 1) && (strcmp(s->rgids->entries[0],"null")==0)) {
@@ -1296,15 +1284,15 @@ static int filter_bam(opts_t *s, BAMit_t *fp_in_bam, BAMit_t *fp_out_bam,
                 }
 
                 if (bad_cycle_count) {
-                    nfiltered++;
+                    incHdrStatsnfiltered();
                     if (s->qcfail) 
                         bam->core.flag |= BAM_FQCFAIL;
                     else
                         ignore = true;
                 }
             }
+            incHdrStatsnreads();
         }
-        nreads++;
 
 		if (!ignore) {
             if (0 > sam_write1(fp_out_bam->f, fp_out_bam->h, bam)) die("Error: writing bam file\n");
@@ -1312,9 +1300,6 @@ static int filter_bam(opts_t *s, BAMit_t *fp_in_bam, BAMit_t *fp_out_bam,
 	}
 
 	bam_destroy1(bam);
-
-    *bam_nreads = nreads;
-	*bam_nfiltered = nfiltered;
 
 	return 0;
 }
@@ -1443,8 +1428,6 @@ static void applyFilter(opts_t *s)
 	char out_mode[5] = "wb";
 	char *out_bam_file = NULL;
 	char *apply_stats_file = NULL;
-	size_t nreads = 0;
-	size_t nfiltered = 0;
 	FILE *fp;
     int read;
 
@@ -1476,16 +1459,6 @@ static void applyFilter(opts_t *s)
     }
     strcat(apply_stats_file, s->apply_stats_out);
 
-/*
-    s->region_size = hdr.region_size;
-	s->nregions    = hdr.nregions;
-	s->nregions_x  = hdr.nregions_x;
-	s->nregions_y  = hdr.nregions_y;
-
-    for (read=0;read<hdr.nreads;read++)
-        s->read_length[read] = hdr.readLength[read];
-*/
-
 	fp_input_bam = BAMit_open(s->in_bam_file, 'r', s->input_fmt, 0);
 	if (NULL == fp_input_bam) {
 		die("ERROR: can't open bam file %s: %s\n", s->in_bam_file, strerror(errno));
@@ -1512,19 +1485,28 @@ static void applyFilter(opts_t *s)
 	free(out_bam_file);
 
 
-	if (-1 == filter_bam(s, fp_input_bam, fp_output_bam, &nreads, &nfiltered)) {
+	if (-1 == filter_bam(s, fp_input_bam, fp_output_bam)) {
 		die("ERROR: failed to filter bam file %s\n", s->in_bam_file);
 	}
 
 	BAMit_free(fp_input_bam);
 	BAMit_free(fp_output_bam);
 
-	if(NULL == (apply_stats_fd=fopen(apply_stats_file, "w"))) {
+//
+//  Display stats
+//
+	if (NULL == (apply_stats_fd=fopen(apply_stats_file, "w"))) {
 		die("ERROR: failed to open apply status log %s\n", apply_stats_file);
 	}
 
-	fprintf(apply_stats_fd, "Processed %8lu traces\n", nreads);
-	fprintf(apply_stats_fd, "%s %8lu traces\n", (s->qcfail ? "QC failed" : "Removed"), nfiltered);
+    va_t *va = HdrHash2Array();
+    for (int n=0; n < va->end; n++) {
+        Header *hdr = (Header *)va->entries[n];
+        fprintf(apply_stats_fd, "%s\t", (strcmp(hdr->rgid,"null") ? hdr->rgid : "Total"));
+        fprintf(apply_stats_fd, "Processed %d \t", hdr->stats_nreads);
+        fprintf(apply_stats_fd, "%s %d traces\n", (s->qcfail ? "Failed" : "Removed"), hdr->stats_nfiltered);
+    }
+    fprintf(apply_stats_fd, "\n");
 
 	fclose(apply_stats_fd);
 
