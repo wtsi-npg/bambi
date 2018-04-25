@@ -1373,7 +1373,7 @@ static void calculateFilter(opts_t *opts)
 
 	RegionTable ***rts = NULL;
     
-	fp_input_bam = BAMit_open(opts->in_bam_file, 'r', opts->input_fmt, 0);
+	fp_input_bam = BAMit_open(opts->in_bam_file, 'r', opts->input_fmt, 0, NULL);
 	if (NULL == fp_input_bam) {
 		die("ERROR: can't open bam file %s: %s\n", opts->in_bam_file, strerror(errno));
 	}
@@ -1461,13 +1461,13 @@ static void applyFilter(opts_t *s)
     }
     strcat(apply_stats_file, s->apply_stats_out);
 
-	fp_input_bam = BAMit_open(s->in_bam_file, 'r', s->input_fmt, 0);
+	fp_input_bam = BAMit_open(s->in_bam_file, 'r', s->input_fmt, 0, NULL);
 	if (NULL == fp_input_bam) {
 		die("ERROR: can't open bam file %s: %s\n", s->in_bam_file, strerror(errno));
 	}
 
 
-	fp_output_bam = BAMit_open(out_bam_file, 'w', s->output_fmt, s->compression_level);
+	fp_output_bam = BAMit_open(out_bam_file, 'w', s->output_fmt, s->compression_level, NULL);
 	if (NULL == fp_output_bam) {
 		die("ERROR: can't open bam file %s: %s\n", out_bam_file, strerror(errno));
 	}

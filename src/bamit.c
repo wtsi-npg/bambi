@@ -42,7 +42,8 @@ BAMit_t *BAMit_init(samFile *f, bam_hdr_t *h)
  *                char *fmt                 format [bam,sam,cram]
  *                char compression level    [0..9]
  */
-BAMit_t *BAMit_open(char *fname, char mode, char *fmt, char compression_level)
+BAMit_t *BAMit_open(char *fname, char mode, char *fmt, char compression_level,
+                    htsThreadPool *thread_pool)
 {
     samFile *f = NULL;
     bam_hdr_t *h = NULL;
@@ -62,6 +63,11 @@ BAMit_t *BAMit_open(char *fname, char mode, char *fmt, char compression_level)
     free(format);
     if (!f) {
         fprintf(stderr,"Could not open file (%s)\n", fname);
+        exit(1);
+    }
+
+    if (thread_pool && hts_set_thread_pool(f, thread_pool) < 0) {
+        fprintf(stderr, "Couldn't set thread pool on %s\n", fname);
         exit(1);
     }
 

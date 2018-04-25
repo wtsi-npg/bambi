@@ -31,6 +31,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <unistd.h>
 #include <regex.h>
 #include <htslib/khash.h>
+#include <htslib/thread_pool.h>
 #include <cram/sam_header.h>
 #include <inttypes.h>
 
@@ -77,6 +78,7 @@ typedef struct {
     char *input_fmt;
     char *output_fmt;
     char compression_level;
+    int nthreads;
     int idx1_len, idx2_len;
     bool ignore_pf;
     unsigned short dual_tag;
@@ -230,6 +232,7 @@ static void usage(FILE *write_to)
 "       --input-fmt                     format of input file [sam/bam/cram]\n"
 "       --output-fmt                    format of output file [sam/bam/cram]\n"
 "       --compression-level             Compression level of output file [0..9]\n"
+"  -t   --threads                       number of threads to use [default: 1]\n"
 "       --ignore-pf                     Doesn't output PF statistics\n"
 "       --dual-tag                      Dual tag position in the barcode string (between 2 and barcode length - 1)\n"
 );
@@ -242,7 +245,7 @@ static opts_t* parse_args(int argc, char *argv[])
 {
     if (argc == 1) { usage(stdout); return NULL; }
 
-    const char* optstring = "i:o:vb:";
+    const char* optstring = "i:o:vb:t:";
 
     static const struct option lopts[] = {
         { "input",                      1, 0, 'i' },
@@ -263,6 +266,7 @@ static opts_t* parse_args(int argc, char *argv[])
         { "compression-level",          1, 0, 0 },
         { "ignore-pf",                  0, 0, 0 },
         { "dual-tag",                   1, 0, 0 },
+        { "threads",                    1, 0, 't' },
         { NULL, 0, NULL, 0 }
     };
 
@@ -297,6 +301,8 @@ static opts_t* parse_args(int argc, char *argv[])
         case 'v':   opts->verbose = true;
                     break;
         case 'b':   opts->barcode_name = strdup(optarg);
+                    break;
+        case 't':   opts->nthreads = atoi(optarg);
                     break;
         case 0:     arg = lopts[option_index].name;
                          if (strcmp(arg, "metrics-file") == 0)               opts->metrics_name = strdup(optarg);
@@ -1074,8 +1080,17 @@ static int decode(opts_t* opts)
     va_t *barcodeArray = NULL;
     HashTable *tagHopHash = NULL;
     HashTable *barcodeHash = NULL;
+    htsThreadPool hts_threads = { NULL, 0 };
 
     while (1) {
+        if (opts->nthreads > 1) {
+            hts_threads.pool = hts_tpool_init(opts->nthreads);
+            if (!hts_threads.pool) {
+                fprintf(stderr, "Couldn't set up thread pool\n");
+                break;
+            }
+        }
+
         /*
          * Read the barcode (tags) file 
          */
@@ -1096,9 +1111,9 @@ static int decode(opts_t* opts)
         /*
          * Open input fnd output BAM files
          */
-        bam_in = BAMit_open(opts->input_name, 'r', opts->input_fmt, 0);
+        bam_in = BAMit_open(opts->input_name, 'r', opts->input_fmt, 0, hts_threads.pool ? &hts_threads : NULL);
         if (!bam_in) break;
-        bam_out = BAMit_open(opts->output_name, 'w', opts->output_fmt, opts->compression_level);
+        bam_out = BAMit_open(opts->output_name, 'w', opts->output_fmt, opts->compression_level, hts_threads.pool ? &hts_threads : NULL);
         if (!bam_out) break;
         // copy input to output header
         bam_hdr_destroy(bam_out->h); bam_out->h = bam_hdr_dup(bam_in->h);
@@ -1139,6 +1154,7 @@ static int decode(opts_t* opts)
     HashTableDestroy(tagHopHash, 0);
     BAMit_free(bam_in);
     BAMit_free(bam_out);
+    if (hts_threads.pool) hts_tpool_destroy(hts_threads.pool);
 
     return retcode;
 }
