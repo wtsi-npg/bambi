@@ -46,6 +46,7 @@ typedef struct {
     int coord_shift;
     int coord_factor;
     int ntiles;
+    int ngood_tiles;
     int *tileArray;
     size_t *tileReadCountArray;
     int region_size;
@@ -86,6 +87,7 @@ char *getFilterData(int tile, int read, int cycle, int region);
 Header *getHdr(char *rgid);
 int x2region(int x, int region_size);
 int xy2region(int x, int y);
+int getHdrngood_tiles(void);
 int getHdrReadLength(int read);
 int getHdrnregions(void);
 int getHdrStatsnreads(void);

@@ -44,6 +44,7 @@ static void chomp(char *line)
 inline int getHdrReadLength(int read) { return _hdr->readLength[read]; }
 inline int getHdrnregions(void) { return _hdr->nregions; }
 
+inline int getHdrngood_tiles(void) { return _hdr->ngood_tiles; }
 inline int getHdrStatsnreads(void) { return _hdr->stats_nreads; }
 inline void incHdrStatsnreads(void) { _hdr->stats_nreads++; }
 inline int getHdrStatsnfiltered(void) { return _hdr->stats_nfiltered; }
@@ -94,6 +95,7 @@ Header *readHeader(char *fname)
 
     hdr = malloc(sizeof(Header));
     if (!hdr) die("readHeader(): Can't allocate memory for %s\n", fname);
+    hdr->ngood_tiles = 0;
 
     fp = fopen(fname, "rb");
     if (!fp) die("readHeader(): Can't open %s\n", fname);

@@ -948,7 +948,7 @@ static void removeBadTiles(Header *hdr)
         }
     }
 
-    hdr->ntiles = ngood_tiles;
+    hdr->ngood_tiles = ngood_tiles;
 }
 
 /*
@@ -1270,25 +1270,27 @@ static int filter_bam(opts_t *s, BAMit_t *fp_in_bam, BAMit_t *fp_out_bam)
         }
 
         if (setCurrentHdr(rgid)) {
-            int iregion = xy2region(bam_x, bam_y);
-            char* state = getFilterData(bam_tile, 0, 0, iregion);
-            if (state != NULL) {
-                int read, cycle, bad_cycle_count = 0;
-                for (read = 0; read < N_READS; read++) {
-                    int maxCycle = getHdrReadLength(read);
-                    for (cycle = 0; cycle < maxCycle; cycle++) {
-                        if (*state & REGION_STATE_MASK)
-                            bad_cycle_count++;
-                        state += getHdrnregions();
+            if (getHdrngood_tiles()) {
+                int iregion = xy2region(bam_x, bam_y);
+                char* state = getFilterData(bam_tile, 0, 0, iregion);
+                if (state != NULL) {
+                    int read, cycle, bad_cycle_count = 0;
+                    for (read = 0; read < N_READS; read++) {
+                        int maxCycle = getHdrReadLength(read);
+                        for (cycle = 0; cycle < maxCycle; cycle++) {
+                            if (*state & REGION_STATE_MASK)
+                                bad_cycle_count++;
+                            state += getHdrnregions();
+                        }
                     }
-                }
 
-                if (bad_cycle_count) {
-                    incHdrStatsnfiltered();
-                    if (s->qcfail) 
-                        bam->core.flag |= BAM_FQCFAIL;
-                    else
-                        ignore = true;
+                    if (bad_cycle_count) {
+                        incHdrStatsnfiltered();
+                        if (s->qcfail) 
+                            bam->core.flag |= BAM_FQCFAIL;
+                        else
+                            ignore = true;
+                    }
                 }
             }
             incHdrStatsnreads();
