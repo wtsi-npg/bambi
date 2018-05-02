@@ -30,8 +30,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <fcntl.h>
 #include <errno.h>
 #include <libgen.h>
+#include <htslib/hts_endian.h>
 
 #include "bclfile.h"
+
+// posix_fadvise control for NovaSeq
+// bit 0 set => Tell the filesystem which tile we want next
+// bit 1 set => Tell the filesystem when we've finished with the tile data
+#ifndef USE_POSIX_FADVISE
+#define USE_POSIX_FADVISE 3
+#endif
 
 #define BCL_BASE_ARRAY "ACGT"
 #define BCL_UNKNOWN_BASE 'N'
@@ -161,50 +169,79 @@ static void _bclfile_open_nextseq(bclfile_t *bcl)
     _bclfile_open_hiseqx(bcl);
 }
 
-static void _bclfile_open_novaseq(bclfile_t *bclfile)
+static off_t find_tile_offset(bclfile_t *bcl, int tile, tilerec_t **ti_out)
 {
-    int r, n;
-    bool happy = false;
+    off_t offset = bcl->header_size;
+    bool found = false;
+
+    for (int n=0; n < bcl->tiles->end; n++) {
+        tilerec_t *ti = (tilerec_t *)bcl->tiles->entries[n];
+        if (ti->tilenum == tile) {
+            found = true;
+            if (ti_out != NULL) *ti_out = ti;
+            break;
+        }
+        offset += ti->compressed_blocksize;
+    }
+    return found ? offset : -1;
+}
+
+static void _bclfile_open_novaseq(bclfile_t *bclfile, int tile)
+{
+    int r;
+    uint32_t n, m;
+    uint8_t buffer[4096];
+    const uint32_t qbins_in_buffer = sizeof(buffer) / (2 * 4);
+    const uint32_t tiles_in_buffer = sizeof(buffer) / (4 * 4);
 
     bclfile->fhandle = fopen(bclfile->filename, "rb");
     if (bclfile->fhandle == NULL) {
         die("Can't open BCL file %s\n", bclfile->filename);
     }
-
+#if (USE_POSIX_FADVISE > 0)
+    // posix_fadvise() and buffered I/O don't go well together, so switch
+    // to unbuffered mode.  Makes reading the header slightly less efficient
+    // but shouldn't matter for the rest of the file.
+    setvbuf(bclfile->fhandle, NULL, _IONBF, 0);
+#endif
     // File is open. Read and parse header.
 
-    while (true) {
-        r = fread(&bclfile->version, sizeof(bclfile->version), 1, bclfile->fhandle); if (r!=1) break;
-        r = fread(&bclfile->header_size, sizeof(bclfile->header_size), 1, bclfile->fhandle); if (r!=1) break;
-        r = fread(&bclfile->bits_per_base, sizeof(bclfile->bits_per_base), 1, bclfile->fhandle); if (r!=1) break;
-        r = fread(&bclfile->bits_per_qual, sizeof(bclfile->bits_per_qual), 1, bclfile->fhandle); if (r!=1) break;
-        r = fread(&bclfile->nbins, sizeof(bclfile->nbins), 1, bclfile->fhandle); if (r!=1) break;
-        for (n=0; n < bclfile->nbins; n++) {
-            uint32_t qbin, qscore;
-            r = fread(&qbin, sizeof(qbin), 1, bclfile->fhandle); if (r!=1) break;
-            r = fread(&qscore, sizeof(qscore), 1, bclfile->fhandle); if (r!=1) break;
+    r = fread(buffer, 2+4+1+1+4, 1, bclfile->fhandle);
+    if (r != 1) goto fail;
+    bclfile->version = le_to_u16(buffer);
+    bclfile->header_size = le_to_u32(buffer + 2);
+    bclfile->bits_per_base = buffer[6];
+    bclfile->bits_per_qual = buffer[7];
+    bclfile->nbins = le_to_u32(buffer + 8);
+    for (n = 0; n < bclfile->nbins;) {
+        uint32_t last_n = bclfile->nbins < n + qbins_in_buffer ? bclfile->nbins : n + qbins_in_buffer;
+        r = fread(buffer, 8, last_n - n, bclfile->fhandle);
+        if (r != last_n - n) goto fail;
+        for (m = 0; n < last_n; n++, m += 8) {
+            uint32_t qbin = le_to_u32(buffer + m);
+            uint32_t qscore = le_to_u32(buffer + m + 4);
             bclfile->qbin[qbin] = qscore;
         }
-        r = fread(&bclfile->ntiles, sizeof(bclfile->ntiles), 1, bclfile->fhandle); if (r!=1) break;
-        for (n=0; n < bclfile->ntiles; n++) {
+    }
+    r = fread(&bclfile->ntiles, sizeof(bclfile->ntiles), 1, bclfile->fhandle);
+    if (r!=1) goto fail;
+    for (n = 0; n < bclfile->ntiles; ) {
+        uint32_t last_n = bclfile->ntiles < n + tiles_in_buffer ? bclfile->ntiles : n + tiles_in_buffer;
+        r = fread(buffer, 16, last_n - n, bclfile->fhandle);
+        if (r != last_n - n) goto fail;
+        for (m = 0; n < last_n; m += 16, n++) {
             tilerec_t *tilerec = calloc(1, sizeof(tilerec_t));
-            uint32_t x[4];
-            r = fread(x, sizeof(x[0]), 4, bclfile->fhandle); if (r!=4) break;
-            tilerec->tilenum = x[0];
-            tilerec->nclusters = x[1];
-            tilerec->uncompressed_blocksize = x[2];
-            tilerec->compressed_blocksize = x[3];
+            if (!tilerec) die("Out of memory\n");
+            tilerec->tilenum = le_to_u32(buffer + m);
+            tilerec->nclusters = le_to_u32(buffer + m + 4);
+            tilerec->uncompressed_blocksize = le_to_u32(buffer + m + 8);
+            tilerec->compressed_blocksize = le_to_u32(buffer + m + 12);
             va_push(bclfile->tiles, tilerec);
             if (!bclfile->current_tile) bclfile->current_tile = tilerec;
         }
-        r = fread(&bclfile->pfFlag, sizeof(bclfile->pfFlag), 1, bclfile->fhandle); if (r!=1) break;
-        happy = true;
-        break;
     }
-
-    if (!happy) {
-        die("failed to read header from bcl file '%s'\n", bclfile->filename);
-    }
+    r = fread(&bclfile->pfFlag, sizeof(bclfile->pfFlag), 1, bclfile->fhandle);
+    if (r!=1) goto fail;
 
     if (bclfile->bits_per_base != 2) {
         die("CBCL file '%s' has bits_per_base %d : expecting 2\n", (bclfile->filename), bclfile->bits_per_base);
@@ -212,9 +249,21 @@ static void _bclfile_open_novaseq(bclfile_t *bclfile)
     if (bclfile->bits_per_qual != 2) {
         die("CBCL file '%s' has bits_per_qual %d : expecting 2\n", (bclfile->filename), bclfile->bits_per_qual);
     }
+#if (USE_POSIX_FADVISE & 1) > 0
+    if (tile >= 0) {
+        tilerec_t *ti = NULL;
+        off_t offset = find_tile_offset(bclfile, tile, &ti);
+        if (offset >= 0) {
+            posix_fadvise(fileno(bclfile->fhandle), offset, ti->compressed_blocksize, POSIX_FADV_WILLNEED);
+        }
+    }
+#endif
+    return;
+ fail:
+    die("failed to read header from bcl file '%s'\n", bclfile->filename);
 }
 
-bclfile_t *bclfile_open(char *fname, MACHINE_TYPE mt)
+bclfile_t *bclfile_open(char *fname, MACHINE_TYPE mt, int tile)
 {
     bclfile_t *bclfile = bclfile_init();
     bclfile->filename = strdup(fname);
@@ -224,7 +273,7 @@ bclfile_t *bclfile_open(char *fname, MACHINE_TYPE mt)
         case MT_MISEQ: _bclfile_open_miseq(bclfile); break;
         case MT_NEXTSEQ: _bclfile_open_nextseq(bclfile); break;
         case MT_HISEQX: _bclfile_open_hiseqx(bclfile); break;
-        case MT_NOVASEQ: _bclfile_open_novaseq(bclfile); break;
+        case MT_NOVASEQ: _bclfile_open_novaseq(bclfile, tile); break;
         default: die("Unknown machine type\n");
     }
     return bclfile;
@@ -247,11 +296,10 @@ int bclfile_seek_cluster(bclfile_t *bcl, int cluster)
     return 0;
 }
 
-int bclfile_seek_tile(bclfile_t *bcl, int tile, filter_t *filter)
+int bclfile_seek_tile(bclfile_t *bcl, int tile, filter_t *filter, int next_tile)
 {
-    int offset;
-    bool found = false;
-    tilerec_t *ti;
+    off_t offset;
+    tilerec_t *ti = NULL;
     char *compressed_block = NULL;
     char *uncompressed_block = NULL;
     int r;
@@ -267,16 +315,8 @@ int bclfile_seek_tile(bclfile_t *bcl, int tile, filter_t *filter)
     }
 
     // First, find the correct tile in the tile list
-    offset = bcl->header_size;
-    for (int n=0; n < bcl->tiles->end; n++) {
-        ti = (tilerec_t *)bcl->tiles->entries[n];
-        if (ti->tilenum == tile) {
-            found = true;
-            break;
-        }
-        offset += ti->compressed_blocksize;
-    }
-    if (!found) {
+    offset = find_tile_offset(bcl, tile, &ti);
+    if (offset < 0) {
         fprintf(stderr,"bclfile_seek_tile(%d) : no such tile\n", tile);
         return -1;
     }
@@ -284,7 +324,7 @@ int bclfile_seek_tile(bclfile_t *bcl, int tile, filter_t *filter)
     bcl->current_tile = ti;
 
     // Read and uncompress the record for this tile
-    if (fseeko(bcl->fhandle, (off_t)offset, SEEK_SET) < 0) {
+    if (fseeko(bcl->fhandle, offset, SEEK_SET) < 0) {
         die("Couldn't seek: %s\n", strerror(errno));
     }
     uncompressed_block = malloc(ti->uncompressed_blocksize);
@@ -302,6 +342,20 @@ int bclfile_seek_tile(bclfile_t *bcl, int tile, filter_t *filter)
         fprintf(stderr,"bclfile_seek_tile(%d): failed to read block: returned %d\n", tile, r);
         return -1;
     }
+
+#if (USE_POSIX_FADVISE & 2) > 0
+    posix_fadvise(fileno(bcl->fhandle), offset, ti->compressed_blocksize, POSIX_FADV_DONTNEED);
+#endif
+#if (USE_POSIX_FADVISE & 1) > 0
+    if (next_tile >= 0) {
+        tilerec_t *next_ti = NULL;
+        off_t next_offset = find_tile_offset(bcl, next_tile, &next_ti);
+        if (next_offset >= 0) {
+            posix_fadvise(fileno(bcl->fhandle), next_offset, next_ti->compressed_blocksize, POSIX_FADV_WILLNEED);
+        }
+    }
+#endif
+
     r=uncompressBlock(compressed_block, ti->compressed_blocksize, uncompressed_block, ti->uncompressed_blocksize);
     free(compressed_block);
     if (r<0) {
@@ -373,11 +427,11 @@ int bclfile_quality(bclfile_t *bcl, int cluster)
     return bcl->quals[cluster];
 }
 
-int bclfile_load_tile(bclfile_t *bcl, int tile, filter_t *filter)
+int bclfile_load_tile(bclfile_t *bcl, int tile, filter_t *filter, int next_tile)
 {
     int retval = 1;
 
-    if (bcl->machine_type == MT_NOVASEQ) retval = bclfile_seek_tile(bcl, tile, filter);
+    if (bcl->machine_type == MT_NOVASEQ) retval = bclfile_seek_tile(bcl, tile, filter, next_tile);
     else if (bcl->machine_type == MT_NEXTSEQ) retval = bclfile_seek_cluster(bcl, tile);
 
     return retval;

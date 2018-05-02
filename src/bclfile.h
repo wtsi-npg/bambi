@@ -72,9 +72,9 @@ typedef struct {
 } bclfile_t;
 
 int bcl_tile2surface(int tile);
-bclfile_t *bclfile_open(char *fname, MACHINE_TYPE mt);
+bclfile_t *bclfile_open(char *fname, MACHINE_TYPE mt, int tile);
 void bclfile_close(bclfile_t *bclfile);
-int bclfile_load_tile(bclfile_t *bclfile, int tile, filter_t *filter);
+int bclfile_load_tile(bclfile_t *bclfile, int tile, filter_t *filter, int next_tile);
 char bclfile_base(bclfile_t *bcl, int cluster);
 int bclfile_quality(bclfile_t *bcl, int cluster);
 #endif
