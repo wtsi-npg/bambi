@@ -1,3 +1,7 @@
+	[0.11.1]
+	posix_fadvise() on NovaSeq cbcl files to pre-cache the next tile to speed up reads
+	bug fix: removeBadTiles() was not being honored in spatial_filter application
+
 	[0.11.0]
 	fixed divide-by-zero bug in tag hops report
 	decode copes with taglist files with empty columns
