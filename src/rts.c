@@ -43,6 +43,29 @@ static void chomp(char *line)
 
 inline int getHdrReadLength(int read) { return _hdr->readLength[read]; }
 inline int getHdrnregions(void) { return _hdr->nregions; }
+
+inline int getHdrngood_tiles(void) { return _hdr->ngood_tiles; }
+inline int getHdrStatsnreads(void) { return _hdr->stats_nreads; }
+inline void incHdrStatsnreads(void) { _hdr->stats_nreads++; }
+inline int getHdrStatsnfiltered(void) { return _hdr->stats_nfiltered; }
+inline void incHdrStatsnfiltered(void) { _hdr->stats_nfiltered++; }
+inline char *getHdrrgid(void) { return _hdr->rgid; }
+
+//
+// HdrHash2Array() - convert the filter hash into a varray
+//
+va_t *HdrHash2Array(void)
+{
+    va_t *va = va_init(20,NULL);
+    HashIter *iter = HashTableIterCreate();
+    HashItem *hi;
+    while ( (hi = HashTableIterNext(_filter_hash, iter)) ) {
+        va_push(va,hi->data.p);
+    }
+    return va;
+}
+
+
 //
 // Filter methods
 //
@@ -72,6 +95,7 @@ Header *readHeader(char *fname)
 
     hdr = malloc(sizeof(Header));
     if (!hdr) die("readHeader(): Can't allocate memory for %s\n", fname);
+    hdr->ngood_tiles = 0;
 
     fp = fopen(fname, "rb");
     if (!fp) die("readHeader(): Can't open %s\n", fname);
@@ -205,6 +229,9 @@ void openFilters(va_t *fnames, va_t *rgids)
         char *fname = fnames->entries[n];
         char *rgid = rgids ? rgids->entries[n] : "null";
         Header *hdr = readHeader(fname);
+        hdr->stats_nreads = 0;
+        hdr->stats_nfiltered = 0;
+        hdr->rgid = strdup(rgid);
         hd.p = hdr;
         HashTableAdd(_filter_hash, rgid, 0, hd, NULL);
     }
