@@ -125,10 +125,16 @@ int main(int argc, char**argv)
     // multiple filters
     if (verbose) fprintf(stderr,"Multiple filters\n");
     sprintf(outputfile,"%s/sf_filtered.bam", TMPDIR);
-//    sprintf(cmd,"%s -a -v -f -F %s,%s,%s,%s --rg 25077_3#3,25077_4#3,25077_5#3,25077_6#3 -o %s %s", prog, MKNAME(DATA_DIR,"/sf_1.filter"), MKNAME(DATA_DIR,"/sf_2.filter"), MKNAME(DATA_DIR,"/sf_3.filter"), MKNAME(DATA_DIR,"/sf_4.filter"), outputfile, MKNAME(DATA_DIR,"/sf2.bam"));
     sprintf(cmd,"%s -a -v -f -F %s,%s,%s --rg 25077_3#3,25077_4#3,25077_5#3 -o %s %s", prog, MKNAME(DATA_DIR,"/sf_1.filter"), MKNAME(DATA_DIR,"/sf_2.filter"), MKNAME(DATA_DIR,"/sf_3.filter"), outputfile, MKNAME(DATA_DIR,"/sf2.bam"));
     if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
     checkFiles(TMPDIR, outputfile, MKNAME(DATA_DIR,"/out/sf2.bam"), verbose);
+
+    // missing filters
+    if (verbose) fprintf(stderr,"Missing filters\n");
+    sprintf(outputfile,"%s/sf_filtered_2.bam", TMPDIR);
+    sprintf(cmd,"%s -a -v -f -F %s,%s,%s --rg 25077_3#3,25077_4#3,25077_5#x -o %s %s", prog, MKNAME(DATA_DIR,"/sf_1.filter"), MKNAME(DATA_DIR,"/sf_2.filter"), MKNAME(DATA_DIR,"/sf_3.filter"), outputfile, MKNAME(DATA_DIR,"/sf2.bam"));
+    if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
+    checkFiles(TMPDIR, outputfile, MKNAME(DATA_DIR,"/out/sf_filtered_2.bam"), verbose);
 
     printf("spatial_filter tests: %s\n", failure ? "FAILED" : "Passed");
     return failure ? EXIT_FAILURE : EXIT_SUCCESS;
