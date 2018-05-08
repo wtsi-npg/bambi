@@ -1594,7 +1594,7 @@ static void bam_add_calls_quals(bam1_t *recs,
     }
     // paranoia check - enough room for base calls and qualities?
     for (int rd = 0; rd < nreads; rd++) {
-        for (int i = 0; i < nrecs; i+=nreads) {
+        for (int i = rd; i < nrecs; i+=nreads) {
             assert(recs[i].l_data + ((job->read_files[rd]->end + 1) >> 1) + job->read_files[rd]->end <= recs[i].m_data);
         }
     }
