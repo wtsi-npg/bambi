@@ -1,11 +1,16 @@
 AC_INIT([bambi], m4_esyscmd_s([git describe --dirty --always --tags]), [js10@sanger.ac.uk])
+AC_CONFIG_MACRO_DIR([m4])
 AC_ARG_VAR(HTSDIR,Directory to look for hts)
-AM_INIT_AUTOMAKE([subdir-objects -Wall -Werror foreign tar-pax no-dependencies])
+AM_INIT_AUTOMAKE([subdir-objects foreign tar-pax no-dependencies])
+
 AC_PROG_CC
+dnl Turn on compiler warnings, if possible
+HTS_PROG_CC_WARNINGS
+dnl Flags to treat warnings as errors.  These need to be applied to CFLAGS
+dnl later as they can interfere with some of the tests (notably AC_SEARCH_LIBS)
+HTS_PROG_CC_WERROR(bambi_late_cflags)
 
 LT_INIT
-
-AC_CONFIG_MACRO_DIR([m4])
 
 AX_WITH_HTSLIB
 
@@ -26,6 +31,9 @@ AC_CHECK_LIB([xml2], [xmlParseFile])
 AC_CHECK_LIB([gd], [gdImageCreate])
 
 AC_CONFIG_SRCDIR([src/bambi.h])
+
+dnl Apply value from HTS_PROG_CC_WERROR (if set)
+AS_IF([test "x$bambi_late_cflags" != x],[CFLAGS="$CFLAGS $bambi_late_cflags"])
 
 AC_CONFIG_FILES([ Makefile ])
 AC_OUTPUT

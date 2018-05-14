@@ -1,7 +1,7 @@
 ACLOCAL_AMFLAGS= -I m4
 
-AM_CPPFLAGS = -I$(top_srcdir)/src $(HTSLIB_CPPFLAGS) -std=gnu99 -Werror
-AM_CFLAGS = $(XML_CFLAGS) -std=gnu99 -Werror
+AM_CPPFLAGS = -I$(top_srcdir)/src $(HTSLIB_CPPFLAGS) -std=gnu99
+AM_CFLAGS = $(XML_CFLAGS) -std=gnu99
 AM_LDFLAGS = -rdynamic $(HTSLIB_LDFLAGS)
 
 bin_PROGRAMS = src/bambi
