@@ -693,7 +693,7 @@ static int noCalls(char *s)
 static int countMismatches(char *tag, char *barcode, int maxval)
 {
     int n = 0;
-    for (int i=0; tag[i]; i++) {
+    for (int i=0; tag[i] && barcode[i]; i++) {
         if ((tag[i] != barcode[i]) && (barcode[i] != 'N')) {
             n++;
             if (n>maxval) return n;     // exit early if we can
