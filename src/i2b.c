@@ -41,6 +41,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <htslib/thread_pool.h>
 #include <htslib/khash.h>
 
+#include "decode.h"
 #include "posfile.h"
 #include "filterfile.h"
 #include "bclfile.h"
@@ -155,6 +156,15 @@ typedef struct {
     xmlDocPtr basecallsConfig;
     xmlDocPtr parametersConfig;
     xmlDocPtr runinfoConfig;
+    decode_opts_t *decode_opts;
+    const char *decode_calls_tag;
+    va_t *barcodeArray;
+    const char *unmatched_barcode_name;
+    bool decode_tags;
+    bool write_decode_metrics;
+    bool change_read_name;
+    bool convert_low_quality;
+    int max_low_quality_to_convert;
 } opts_t;
 
 /*
@@ -179,6 +189,9 @@ typedef struct {
     lockable_bcl_cache *bcl_cache;
     hts_tpool *thread_p;
     hts_tpool_process *thread_q;
+    HashTable *barcodes_hash;
+    HashTable *tag_hops;
+    size_t longest_barcode_name;
 } job_data_t;
 
 
@@ -215,6 +228,7 @@ void i2b_free_opts(opts_t* opts)
     xmlFreeDoc(opts->basecallsConfig);
     xmlFreeDoc(opts->parametersConfig);
     xmlFreeDoc(opts->runinfoConfig);
+    decode_free_opts(opts->decode_opts);
     free(opts);
 }
 
@@ -420,6 +434,18 @@ static void usage(FILE *write_to)
 "  -t   --threads                       maximum number of threads to use [default: " DEFAULT_MAX_THREADS "]\n"
 "       --output-fmt                    [sam/bam/cram] [default: bam]\n"
 "       --compression-level             [0..9]\n"
+"Barcode decoding options:\n"
+"       --barcode-file                  file containing barcodes.\n"
+"       --barcode-tag-name              Barcode tag to use for decoding\n"
+"       --convert-low-quality           convert low quality bases in barcode reads to N\n"
+"       --max-low-quality-to-convert    max low quality phred value to convert bases in barcode\n"
+"       --max-no-calls                  Max allowable number of no-calls in a barcode\n"
+"read before it is considered unmatchable.\n"
+"       --max-mismatches                Maximum mismatches for a barcode to be considered a match\n"
+"       --min-mismatch-delta            Minimum difference between number of mismatches in the best\n"
+"                                       and second best barcodes for a barcode to be considered a\n"
+"                                       match\n"
+"       --change-read-name              Change the read name by adding #<barcode> suffix\n"
 );
 }
 
@@ -466,6 +492,16 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
         { "final-cycle",                1, 0, 0 },
         { "first-index-cycle",          1, 0, 0 },
         { "final-index-cycle",          1, 0, 0 },
+        { "metrics-file",               1, 0, 0 },
+        { "barcode-file",               1, 0, 0 },
+        { "barcode-tag-name",           1, 0, 0 },
+        { "convert-low-quality",        0, 0, 0 },
+        { "max-low-quality-to-convert", 1, 0, 0 },
+        { "max-no-calls",               1, 0, 0 },
+        { "max-mismatches",             1, 0, 0 },
+        { "min-mismatch-delta",         1, 0, 0 },
+        { "change-read-name",           0, 0, 0 },
+        { "ignore-pf",                  0, 0, 0 },
         { NULL, 0, NULL, 0 }
     };
 
@@ -485,6 +521,9 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
     opts->separator = true;
     opts->nthreads = atoi(DEFAULT_MAX_THREADS);
     opts->qlen = atoi(QUEUELEN);
+    opts->decode_opts = decode_init_opts(argc - 1, argv + 1);
+    opts->decode_tags = false;
+    opts->decode_calls_tag = NULL;
 
     int opt;
     int option_index = 0;
@@ -534,6 +573,24 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
                     else if (strcmp(arg, "final-cycle") == 0)                  parse_int(opts->final_cycle,optarg);
                     else if (strcmp(arg, "first-index-cycle") == 0)            parse_int(opts->first_index_cycle,optarg);
                     else if (strcmp(arg, "final-index-cycle") == 0)            parse_int(opts->final_index_cycle,optarg);
+                    else if (strcmp(arg, "metrics-file") == 0) {
+                        set_decode_opt_metrics_name(opts->decode_opts, optarg);
+                        opts->write_decode_metrics = true;
+                    } else if (strcmp(arg, "barcode-file") == 0) {
+                        set_decode_opt_barcode_name(opts->decode_opts, optarg);
+                        opts->decode_tags = true;
+                    } else if (strcmp(arg, "barcode-tag-name") == 0) {
+                        set_decode_opt_barcode_tag_name(opts->decode_opts, optarg);
+                        opts->decode_calls_tag = optarg;
+                    } else if (strcmp(arg, "convert-low-quality") == 0)          opts->convert_low_quality = true;
+                    else if (strcmp(arg, "max-low-quality-to-convert") == 0)   opts->max_low_quality_to_convert = atoi(optarg);
+                    else if (strcmp(arg, "max-no-calls") == 0)                 set_decode_opt_max_no_calls(opts->decode_opts, atoi(optarg));
+                    else if (strcmp(arg, "max-mismatches") == 0)               set_decode_opt_max_mismatches(opts->decode_opts, atoi(optarg));
+                    else if (strcmp(arg, "min-mismatch-delta") == 0)           set_decode_opt_min_mismatch_delta(opts->decode_opts, atoi(optarg));
+                    else if (strcmp(arg, "change-read-name") == 0) {
+                        set_decode_opt_change_read_name(opts->decode_opts, true);
+                        opts->change_read_name = true;
+                    } else if (strcmp(arg, "ignore-pf") == 0)                    set_decode_opt_ignore_pf(opts->decode_opts, true);
                     else {
                         fprintf(stderr,"\nUnknown option: %s\n\n", arg); 
                         usage(stdout); i2b_free_opts(opts);
@@ -704,6 +761,27 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
         return NULL;
     }
 
+    if (opts->decode_tags) {
+        int i;
+        if (!opts->decode_calls_tag) { // Set default
+            opts->decode_calls_tag = DEFAULT_BARCODE_TAG;
+            set_decode_opt_barcode_tag_name(opts->decode_opts, opts->decode_calls_tag);
+        }
+        for (i = 0; i < opts->barcode_tag->end; i++) {
+            if (strcmp(opts->decode_calls_tag, opts->barcode_tag->entries[i]) == 0) break;
+        }
+        if (i == opts->barcode_tag->end) {
+            fprintf(stderr, "Tag name in --barcode-tag-name option is not in the list for --barcode-tag\n");
+            return NULL;
+        }
+
+        opts->barcodeArray = loadBarcodeFile(opts->decode_opts);
+        if (!opts->barcodeArray) {
+            fprintf(stderr, "Failed to read barcodes file\n");
+            return NULL;
+        }
+    }
+
     return opts;
 }
 
@@ -743,16 +821,48 @@ static int addHeader(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
     sam_hdr_add(sh, "HD", "VN", "1.5", "SO", "unsorted", NULL, NULL);
 
     // Add RG line
-    sam_hdr_add(sh, "RG", "ID", opts->read_group_id, 
-                    "DT", opts->run_start_date,
-                    "PU", opts->platform_unit,
-                    "LB", opts->library_name,
-                    "PG", "SCS",
-                    "SM", opts->sample_alias,
-                    "CN", opts->sequencing_centre,
-                    "PL", opts->platform,
-                    (opts->study_name ? "DS": NULL), (opts->study_name ? opts->study_name: NULL),
-                    NULL, NULL);
+    if (opts->barcodeArray) {
+        size_t longest_name = find_longest_barcode_name(opts->barcodeArray);
+        char *id = malloc(strlen(opts->read_group_id) + longest_name + 2);
+        char *pu = malloc(strlen(opts->platform_unit) + longest_name + 2);
+        if (!id || !pu) die("Out of memory");
+        for (int idx = 0; ; idx++) {
+            const char *name = NULL, *lib = NULL, *sample = NULL, *desc = NULL;
+            if (get_barcode_metadata(opts->barcodeArray, idx, &name, &lib, &sample, &desc) < 0) break;
+            if (idx == 0) {
+                lib    = opts->library_name;
+                sample = opts->sample_alias;
+                desc   = opts->study_name;
+            }
+            sprintf(id, "%s#%s", opts->read_group_id, name);
+            sprintf(pu, "%s#%s", opts->platform_unit, name);
+            sam_hdr_add(sh, "RG",
+                        "ID", id,
+                        "DT", opts->run_start_date,
+                        "PU", pu,
+                        "LB", lib ? lib : opts->library_name,
+                        "PG", "SCS",
+                        "SM", sample ? sample : opts->sample_alias,
+                        "CN", opts->sequencing_centre,
+                        "PL", opts->platform,
+                        (desc ? "DS" : NULL), (desc ? desc : NULL),
+                        NULL, NULL);
+        }
+        free(id);
+        free(pu);
+    } else {
+        sam_hdr_add(sh, "RG",
+                        "ID", opts->read_group_id,
+                        "DT", opts->run_start_date,
+                        "PU", opts->platform_unit,
+                        "LB", opts->library_name,
+                        "PG", "SCS",
+                        "SM", opts->sample_alias,
+                        "CN", opts->sequencing_centre,
+                        "PL", opts->platform,
+                        (opts->study_name ? "DS": NULL), (opts->study_name ? opts->study_name: NULL),
+                        NULL, NULL);
+    }
 
     // Add PG lines
     sam_hdr_add(sh, "PG",
@@ -1414,11 +1524,11 @@ static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, int next_til
 /*
  * calculate and return the readname
  */
-static size_t getReadName(char *readName, size_t sz, char *prefix, posfile_t *posfile, int cluster) {
+static size_t getReadName(char *readName, size_t sz, char *prefix, posfile_t *posfile, int cluster, char *barcode) {
     int x = posfile_get_x(posfile,cluster);
     int y = posfile_get_y(posfile,cluster);
     size_t l;
-    l = snprintf(readName, sz, "%s:%d:%d", prefix, x, y);
+    l = snprintf(readName, sz, "%s:%d:%d%s%s", prefix, x, y, barcode ? "#" : "", barcode ? barcode : "");
     if (l >= sz) {
         fprintf(stderr,"readName too long: %s\n", readName);
         exit(1);
@@ -1513,8 +1623,13 @@ struct processRecordJob_struct {
     size_t read_len[2];
     size_t total_bc_tag_len[2];
     size_t max_data_len[2];
+    va_t *barcodeArray;
+    HashTable *barcodes_hash;
+    HashTable *tag_hops;
+    struct barcode_bcl_files *decode_calls;
+    struct processRecordResult_struct results;
+    struct processRecordJob_struct *next;
 };
-
 
 /*
  * Fill out bam1_core_t values for each record and set the bam1_t data
@@ -1529,32 +1644,49 @@ static void bam_fill_core(bam1_t *recs, unsigned char *data_block,
 
     for (int cluster = cluster_from, i = 0; cluster < cluster_to; cluster++, i+=nreads) {
         unsigned char *data[2];
-        size_t name_len, extranul;
         bool filtered = (machineType == MT_NOVASEQ ? false    // NovaSeq is pre-filtered by this point
                          : !filter_get(job->filter, cluster)); // actual flag is 'passed', but we want 'filtered out'
 
         data[0] = data_block + (cluster - job->start_cluster) * data_len;
         data[1] = data[0] + job->max_data_len[0];
 
-        name_len = getReadName((char *) data[0], job->read_name_prefix_len + 28, job->read_name_prefix, job->posfile, cluster) + 1; // +1 for NUL on end
-        extranul = (name_len & 3) != 0 ? (4 - (name_len & 3)) : 0;
         for (int rd = 0; rd < nreads; rd++) {
             assert(recs[i + rd].l_data == 0);
             recs[i + rd].core.tid = recs[i + rd].core.mtid = -1;
             recs[i + rd].core.pos = recs[i + rd].core.mpos = -1;
             recs[i + rd].core.bin = unmapped_bin;
-            recs[i + rd].core.l_qname = name_len + extranul;
+            recs[i + rd].core.l_qname = 0;
             recs[i + rd].core.flag = setFlag(rd > 0, filtered, nreads > 1);
-            recs[i + rd].core.l_extranul = extranul;
+            recs[i + rd].core.l_extranul = 0;
             recs[i + rd].core.l_qseq = job->read_len[rd];
             recs[i + rd].data = data[rd];
             recs[i + rd].m_data = job->max_data_len[rd];
-            for (recs[i + rd].l_data = name_len; recs[i + rd].l_data < name_len + extranul; recs[i + rd].l_data++) {
-                recs[i + rd].data[recs[i + rd].l_data] = '\0';
-            }
         }
-        // Copy name to read 2
-        if (nreads > 1) memcpy(recs[i+1].data, recs[i].data, name_len);
+    }
+}
+
+/* Add the read names */
+static void bam_add_names(bam1_t *recs, struct processRecordJob_struct *job,
+                          int cluster_from, int cluster_to, int nreads,
+                          char **barcode_names)
+{
+    bool add_bc = job->opts->change_read_name && barcode_names;
+    for (int cluster = cluster_from, i = 0; cluster < cluster_to; cluster++, i+=nreads) {
+        char *barcode = add_bc ? barcode_names[cluster - cluster_from] : NULL;
+        size_t name_len = getReadName((char *) recs[i].data, job->read_name_prefix_len + 28, job->read_name_prefix, job->posfile, cluster, barcode) + 1; // +1 for NUL on end
+        size_t extranul = (name_len & 3) != 0 ? (4 - (name_len & 3)) : 0;
+        recs[i].core.l_qname = name_len + extranul;
+        recs[i].core.l_extranul = extranul;
+        for (recs[i].l_data = name_len; recs[i].l_data < name_len + extranul; recs[i].l_data++) {
+                recs[i].data[recs[i].l_data] = '\0';
+        }
+
+        if (nreads > 1) {
+            memcpy(recs[i+1].data, recs[i].data, recs[i].core.l_qname);
+            recs[i+1].core.l_qname = recs[i].core.l_qname;
+            recs[i+1].core.l_extranul = recs[i].core.l_extranul;
+            recs[i+1].l_data = recs[i].l_data;
+        }
     }
 }
 
@@ -1644,7 +1776,8 @@ static void bam_add_calls_quals(bam1_t *recs,
 
 static void bam_add_rg_tags(bam1_t *recs,
                             struct processRecordJob_struct *job,
-                            int cluster_from, int cluster_to, int nreads) {
+                            int cluster_from, int cluster_to, int nreads,
+                            char **barcodes) {
     int nrecs = (cluster_to - cluster_from) * nreads;
 
     // Note: job->read_group_tag_len includes the RGZ and trailing NUL
@@ -1655,6 +1788,110 @@ static void bam_add_rg_tags(bam1_t *recs,
         memcpy(&recs[i].data[recs[i].l_data + 3], job->opts->read_group_id, job->read_group_tag_len - 3);
         recs[i].l_data += job->read_group_tag_len;
     }
+    if (barcodes) {
+        for (int c = 0; c < cluster_to - cluster_from; c++) {
+            size_t bc_len = strlen(barcodes[c]);
+            int i = c * nreads;
+            recs[i].data[recs[i].l_data - 1] = '#';
+            memcpy(&recs[i].data[recs[i].l_data], barcodes[c], bc_len + 1);
+            recs[i].l_data += bc_len + 1;
+            if (nreads > 1) {
+                recs[i + 1].data[recs[i + 1].l_data - 1] = '#';
+                memcpy(&recs[i + 1].data[recs[i + 1].l_data], barcodes[c], bc_len + 1);
+                recs[i + 1].l_data += bc_len + 1;
+            }
+        }
+    }
+}
+
+/*
+ * Copy barcode data into a buffer.
+ * Buffer must be bc_len * (cluster_to - cluster_from) bytes long.
+ * bc_len must be long enough to hold all the barcode parts plus separators
+ * and a terminating NUL.
+ */
+
+static void get_barcodes(char *buffer, unsigned int bc_len,
+                         struct barcode_bcl_files *bcls,
+                         int cluster_from, int cluster_to, int max_low_qual,
+                         const char *separator, size_t separator_len)
+{
+    int pos = 0;
+    int num_parts = bcls ? bcls->bcl_files_array->end : 0;
+    for (int part = 0; part < num_parts; part++) {
+        va_t *bcl_files = bcls->bcl_files_array->entries[part];
+        if (part > 0 && separator_len > 0) {
+            for (int c = cluster_from, i = pos; c < cluster_to; c++, i += bc_len) {
+                memcpy(&buffer[i], separator, separator_len);
+            }
+            pos += separator_len;
+        }
+        if (max_low_qual < 0) {
+            for (int cycle = 0; cycle < bcl_files->end; cycle++,pos++) {
+                bclfile_t *bcl = bcl_files->entries[cycle];
+                for (int cluster = cluster_from, i = pos; cluster < cluster_to; cluster++, i += bc_len) {
+                    buffer[i] = bcl->bases[cluster];
+                }
+            }
+        } else {
+            for (int cycle = 0; cycle < bcl_files->end; cycle++,pos++) {
+                bclfile_t *bcl = bcl_files->entries[cycle];
+                for (int cluster = cluster_from, i = pos; cluster < cluster_to; cluster++, i += bc_len) {
+                    buffer[i] = bcl->quals[cluster] > max_low_qual ? bcl->bases[cluster] : 'N';
+                }
+            }
+        }
+    }
+    for (int cluster = cluster_from, i = pos; cluster < cluster_to; cluster++, i+=bc_len) {
+        buffer[i] = 0;
+    }
+}
+
+/*
+ * Decode sequence barcodes
+ */
+static char **decode_tags(bam1_t *recs,
+                          struct processRecordJob_struct *job,
+                          int cluster_from, int cluster_to, int nreads)
+{
+    size_t index_separator_len = strlen(INDEX_SEPARATOR);
+    char *barcode_calls = NULL;
+    char **barcode_names = NULL;
+    int nclusters = cluster_to - cluster_from;
+    size_t bc_len = 1;
+    int mlq = job->opts->convert_low_quality ? job->opts->max_low_quality_to_convert : -1;
+
+    if (job->decode_calls) {
+        va_t *bcl_arrays = job->decode_calls->bcl_files_array;
+
+        for (int i = 0; i < bcl_arrays->end; i++) {
+            va_t *bcl_files = bcl_arrays->entries[i];
+            bc_len += bcl_files->end;
+        }
+        bc_len += job->decode_calls->bcl_files_array->end * (job->opts->separator ? index_separator_len : 0);
+    }
+
+    barcode_calls = malloc(nclusters * bc_len);
+    barcode_names = malloc(nclusters * sizeof(*barcode_names));
+    if (!barcode_names || !barcode_calls) die("Out of memory");
+
+    get_barcodes(barcode_calls, bc_len, job->decode_calls,
+                 cluster_from, cluster_to, mlq, INDEX_SEPARATOR,
+                 job->opts->separator ? index_separator_len : 0);
+
+    for (int c = 0; c < nclusters; c++) {
+        bool is_pf = !(recs[c * nreads].core.flag & BAM_FQCFAIL);
+        if (is_pf || job->opts->no_filter) {
+            barcode_names[c] = findBarcodeName(barcode_calls + c * bc_len,
+                                               job->barcodeArray, job->barcodes_hash,
+                                               job->tag_hops, job->opts->decode_opts,
+                                               is_pf, true);
+        } else {
+            barcode_names[c] = ""; // Won't be used, anyway.
+        }
+    }
+    free(barcode_calls);
+    return barcode_names;
 }
 
 /*
@@ -1761,12 +1998,21 @@ static void bam_add_barcode_tags(bam1_t *recs,
 
 static void processRecordGroup(struct processRecordJob_struct *job, int cluster_from, int cluster_to, struct processRecordResult_struct *res) {
     int nreads = job->read_files[1] != NULL ? 2 : 1;
-    int nrecs = (cluster_to - cluster_from) * nreads;
+    int nclusters = cluster_to - cluster_from;
+    int nrecs = nclusters * nreads;
     bam1_t *recs = &res->records[(cluster_from - job->start_cluster) * nreads];
+    char **barcode_names = NULL;
     int i;
 
-    // Read names and core bam struct.  Also set up data pointers.
+    // Core bam struct.  Also set up data pointers.
     bam_fill_core(recs, res->data, job, cluster_from, cluster_to, nreads);
+
+    if (job->barcodeArray) {
+        barcode_names = decode_tags(recs, job, cluster_from, cluster_to, nreads);
+    }
+
+    // Read names
+    bam_add_names(recs, job, cluster_from, cluster_to, nreads, barcode_names);
 
     // Base calls and quality values
     bam_add_calls_quals(recs, job, cluster_from, cluster_to, nreads);
@@ -1777,10 +2023,12 @@ static void processRecordGroup(struct processRecordJob_struct *job, int cluster_
     }
 
     // Add RG aux tag
-    bam_add_rg_tags(recs, job, cluster_from, cluster_to, nreads);
+    bam_add_rg_tags(recs, job, cluster_from, cluster_to, nreads, barcode_names);
 
     // Add barcode tags
     bam_add_barcode_tags(recs, job, cluster_from, cluster_to, nreads);
+
+    free(barcode_names);
 }
 
 /*
@@ -1793,7 +2041,7 @@ static void processRecordGroup(struct processRecordJob_struct *job, int cluster_
 static void *processRecords(void *arg)
 {
     struct processRecordJob_struct *job_struct = (struct processRecordJob_struct *)arg;
-    struct processRecordResult_struct *res = malloc(sizeof(struct processRecordResult_struct));
+    struct processRecordResult_struct *res = &job_struct->results;
     int is_paired = job_struct->read_files[1] != NULL;
     int num_clusters = job_struct->end_cluster + 1 - job_struct->start_cluster;
     if (!res) die("Out of memory");
@@ -1807,12 +2055,8 @@ static void *processRecords(void *arg)
         int end = cluster + RECORD_GROUP_SIZE <= job_struct->end_cluster + 1 ? cluster + RECORD_GROUP_SIZE : job_struct->end_cluster + 1;
         processRecordGroup(job_struct, cluster, end, res);
     }
-    for (int rd = 0; rd < (is_paired ? 2 : 1); rd++) {
-        va_free(job_struct->bc_calls_tags[rd]);
-        va_free(job_struct->bc_quals_tags[rd]);
-    }
-    free(job_struct);
-    return res;
+
+    return job_struct;
 }
 
 /*
@@ -1865,6 +2109,22 @@ static va_t *get_barcode_bcl_files(va_t *barcode_specs, va_t *bcl_read_array, in
 }
 
 /*
+ * Search barcode bcl files for a given tag.  Used to find the bcl files
+ * needed for decoding.
+ */
+
+static struct barcode_bcl_files *find_tag_bcls(va_t *barcode_bcls[2], int nreads, const char *tag_name)
+{
+    for (int rd = 0; rd < nreads; rd++) {
+        for (int i = 0; i < barcode_bcls[rd]->end; i++) {
+            struct barcode_bcl_files *tag_bcls = barcode_bcls[rd]->entries[i];
+            if (strncmp(tag_name, tag_bcls->tag, 2) == 0) return tag_bcls;
+        }
+    }
+    return NULL;
+}
+
+/*
  * Write all the BAM records for a given tile
  * Records are written to the global FIFO queue
  */
@@ -1889,6 +2149,8 @@ static void processTile(job_data_t *job_data)
     size_t read_name_prefix_len;
     size_t index_separator_len = strlen(INDEX_SEPARATOR);
     size_t qual_separator_len = strlen(QUAL_SEPARATOR);
+    size_t barcode_name_extra = opts->decode_tags && opts->change_read_name ? job_data->longest_barcode_name + 1 : 0;
+    size_t barcode_rg_extra = opts->decode_tags ? job_data->longest_barcode_name + 1 : 0;
 
     if (opts->verbose) fprintf(stderr,"Processing Tile %d\n", tile);
 
@@ -1918,14 +2180,19 @@ static void processTile(job_data_t *job_data)
     //
     // write all the records
     //
-    int cluster = 0;
-    struct processRecordJob_struct *job_struct = NULL;
+    int cluster;
+    struct processRecordJob_struct *job_freelist = NULL;
 
-    while (cluster < max_cluster) {
-        int blk = 0;   
-        if (!job_struct) {
+    for (cluster = 0; cluster < max_cluster; cluster += CLUSTERS_PER_THREAD) {
+        int blk = 0, nreads = 1;
+        struct processRecordJob_struct *job_struct = job_freelist;
+        if (job_struct) {
+            job_freelist = job_struct->next;
+            job_struct->next = NULL;
+        } else {
             job_struct = malloc(sizeof(*job_struct));
             if (!job_struct) die("Out of memory");
+            job_struct->next = NULL;
             job_struct->start_cluster = cluster;
             job_struct->end_cluster = cluster+CLUSTERS_PER_THREAD-1;
             if (job_struct->end_cluster >= max_cluster) job_struct->end_cluster = max_cluster - 1;
@@ -1945,6 +2212,7 @@ static void processTile(job_data_t *job_data)
             job_struct->read_files[0] = getBclFileArray(bclReadArray, "read1", surface);
             if (!job_struct->read_files[0]) die("Couldn't find read1 bcl file data");
             job_struct->read_files[1] = getBclFileArray(bclReadArray, "read2", surface);
+            if (job_struct->read_files[1]) nreads = 2;
             /* Get read lengths */
             job_struct->read_len[0] = job_struct->read_files[0]->end;
             job_struct->read_len[1] = job_struct->read_files[1] ? job_struct->read_files[1]->end : 0;
@@ -1954,65 +2222,85 @@ static void processTile(job_data_t *job_data)
              */
             job_struct->total_bc_tag_len[0] = 0;
             job_struct->total_bc_tag_len[1] = 0;
-            for (int rd = 0; rd < (job_struct->read_files[1] != NULL ? 2 : 1); rd++) {
+            for (int rd = 0; rd < nreads; rd++) {
                 job_struct->bc_calls_tags[rd] = get_barcode_bcl_files(job_data->barcode_calls[rd], bclReadArray, surface, opts->separator ? index_separator_len : 0, &job_struct->total_bc_tag_len[rd]);
                 job_struct->bc_quals_tags[rd] = get_barcode_bcl_files(job_data->barcode_quals[rd], bclReadArray, surface, opts->separator ? qual_separator_len : 0, &job_struct->total_bc_tag_len[rd]);
+            }
+
+            if (opts->decode_tags) {
+                job_struct->decode_calls = find_tag_bcls(job_struct->bc_calls_tags, nreads, opts->decode_calls_tag);
+                job_struct->barcodeArray = copy_barcode_array(opts->barcodeArray);
+                job_struct->barcodes_hash = job_data->barcodes_hash;
+                job_struct->tag_hops = HashTableCreate(0, HASH_DYNAMIC_SIZE | HASH_FUNC_JENKINS);
+                if (!job_struct->tag_hops) die("Out of memory");
+            } else {
+                job_struct->decode_calls = NULL;
+                job_struct->barcodeArray = NULL;
+                job_struct->barcodes_hash = NULL;
+                job_struct->tag_hops = NULL;
             }
 
             /*
              * Work out worst-case memory neeeded for the variable parts of
              * the bam records (28 on name is for ":-2147483647:-2147483647\0\0\0\0")
              */
-            job_struct->max_data_len[0] = (job_struct->read_name_prefix_len + 28  // name
+            job_struct->max_data_len[0] = (job_struct->read_name_prefix_len + barcode_name_extra + 28  // name
                                            + ((job_struct->read_len[0] + 1) >> 1) // bases
                                            + job_struct->read_len[0]              // quals
-                                           + job_struct->read_group_tag_len       // RG tag
+                                           + job_struct->read_group_tag_len + barcode_rg_extra // RG tag
                                            + job_struct->total_bc_tag_len[0]);    // Barcodes
             if (job_struct->read_files[1]) {
-                job_struct->max_data_len[1] = (job_struct->read_name_prefix_len + 28  // name
+                job_struct->max_data_len[1] = (job_struct->read_name_prefix_len + barcode_name_extra + 28  // name
                                                + ((job_struct->read_len[1] + 1) >> 1) // bases
                                                + job_struct->read_len[1]              // quals
-                                               + job_struct->read_group_tag_len       // RG tag
+                                               + job_struct->read_group_tag_len + barcode_rg_extra // RG tag
                                                + job_struct->total_bc_tag_len[1]);    // Barcodes
             } else {
                 job_struct->max_data_len[1] = 0;
             }
         }
+        job_struct->start_cluster = cluster;
+        job_struct->end_cluster = cluster+CLUSTERS_PER_THREAD-1;
+        if (job_struct->end_cluster >= max_cluster) job_struct->end_cluster = max_cluster - 1;
 
-        blk = hts_tpool_dispatch2(p, q, processRecords, job_struct, 1);
-        if (!blk) {
-            cluster += CLUSTERS_PER_THREAD;
-            job_struct = NULL;
-        } else if (errno != EAGAIN) {
-            die("Thread pool dispatch failed");
-        }
-
-        // Check for results.
-        if (blk) {
-            r = hts_tpool_next_result_wait(q);
-        } else {
-            r = hts_tpool_next_result(q);
-        }
-        if (r != NULL) {
-            struct processRecordResult_struct *res = (struct processRecordResult_struct *)hts_tpool_result_data(r);
-            for (int n=0; n < res->num_records; n++) {
-                if (!opts->no_filter && (res->records[n].core.flag & BAM_FQCFAIL)) continue;
-                int ret = sam_write1(output_file, output_header, &res->records[n]);
-                if (ret < 0) {
-                    die("Problem writing record %s  : r=%d\n", bam_get_qname(&res->records[n]), ret);
-                }
+        while (job_struct != NULL) {
+            blk = hts_tpool_dispatch2(p, q, processRecords, job_struct, 1);
+            if (!blk) {
+                job_struct = NULL;
+            } else if (errno != EAGAIN) {
+                die("Thread pool dispatch failed");
             }
-            free(res->records);
-            free(res->data);
-            free(res);
-            hts_tpool_delete_result(r, 0);
+
+            // Check for results.
+            if (blk) {
+                r = hts_tpool_next_result_wait(q);
+            } else {
+                r = hts_tpool_next_result(q);
+            }
+            if (r != NULL) {
+                struct processRecordJob_struct *job = (struct processRecordJob_struct *) hts_tpool_result_data(r);
+                struct processRecordResult_struct *res = &job->results;
+                for (int n=0; n < res->num_records; n++) {
+                    if (!opts->no_filter && (res->records[n].core.flag & BAM_FQCFAIL)) continue;
+                    int ret = sam_write1(output_file, output_header, &res->records[n]);
+                    if (ret < 0) {
+                        die("Problem writing record %s  : r=%d\n", bam_get_qname(&res->records[n]), ret);
+                    }
+                }
+                free(res->records);
+                free(res->data);
+                job->next = job_freelist;
+                job_freelist = job;
+                hts_tpool_delete_result(r, 0);
+            }
         }
     }
 
     // Wait for any input-queued up jobs or in-progress jobs to complete.
     while (!hts_tpool_process_empty(q)) {
         r = hts_tpool_next_result_wait(q);
-        struct processRecordResult_struct *res = (struct processRecordResult_struct *)hts_tpool_result_data(r);
+        struct processRecordJob_struct *job = (struct processRecordJob_struct *) hts_tpool_result_data(r);
+        struct processRecordResult_struct *res = &job->results;
         for (int n=0; n < res->num_records; n++) {
             if (!opts->no_filter && (res->records[n].core.flag & BAM_FQCFAIL)) continue;
             int ret = sam_write1(output_file, output_header, &res->records[n]);
@@ -2022,8 +2310,29 @@ static void processTile(job_data_t *job_data)
         }
         free(res->records);
         free(res->data);
-        free(res);
+        job->next = job_freelist;
+        job_freelist = job;
         hts_tpool_delete_result(r, 0);
+    }
+
+    while (job_freelist != NULL) {
+        struct processRecordJob_struct *next = job_freelist->next;
+        int is_paired = job_freelist->read_files[1] != NULL;
+        if (opts->barcodeArray) {
+            accumulate_job_metrics(job_freelist->barcodeArray, job_freelist->tag_hops, opts->barcodeArray, job_data->tag_hops);
+        }
+        for (int rd = 0; rd < (is_paired ? 2 : 1); rd++) {
+            va_free(job_freelist->bc_calls_tags[rd]);
+            va_free(job_freelist->bc_quals_tags[rd]);
+        }
+        if (job_freelist->barcodeArray) {
+            delete_barcode_array_copy(job_freelist->barcodeArray);
+        }
+        if (job_freelist->tag_hops) {
+            HashTableDestroy(job_freelist->tag_hops, 0);
+        }
+        free(job_freelist);
+        job_freelist = next;
     }
 
     free(id);
@@ -2094,6 +2403,9 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, hts_tpool *
     va_t *tileIndex = getTileIndex(opts);
     va_t *barcode_calls[2];
     va_t *barcode_quals[2];
+    HashTable *barcodeHash = NULL;
+    HashTable *tag_hops = NULL;
+    size_t longest_barcode_name = 0;
     lockable_bcl_cache bcl_cache = { PTHREAD_MUTEX_INITIALIZER, NULL };
     if (machineType == MT_NOVASEQ) {
         bcl_cache.cache = kh_init(bcl_cache);
@@ -2106,6 +2418,16 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, hts_tpool *
     barcode_quals[1] = va_init(4, free_barcode_spec);
     getBarcodeSpecs(barcode_calls, opts->barcode_tag, opts->bc_read);
     getBarcodeSpecs(barcode_quals, opts->quality_tag, opts->bc_read);
+
+    if (opts->barcodeArray) {
+        tag_hops = HashTableCreate(0, HASH_DYNAMIC_SIZE | HASH_FUNC_JENKINS);
+        if (!tag_hops) die("Out of memory");
+        barcodeHash = make_barcode_hash(opts->barcodeArray);
+        longest_barcode_name = find_longest_barcode_name(opts->barcodeArray);
+        if (get_barcode_metadata(opts->barcodeArray, 0, &opts->unmatched_barcode_name, NULL, NULL, NULL) < 0) {
+            opts->unmatched_barcode_name = "0";
+        }
+    }
 
     if (opts->verbose) {
         for (int n=0; n < cycleRange->end; n++) {
@@ -2139,13 +2461,21 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, hts_tpool *
         job_data->bcl_cache = bcl_cache.cache ? &bcl_cache : NULL;
         job_data->thread_p = thread_p;
         job_data->thread_q = thread_q;
+        job_data->barcodes_hash = barcodeHash;
+        job_data->tag_hops = tag_hops;
+        job_data->longest_barcode_name = longest_barcode_name;
 
         processTile(job_data);
+    }
+
+    if (opts->write_decode_metrics) {
+        writeMetrics(opts->barcodeArray, tag_hops, opts->decode_opts);
     }
 
     if (bcl_cache.cache)
         clear_bcl_cache(&bcl_cache);
 
+    HashTableDestroy(barcodeHash, 0);
     va_free(barcode_calls[0]);
     va_free(barcode_calls[1]);
     va_free(barcode_quals[0]);
