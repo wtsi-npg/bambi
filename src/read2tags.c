@@ -736,8 +736,8 @@ int process(opts_t* opts)
     int nrec = 0;
     int r;
 
-    BAMit_t *bam_in = BAMit_open(opts->in_file, 'r', opts->input_fmt, 0);
-    BAMit_t *bam_out = BAMit_open(opts->out_file, 'w', opts->output_fmt, opts->compression_level);
+    BAMit_t *bam_in = BAMit_open(opts->in_file, 'r', opts->input_fmt, 0, NULL);
+    BAMit_t *bam_out = BAMit_open(opts->out_file, 'w', opts->output_fmt, opts->compression_level, NULL);
 
     // copy input to output header
     bam_hdr_destroy(bam_out->h); bam_out->h = bam_hdr_dup(bam_in->h);

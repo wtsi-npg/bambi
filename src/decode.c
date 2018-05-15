@@ -30,7 +30,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <limits.h>
 #include <unistd.h>
 #include <regex.h>
+#include <errno.h>
 #include <htslib/khash.h>
+#include <htslib/thread_pool.h>
 #include <cram/sam_header.h>
 #include <inttypes.h>
 
@@ -46,6 +48,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define DEFAULT_MIN_MISMATCH_DELTA 1
 #define DEFAULT_BARCODE_TAG "BC"
 #define DEFAULT_QUALITY_TAG "QT"
+#define TEMPLATES_PER_JOB 5000
+
+// Size of stack allocations to use for storing barcodes.  If too small, malloc will be used instead.
+// Ideally this should be bigger than the longest barcode expected.
+#ifndef STACK_BC_LEN
+#define STACK_BC_LEN 32
+#endif
 
 enum match {
     MATCHED_NONE,
@@ -77,6 +86,7 @@ typedef struct {
     char *input_fmt;
     char *output_fmt;
     char compression_level;
+    int nthreads;
     int idx1_len, idx2_len;
     bool ignore_pf;
     unsigned short dual_tag;
@@ -110,16 +120,30 @@ typedef struct {
     uint64_t reads, pf_reads, perfect, pf_perfect, one_mismatch, pf_one_mismatch;
 } bc_details_t;
 
+// Data for thread pool jobs
+typedef struct decode_thread_data_t {
+    va_t *record_set;                   // records to process
+    ia_t *template_counts;              // records in each template
+    va_t *barcode_array;                // job-local copy of barcodes array
+    bc_details_t *barcodes;             // memory for job-local barcodes
+    HashTable *tagHopHash;              // job-local tag hops hash
+    HashTable *barcodeHash;             // pointer to shared barcodeHash
+    opts_t *opts;                       // pointer to shared opts
+    int nrec;                           // number of live records in record_set
+    int result;                         // job result, 0 = success
+    struct decode_thread_data_t *next;  // for free list
+} decode_thread_data_t;
+
 static bc_details_t *bcd_init(void)
 {
     bc_details_t *bcd = calloc(1, sizeof(bc_details_t));
     bcd->seq = NULL;
     bcd->idx1 = NULL;
     bcd->idx2 = NULL;
-    bcd->name = strdup("0");
-    bcd->lib = strdup("");
-    bcd->sample = strdup("");
-    bcd->desc = strdup("");
+    bcd->name = NULL;
+    bcd->lib = NULL;
+    bcd->sample = NULL;
+    bcd->desc = NULL;
     return bcd;
 }
 
@@ -186,6 +210,13 @@ void free_bcd(void *entry)
     free(bcd);
 }
 
+void free_taghop_bcd(void *entry)
+{
+    bc_details_t *bcd = (bc_details_t *)entry;
+    free(bcd->seq);
+    free(bcd);
+}
+
 static int compareTagHops(const void *t1, const void *t2) {
     bc_details_t *th1 = *(bc_details_t **)t1;
     bc_details_t *th2 = *(bc_details_t **)t2;
@@ -230,6 +261,7 @@ static void usage(FILE *write_to)
 "       --input-fmt                     format of input file [sam/bam/cram]\n"
 "       --output-fmt                    format of output file [sam/bam/cram]\n"
 "       --compression-level             Compression level of output file [0..9]\n"
+"  -t   --threads                       number of threads to use [default: 1]\n"
 "       --ignore-pf                     Doesn't output PF statistics\n"
 "       --dual-tag                      Dual tag position in the barcode string (between 2 and barcode length - 1)\n"
 );
@@ -242,7 +274,7 @@ static opts_t* parse_args(int argc, char *argv[])
 {
     if (argc == 1) { usage(stdout); return NULL; }
 
-    const char* optstring = "i:o:vb:";
+    const char* optstring = "i:o:vb:t:";
 
     static const struct option lopts[] = {
         { "input",                      1, 0, 'i' },
@@ -263,6 +295,7 @@ static opts_t* parse_args(int argc, char *argv[])
         { "compression-level",          1, 0, 0 },
         { "ignore-pf",                  0, 0, 0 },
         { "dual-tag",                   1, 0, 0 },
+        { "threads",                    1, 0, 't' },
         { NULL, 0, NULL, 0 }
     };
 
@@ -297,6 +330,8 @@ static opts_t* parse_args(int argc, char *argv[])
         case 'v':   opts->verbose = true;
                     break;
         case 'b':   opts->barcode_name = strdup(optarg);
+                    break;
+        case 't':   opts->nthreads = atoi(optarg);
                     break;
         case 0:     arg = lopts[option_index].name;
                          if (strcmp(arg, "metrics-file") == 0)               opts->metrics_name = strdup(optarg);
@@ -354,29 +389,27 @@ static opts_t* parse_args(int argc, char *argv[])
 }
 
 //
-// char *checkBarcodeQuality(char *barcode, char *quality);
+// checkBarcodeQuality(char *newBarcode, char *barcode, size_t barcode_len, char *quality, size_t quality_len, opts_t *opts);
 //
-// return a new barcode read string with low quality bases converted to 'N'
+// Write a new barcode read string with low quality bases converted to 'N' into newBarcode.
 //
-static char *checkBarcodeQuality(char *bc_tag, char *qt_tag, opts_t *opts)
+static void checkBarcodeQuality(char *newBarcode,
+                                char *bc_tag, size_t bc_len,
+                                char *qt_tag, size_t qt_len, opts_t *opts)
 {
+    memcpy(newBarcode, bc_tag, bc_len + 1);
+    if (!qt_tag) return;
 
-    char *newBarcode = strdup(bc_tag);
-    if (!qt_tag) return newBarcode;
-
-    if (!bc_tag || strlen(bc_tag) != strlen(qt_tag)) {
-        fprintf(stderr, "checkBarcodeQuality(): barcode and quality are different lengths\n");
-        return NULL;
+    if (bc_len != qt_len) {
+        die("checkBarcodeQuality(): barcode and quality are different lengths\n");
     }
 
     int mlq = opts->max_low_quality_to_convert ? opts->max_low_quality_to_convert 
                                                : DEFAULT_MAX_LOW_QUALITY_TO_CONVERT;
-    for (int i=0; i < strlen(qt_tag); i++) {
+    for (size_t i=0; i < qt_len; i++) {
         int qual = qt_tag[i] - 33;
         if (isalpha(newBarcode[i]) && (qual <= mlq)) newBarcode[i] = 'N';
     }
-
-    return newBarcode;
 }
 
 void writeMetricsLine(FILE *f, bc_details_t *bcd, opts_t *opts, uint64_t total_reads, uint64_t max_reads, uint64_t total_pf_reads, uint64_t max_pf_reads, uint64_t total_pf_reads_assigned, uint64_t nReads, bool metrics)
@@ -457,7 +490,7 @@ int writeMetrics(va_t *barcodeArray, HashTable *tagHopHash, opts_t *opts)
     // Copy the tag hop hash into an array and sort it
     va_t *tagHopArray = NULL;
     if (tagHopHash && tagHopHash->nused) {
-        tagHopArray = va_init(barcodeArray->end, free_bcd);
+        tagHopArray = va_init(barcodeArray->end, NULL);
         HashIter *iter = HashTableIterCreate();
         HashItem *hi;
         while ( (hi = HashTableIterNext(tagHopHash, iter)) != NULL) {
@@ -532,23 +565,28 @@ int writeMetrics(va_t *barcodeArray, HashTable *tagHopHash, opts_t *opts)
  * split a dual index (eg ACACAC-TGTGTG) into two different indexes.
  * If a single index is given, then the second index is an empty string.
  */
-static void split_index(char *seq, int dual_tag, char **idx1_ptr, char **idx2_ptr)
+static void split_index(char *seq, size_t seq_len, int dual_tag, char **idx1_ptr, char **idx2_ptr, size_t idx1_sz, size_t idx2_sz)
 {
-    char *seq_copy = strdup(seq);
-
+    size_t idx1_len, idx2_start, idx2_len;
     if (dual_tag) {
-        *idx2_ptr = strdup(seq_copy + dual_tag);
-        seq_copy[dual_tag-1] = 0;
-        *idx1_ptr = strdup(seq_copy);
+        idx1_len = dual_tag - 1;
+        idx2_start = dual_tag;
+        idx2_len = seq_len - dual_tag;
     } else {
-        char *saveptr;
-        char *p;
-        p = strtok_r(seq_copy, INDEX_SEPARATOR, &saveptr);
-        if (p) *idx1_ptr = strdup(p);
-        p = strtok_r(NULL, INDEX_SEPARATOR, &saveptr);
-        if (p) *idx2_ptr = strdup(p); else *idx2_ptr = strdup("");
+        idx1_len = strcspn(seq, INDEX_SEPARATOR);
+        idx2_start = idx1_len + strspn(seq + idx1_len, INDEX_SEPARATOR);
+        idx2_len = strcspn(seq + idx2_start, INDEX_SEPARATOR);
     }
-    free(seq_copy);
+    if (idx1_len >= idx1_sz) {
+        *idx1_ptr = malloc(idx1_len + 1);
+        if (!*idx1_ptr) die("Out of memory");
+    }
+    memcpy(*idx1_ptr, seq, idx1_len); (*idx1_ptr)[idx1_len] = '\0';
+    if (idx2_len >= idx2_sz) {
+        *idx2_ptr = malloc(idx2_len + 1);
+        if (!*idx2_ptr) die("Out of memory");
+    }
+    memcpy(*idx2_ptr, seq + idx2_start, idx2_len); (*idx2_ptr)[idx2_len] = '\0';
 }
 
 /*
@@ -562,6 +600,10 @@ static va_t *loadBarcodeFile(opts_t *opts)
 
     // initialise first entry for null metrics
     bc_details_t *bcd = bcd_init();
+    bcd->name   = strdup("0");
+    bcd->lib    = strdup("");
+    bcd->sample = strdup("");
+    bcd->desc   = strdup("");
     va_push(barcodeArray,bcd);
 
     FILE *fh = fopen(opts->barcode_name,"r");
@@ -588,11 +630,11 @@ static va_t *loadBarcodeFile(opts_t *opts)
         bcd->seq     = strdup(s);
         s = strtok(NULL,"\t"); if (!s) die("Can't read name from tag file: Line %d\n", lineno);
         bcd->name    = strdup(s);
-        s = strtok(NULL,"\t"); if (s) bcd->lib     = strdup(s);
-        s = strtok(NULL,"\t"); if (s) bcd->sample  = strdup(s);
-        s = strtok(NULL,"\t"); if (s) bcd->desc    = strdup(s);
+        s = strtok(NULL,"\t"); bcd->lib     = s ? strdup(s) : strdup("");
+        s = strtok(NULL,"\t"); bcd->sample  = s ? strdup(s) : strdup("");
+        s = strtok(NULL,"\t"); bcd->desc    = s ? strdup(s) : strdup("");
 
-        split_index(bcd->seq, opts->dual_tag, &bcd->idx1, &bcd->idx2);
+        split_index(bcd->seq, strlen(bcd->seq), opts->dual_tag, &bcd->idx1, &bcd->idx2, 0, 0);
 
         va_push(barcodeArray,bcd);
         free(buf); buf=NULL;
@@ -651,7 +693,7 @@ static int noCalls(char *s)
 static int countMismatches(char *tag, char *barcode, int maxval)
 {
     int n = 0;
-    for (int i=0; tag[i]; i++) {
+    for (int i=0; tag[i] && barcode[i]; i++) {
         if ((tag[i] != barcode[i]) && (barcode[i] != 'N')) {
             n++;
             if (n>maxval) return n;     // exit early if we can
@@ -666,11 +708,12 @@ static int countMismatches(char *tag, char *barcode, int maxval)
 static bc_details_t *check_tag_hopping(char *barcode, va_t *barcodeArray, HashTable *tagHopHash, opts_t *opts)
 {
     bc_details_t *bcd=NULL, *best_match1, *best_match2;
-    char *idx1, *idx2;
+    char stack_idx1[STACK_BC_LEN], stack_idx2[STACK_BC_LEN];
+    char *idx1 = stack_idx1, *idx2 = stack_idx2;
     int nmBest1 = opts->idx1_len + opts->idx2_len + 1;
     int nmBest2 = nmBest1;
 
-    split_index(barcode, opts->dual_tag, &idx1, &idx2);
+    split_index(barcode, strlen(barcode), opts->dual_tag, &idx1, &idx2, sizeof(stack_idx1), sizeof(stack_idx2));
 
     // for each tag in barcodeArray
     for (int n=1; n < barcodeArray->end; n++) {
@@ -692,7 +735,8 @@ static bc_details_t *check_tag_hopping(char *barcode, va_t *barcodeArray, HashTa
         }
     }
 
-    free(idx2); free(idx1);
+    if (idx1 != stack_idx1) free(idx1);
+    if (idx2 != stack_idx2) free(idx2);
 
     bool matched_first = (nmBest1 == 0 );
     bool matched_second = (nmBest2 == 0 );
@@ -700,26 +744,32 @@ static bc_details_t *check_tag_hopping(char *barcode, va_t *barcodeArray, HashTa
     if (matched_first && matched_second) {
         HashData hd;
         HashItem *hi;
-        char *key = malloc(opts->idx1_len + opts->idx2_len + 2);
-        strcpy(key, best_match1->idx1);
-        strcat(key, INDEX_SEPARATOR);
-        strcat(key, best_match2->idx2);
+        char stack_key[STACK_BC_LEN];
+        char *key = stack_key;
+        if (opts->idx1_len + opts->idx2_len + 2 >= sizeof(stack_key)) {
+            key = malloc(opts->idx1_len + opts->idx2_len + 2);
+            if (!key) die("Out of memory");
+        }
+        memcpy(key, best_match1->idx1, opts->idx1_len);
+        memcpy(key + opts->idx1_len, INDEX_SEPARATOR, 1);
+        memcpy(key + opts->idx1_len + 1, best_match2->idx2, opts->idx2_len);
+        key[opts->idx1_len + opts->idx2_len + 1] = '\0';
         hi = HashTableSearch(tagHopHash, key, 0);
         if (hi) {
             bcd = hi->data.p;
         } else {
             bcd = calloc(1, sizeof(bc_details_t)); //create a new entry with the two tags
-            bcd->idx1 = strdup(best_match1->idx1);            
-            bcd->idx2 = strdup(best_match2->idx2);            
+            bcd->idx1 = best_match1->idx1;
+            bcd->idx2 = best_match2->idx2;
             bcd->seq = strdup(key);
-            bcd->name = strdup("0");
-            bcd->lib = strdup("DUMMY_LIB");
-            bcd->sample = strdup("DUMMY_SAMPLE");
+            bcd->name = "0";
+            bcd->lib = "DUMMY_LIB";
+            bcd->sample = "DUMMY_SAMPLE";
             bcd->desc = NULL;
             hd.p = bcd;
             HashTableAdd(tagHopHash, key, 0, hd, NULL);
         }
-        free(key);
+        if (key != stack_key) free(key);
     }
 
     return bcd;
@@ -745,7 +795,7 @@ bc_details_t *findBestMatch(char *barcode, va_t *barcodeArray, HashTable *barcod
         HashItem *hi;
         hi = HashTableSearch(barcodeHash, barcode, 0);
         if (hi) {
-            return hi->data.p;
+            return barcodeArray->entries[hi->data.i];
         }
     }
 
@@ -818,16 +868,20 @@ static char *findBarcodeName(char *barcode, va_t *barcodeArray, HashTable *barco
 /*
  * make a new tag by appending #<name> to the old tag
  */
-static char *makeNewTag(bam1_t *rec, char *tag, char *name)
+static void makeNewTag(bam1_t *rec, char *tag, char *name, char **newtag, size_t newtag_sz)
 {
     char *rg = "";
     uint8_t *p = bam_aux_get(rec,tag);
+    size_t name_len = strlen(name), rg_len;
     if (p) rg = bam_aux2Z(p);
-    char *newtag = malloc(strlen(rg) + strlen(name) + 16);
-    strcpy(newtag, rg);
-    strcat(newtag,"#");
-    strcat(newtag, name);
-    return newtag;
+    rg_len = strlen(rg);
+    if (name_len + rg_len + 2 > newtag_sz) {
+        *newtag = malloc(name_len + rg_len + 2);
+        if (!*newtag) die("Out of memory");
+    }
+    memcpy(*newtag, rg, rg_len);
+    (*newtag)[rg_len] = '#';
+    memcpy(*newtag + rg_len + 1, name, name_len + 1);
 }
 
 /*
@@ -975,12 +1029,17 @@ static void changeHeader(va_t *barcodeArray, bam_hdr_t *h, char *argv_list)
 /*
  * Process one template
  */
-static int processTemplate(va_t *template, BAMit_t *bam_out, va_t *barcodeArray, HashTable *barcodeHash, HashTable *tagHopHash, opts_t *opts)
+static int processTemplate(va_t *template, va_t *barcodeArray, HashTable *barcodeHash, HashTable *tagHopHash, opts_t *opts)
 {
     char *name = NULL;
     char *bc_tag = NULL;
     char *qt_tag = NULL;
+    char *newtag = NULL;
     short error_code = 0;
+    size_t bc_len = 0;
+    char stack_bc_tag[STACK_BC_LEN];
+    char stack_qt_tag[STACK_BC_LEN];
+    char stack_newtag[STACK_BC_LEN];
 
     // look for barcode tag
     for (int n=0; n < template->end; n++) {
@@ -991,27 +1050,54 @@ static int processTemplate(va_t *template, BAMit_t *bam_out, va_t *barcodeArray,
                 if (strcmp(bc_tag,bam_aux2Z(p)) != 0) {
                     fprintf(stderr,"Record %s has two different barcode tags: %s and %s\n",
                                    bam_get_qname(rec), bc_tag, bam_aux2Z(p));
+                    if (bc_tag != stack_bc_tag) free(bc_tag);
+                    if (qt_tag != stack_qt_tag) free(qt_tag);
                     return -1;
                 }
             } else {
-                bc_tag = strdup(bam_aux2Z(p));
+                char *bc = bam_aux2Z(p);
+                bc_len = strlen(bc);
+                if (bc_len < sizeof(stack_bc_tag)) {
+                    bc_tag = stack_bc_tag;
+                    memcpy(bc_tag, bc, bc_len + 1);
+                } else {
+                    bc_tag = strdup(bc);
+                    if (!bc_tag) die("Out of memory");
+                }
                 p = bam_aux_get(rec,opts->quality_tag_name);
-                if (p) qt_tag = strdup(bam_aux2Z(p));
+                if (p) {
+                    char *qt = bam_aux2Z(p);
+                    size_t qt_len = strlen(qt);
+                    if (qt_len < sizeof(stack_qt_tag)) {
+                        qt_tag = stack_qt_tag;
+                        memcpy(qt_tag, qt, qt_len + 1);
+                    } else {
+                        qt_tag = strdup(bam_aux2Z(p));
+                        if (!qt_tag) die("Out of memory");
+                    }
+                }
             }
         }
     }
 
     // if the convert_low_quality flag is set, then (potentially) change the tag
-    char *newtag = NULL;
     if (bc_tag) {
-        if (opts->convert_low_quality) {
-            newtag = checkBarcodeQuality(bc_tag,qt_tag,opts);
+        if (opts->convert_low_quality && qt_tag) {
+            if (bc_len >= sizeof(stack_newtag)) {
+                newtag = malloc(bc_len + 1);
+                if (!newtag) die("Out of memory");
+            } else {
+                newtag = stack_newtag;
+            }
+            checkBarcodeQuality(newtag, bc_tag, bc_len, qt_tag, strlen(qt_tag), opts);
         } else {
-            newtag = strdup(bc_tag);
+            newtag = bc_tag;
         }
         // truncate to barcode lengths if necessary
-        char *idx1, *idx2;
-        split_index(bc_tag, opts->dual_tag, &idx1, &idx2);
+        char stack_idx1[STACK_BC_LEN];
+        char stack_idx2[STACK_BC_LEN];
+        char *idx1 = stack_idx1, *idx2 = stack_idx2;
+        split_index(bc_tag, bc_len, opts->dual_tag, &idx1, &idx2, sizeof(stack_idx1), sizeof(stack_idx2));
         if ( (strlen(idx1) > opts->idx1_len) || (strlen(idx2) > opts->idx2_len) ) {
             if (strlen(idx1) > opts->idx1_len) idx1[opts->idx1_len]=0;
             if (strlen(idx2) > opts->idx2_len) idx2[opts->idx2_len]=0;
@@ -1019,29 +1105,26 @@ static int processTemplate(va_t *template, BAMit_t *bam_out, va_t *barcodeArray,
             if (opts->idx2_len) strcat(newtag,INDEX_SEPARATOR);
             strcat(newtag,idx2);
         }
-        free(idx2); free(idx1);
+        if (idx1 != stack_idx1) free(idx1);
+        if (idx2 != stack_idx2) free(idx2);
     }
 
     for (int n=0; n < template->end; n++) {
         bam1_t *rec = template->entries[n];
         if (newtag) {
+            char stack_newrg[256];
+            char *newrg = stack_newrg;
             if (n==0) name = findBarcodeName(newtag,barcodeArray, barcodeHash, tagHopHash, opts,!(rec->core.flag & BAM_FQCFAIL), n==0);
-            char *newrg = makeNewTag(rec,"RG",name);
+            makeNewTag(rec,"RG",name, &newrg, sizeof(stack_newrg));
             bam_aux_update_str(rec,"RG",strlen(newrg)+1, newrg);
-            free(newrg);
+            if (newrg != stack_newrg) free(newrg);
             if (opts->change_read_name) add_suffix(rec, name);
-        }
-        int r = sam_write1(bam_out->f, bam_out->h, rec);
-        if (r < 0) {
-            fprintf(stderr, "Could not write sequence\n");
-            error_code = -1;
-            break;
         }
     }
 
-    free(newtag);
-    free(qt_tag);
-    free(bc_tag);
+    if (newtag != bc_tag && newtag != stack_newtag) free(newtag);
+    if (qt_tag && qt_tag != stack_qt_tag) free(qt_tag);
+    if (bc_tag && bc_tag != stack_bc_tag) free(bc_tag);
     return error_code;
 }
 
@@ -1061,8 +1144,253 @@ static va_t *loadTemplate(BAMit_t *bit, char *qname)
     return recordSet;
 }
 
+static int processTemplatesNoThreads(BAMit_t *bam_in, BAMit_t *bam_out, va_t *barcodeArray, HashTable *barcodeHash, HashTable *tagHopHash, opts_t* opts)
+{
+    char qname[257] = {0};
 
- 
+    while (BAMit_hasnext(bam_in)) {
+        bam1_t *rec = BAMit_peek(bam_in);
+        va_t *template;
+        memcpy(qname, bam_get_qname(rec), rec->core.l_qname);
+        template = loadTemplate(bam_in, qname);
+        if (processTemplate(template, barcodeArray, barcodeHash, tagHopHash, opts)) break;
+        for (int n = 0; n < template->end; n++) {
+            bam1_t *rec_n = template->entries[n];
+            int r = sam_write1(bam_out->f, bam_out->h, rec_n);
+            if (r < 0) {
+                fprintf(stderr, "Could not write sequence\n");
+                return -1;
+            }
+        }
+        va_free(template);
+    }
+    return 0;
+}
+
+static void *decode_job(void *arg)
+{
+    decode_thread_data_t *job_data = (decode_thread_data_t *) arg;
+    va_t template = { 0, 0, NULL, NULL };
+    size_t start_rec = 0;
+
+    job_data->result = -1;
+    for (int i = 0; i < job_data->template_counts->end; i++) {
+        template.end = template.max = job_data->template_counts->entries[i];
+        template.entries = &job_data->record_set->entries[start_rec];
+        start_rec += template.end;
+        if (processTemplate(&template, job_data->barcode_array, job_data->barcodeHash, job_data->tagHopHash, job_data->opts)) goto fail;
+    }
+    assert(start_rec == job_data->nrec);
+
+    job_data->result = 0;
+ fail:
+    return job_data;
+}
+
+static void output_job_results(BAMit_t *bam_out, decode_thread_data_t *job_data)
+{
+    if (job_data->result != 0) {
+        die("Processing job failed to return a result\n");
+    }
+
+    // Write out result records
+    for (int i = 0; i < job_data->nrec; i++) {
+        bam1_t *rec = job_data->record_set->entries[i];
+        int r = sam_write1(bam_out->f, bam_out->h, rec);
+        if (r < 0) {
+            die("Could not write sequence\n");
+        }
+    }
+}
+
+static void accumulate_job_metrics(decode_thread_data_t *job_data, va_t *barcodeArray, HashTable *tagHopHash)
+{
+    // Accumulate metrics
+    HashIter *iter = HashTableIterCreate();
+    if (!iter) die("Out of memory");
+    HashItem *hi;
+
+    for (int i = 0; i < barcodeArray->end; i++) {
+        bc_details_t *bc = barcodeArray->entries[i];
+        bc->reads           += job_data->barcodes[i].reads;
+        bc->pf_reads        += job_data->barcodes[i].pf_reads;
+        bc->perfect         += job_data->barcodes[i].perfect;
+        bc->pf_perfect      += job_data->barcodes[i].pf_perfect;
+        bc->one_mismatch    += job_data->barcodes[i].one_mismatch;
+        bc->pf_one_mismatch += job_data->barcodes[i].pf_one_mismatch;
+    }
+
+    // Accumulate tag hops
+    while ((hi = HashTableIterNext(job_data->tagHopHash, iter)) != NULL) {
+        int added = -1;
+        HashItem *hi2 = HashTableAdd(tagHopHash, hi->key, hi->key_len, hi->data, &added);
+        if (!hi2) die("Out of memory");
+        if (!added) {  // Already in there so accumulate results
+            bc_details_t *job_bc = hi->data.p;
+            bc_details_t *acc_bc = hi2->data.p;
+            acc_bc->reads           += job_bc->reads;
+            acc_bc->pf_reads        += job_bc->pf_reads;
+            acc_bc->perfect         += job_bc->perfect;
+            acc_bc->pf_perfect      += job_bc->pf_perfect;
+            acc_bc->one_mismatch    += job_bc->one_mismatch;
+            acc_bc->pf_one_mismatch += job_bc->pf_one_mismatch;
+            free_taghop_bcd(job_bc);
+        }
+    }
+
+    HashTableIterDestroy(iter);
+}
+
+static void job_free(decode_thread_data_t *job_data)
+{
+    va_free(job_data->record_set);
+    ia_free(job_data->template_counts);
+    va_free(job_data->barcode_array);
+    free(job_data->barcodes);
+    HashTableDestroy(job_data->tagHopHash, 0);
+    free(job_data);
+}
+
+static decode_thread_data_t *init_job(va_t *barcode_array, HashTable *barcodeHash, opts_t *opts)
+{
+    decode_thread_data_t *job_data = calloc(1, sizeof(*job_data));
+    if (!job_data) die("Out of memory\n");
+
+    job_data->barcode_array = va_init(barcode_array->end, NULL);
+    job_data->barcodes = calloc(barcode_array->end, sizeof(bc_details_t));
+    if (!job_data->barcodes) die("Out of memory\n");
+    job_data->tagHopHash = HashTableCreate(0, HASH_DYNAMIC_SIZE | HASH_FUNC_JENKINS);
+    if (!job_data->tagHopHash) die("Out of memory");
+    job_data->barcodeHash = barcodeHash;
+    job_data->opts = opts;
+    job_data->result = -1;
+    job_data->next = NULL;
+
+    for (int i = 0; i < barcode_array->end; i++) {
+        bc_details_t *bc = barcode_array->entries[i];
+        job_data->barcodes[i].seq    = bc->seq;
+        job_data->barcodes[i].idx1   = bc->idx1;
+        job_data->barcodes[i].idx2   = bc->idx2;
+        job_data->barcodes[i].name   = bc->name;
+        job_data->barcodes[i].lib    = bc->lib;
+        job_data->barcodes[i].sample = bc->sample;
+        job_data->barcodes[i].desc   = bc->desc;
+        va_push(job_data->barcode_array, &job_data->barcodes[i]);
+    }
+
+    return job_data;
+}
+
+static int processTemplatesThreads(hts_tpool *pool, BAMit_t *bam_in, BAMit_t *bam_out, va_t *barcodeArray, HashTable *barcodeHash, HashTable *tagHopHash, opts_t* opts)
+{
+    hts_tpool_result *job_result = NULL;
+    hts_tpool_process *queue = hts_tpool_process_init(pool, 2 * opts->nthreads, 0);
+    decode_thread_data_t *job_freelist = NULL;
+    decode_thread_data_t *job_data = init_job(barcodeArray, barcodeHash, opts);
+    char qname[257] = { 0 };
+
+    if (!queue) {
+        perror("hts_tpool_process_init");
+        return -1;
+    }
+
+    job_data->record_set = va_init(TEMPLATES_PER_JOB * 2, freeRecord);
+    job_data->template_counts = ia_init(TEMPLATES_PER_JOB);
+    job_data->nrec = 0;
+
+    while (BAMit_hasnext(bam_in)) {
+        bam1_t *rec = BAMit_peek(bam_in);
+        int rec_count = 0;
+        memcpy(qname, bam_get_qname(rec), rec->core.l_qname);
+        while (BAMit_hasnext(bam_in) && strcmp(bam_get_qname(BAMit_peek(bam_in)),qname) == 0) {
+            if (job_data->nrec < job_data->record_set->end) {
+                bam_copy1(job_data->record_set->entries[job_data->nrec], BAMit_next(bam_in));
+            } else {
+                bam1_t *rec = bam_init1();
+                if (!rec) { die("Out of memory"); }
+                bam_copy1(rec, BAMit_next(bam_in));
+                va_push(job_data->record_set, rec);
+            }
+            job_data->nrec++;
+            rec_count++;
+        }
+        ia_push(job_data->template_counts, rec_count);
+
+        if (job_data->template_counts->end == TEMPLATES_PER_JOB) {
+            while (job_data != NULL) {
+                int blk = hts_tpool_dispatch2(pool, queue, decode_job, job_data, 1);
+                if (!blk) {
+                    job_data = NULL;
+                } else if (errno != EAGAIN) {
+                    die("Thread pool dispatch failed");
+                }
+
+                if (blk) {
+                    job_result = hts_tpool_next_result_wait(queue);
+                    if (!job_result) {
+                        die("Failed to get processing job result");
+                    }
+                } else {
+                    job_result = hts_tpool_next_result(queue);
+                }
+
+                if (job_result != NULL) {
+                    decode_thread_data_t *finished_job = hts_tpool_result_data(job_result);
+                    output_job_results(bam_out, finished_job);
+                    finished_job->next = job_freelist;
+                    job_freelist = finished_job;
+                    hts_tpool_delete_result(job_result, 0);
+                }
+            }
+
+            if (job_freelist != NULL) {
+                job_data = job_freelist;
+                job_freelist = job_data->next;
+                job_data->template_counts->end = 0;
+            }  else {
+                job_data = init_job(barcodeArray, barcodeHash, opts);
+                job_data->record_set = va_init(TEMPLATES_PER_JOB * 2, freeRecord);
+                job_data->template_counts = ia_init(TEMPLATES_PER_JOB);
+            }
+            job_data->nrec = 0;
+        }
+    }
+
+    if (job_data->template_counts->end > 0) {
+        // Deal with left-over items
+        if (hts_tpool_dispatch(pool, queue, decode_job, job_data) < 0) {
+            die("Thread pool dispatch failed");
+        }
+    } else {
+        // Not used, put back on free list
+        job_data->next = job_freelist;
+        job_freelist = job_data;
+    }
+
+    while (!hts_tpool_process_empty(queue)) {
+        job_result = hts_tpool_next_result_wait(queue);
+        if (!job_result) {
+            die("Failed to get processing job result");
+        }
+        decode_thread_data_t *finished_job = hts_tpool_result_data(job_result);
+        output_job_results(bam_out, finished_job);
+        finished_job->next = job_freelist;
+        job_freelist = finished_job;
+        hts_tpool_delete_result(job_result, 0);
+    }
+
+    while (job_freelist != NULL) {
+        decode_thread_data_t *next = job_freelist->next;
+        accumulate_job_metrics(job_freelist, barcodeArray, tagHopHash);
+        job_free(job_freelist);
+        job_freelist = next;
+    }
+
+    hts_tpool_process_destroy(queue);
+
+    return 0;
+}
+
 /*
  * Main code
  */
@@ -1074,8 +1402,17 @@ static int decode(opts_t* opts)
     va_t *barcodeArray = NULL;
     HashTable *tagHopHash = NULL;
     HashTable *barcodeHash = NULL;
+    htsThreadPool hts_threads = { NULL, 0 };
 
     while (1) {
+        if (opts->nthreads > 1) {
+            hts_threads.pool = hts_tpool_init(opts->nthreads);
+            if (!hts_threads.pool) {
+                fprintf(stderr, "Couldn't set up thread pool\n");
+                break;
+            }
+        }
+
         /*
          * Read the barcode (tags) file 
          */
@@ -1087,7 +1424,7 @@ static int decode(opts_t* opts)
         for (int n=0; n < barcodeArray->end; n++) {
             bc_details_t *bcd = barcodeArray->entries[n];
             HashData hd;
-            hd.p = bcd;
+            hd.i = n;
             HashTableAdd(barcodeHash, bcd->seq, 0, hd, NULL);
         }
 
@@ -1096,9 +1433,9 @@ static int decode(opts_t* opts)
         /*
          * Open input fnd output BAM files
          */
-        bam_in = BAMit_open(opts->input_name, 'r', opts->input_fmt, 0);
+        bam_in = BAMit_open(opts->input_name, 'r', opts->input_fmt, 0, hts_threads.pool ? &hts_threads : NULL);
         if (!bam_in) break;
-        bam_out = BAMit_open(opts->output_name, 'w', opts->output_fmt, opts->compression_level);
+        bam_out = BAMit_open(opts->output_name, 'w', opts->output_fmt, opts->compression_level, hts_threads.pool ? &hts_threads : NULL);
         if (!bam_out) break;
         // copy input to output header
         bam_hdr_destroy(bam_out->h); bam_out->h = bam_hdr_dup(bam_in->h);
@@ -1111,13 +1448,10 @@ static int decode(opts_t* opts)
         }
 
         // Read and process each template in the input BAM
-        while (BAMit_hasnext(bam_in)) {
-            bam1_t *rec = BAMit_peek(bam_in);
-            char *qname = strdup(bam_get_qname(rec));
-            va_t *template = loadTemplate(bam_in, qname);
-            if (processTemplate(template, bam_out, barcodeArray, barcodeHash, tagHopHash, opts)) break;
-            va_free(template);
-            free(qname);
+        if (opts->nthreads < 2) {
+            if (processTemplatesNoThreads(bam_in, bam_out, barcodeArray, barcodeHash, tagHopHash, opts) < 0) break;
+        } else {
+            if (processTemplatesThreads(hts_threads.pool, bam_in, bam_out, barcodeArray, barcodeHash, tagHopHash, opts) < 0) break;
         }
 
         if (BAMit_hasnext(bam_in)) break;   // we must has exited the above loop early
@@ -1134,11 +1468,20 @@ static int decode(opts_t* opts)
     }
 
     // tidy up after us
+    HashIter *iter = HashTableIterCreate();
+    if (iter) {
+        HashItem *hi;
+        while ((hi = HashTableIterNext(tagHopHash, iter)) != NULL) {
+            free_taghop_bcd(hi->data.p);
+        }
+        HashTableIterDestroy(iter);
+    }
     va_free(barcodeArray);
     HashTableDestroy(barcodeHash, 0);
     HashTableDestroy(tagHopHash, 0);
     BAMit_free(bam_in);
     BAMit_free(bam_out);
+    if (hts_threads.pool) hts_tpool_destroy(hts_threads.pool);
 
     return retcode;
 }
