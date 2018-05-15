@@ -166,11 +166,11 @@ CFLAGS="$ac_arg_needed $CFLAGS"],[dnl
 
 AC_DEFUN([HTS_PROG_CC_WERROR], [
   AC_ARG_ENABLE([werror],
-    [AS_HELP_STRING([--enable-werror], [change warnings into errors, where supported])],
-    [enable_werror=yes],
-    [])
+    [AS_HELP_STRING([--disable-werror], [do not try to change warnings into errors])],
+    [],
+    [enable_werror=yes])
 
-  AS_IF([test "x$enable_werror" = xyes],[
+  AS_IF([test "x$enable_werror" != xno],[
     AC_MSG_CHECKING([for C compiler flags to error on warnings])
     AC_CACHE_VAL(hts_cv_prog_cc_werror, [dnl
       hts_cv_prog_cc_werror=""
