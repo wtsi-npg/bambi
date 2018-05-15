@@ -7,6 +7,8 @@ AM_LDFLAGS = -rdynamic $(HTSLIB_LDFLAGS)
 bin_PROGRAMS = src/bambi
 src_bambi_SOURCES = src/bambi.c \
                     src/bambi.h \
+                    src/bambi_utils.c \
+                    src/bambi_utils.h \
                     src/decode.c \
                     src/i2b.c \
                     src/select.c \
@@ -67,7 +69,7 @@ check_PROGRAMS = test/t_read2tags \
 TEST_CFLAGS = -I$(top_srcdir)/src $(XML_CFLAGS) -DDATA_DIR=$(top_srcdir)/test/data
 TEST_LDADD = $(HTSLIB_LIBS) -lm
 
-test_t_read2tags_SOURCES = test/t_read2tags.c src/read2tags.c src/array.c src/bamit.c src/parse.c src/hts_addendum.c
+test_t_read2tags_SOURCES = test/t_read2tags.c src/read2tags.c src/array.c src/bamit.c src/parse.c src/hts_addendum.c src/bambi_utils.c
 test_t_read2tags_CFLAGS = $(TEST_CFLAGS)
 test_t_read2tags_LDADD = $(TEST_LDADD)
 

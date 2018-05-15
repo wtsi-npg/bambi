@@ -197,7 +197,6 @@ int main(int argc, char**argv)
     char outputfile[1024];
     char unalignedfile[512];
     char metricsfile[512];
-    char cmd[512];
 
     sprintf(outputfile,"%s/select_1.bam,%s/select_1_human.bam", TMPDIR, TMPDIR);
     sprintf(metricsfile,"%s/select_1_metrics.json", TMPDIR);

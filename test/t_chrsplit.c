@@ -97,7 +97,6 @@ static void testxahuman(char *TMPDIR)
     char** argv;
     char target[512];
     char exclude[512];
-    char cmd[512];
     va_t *expected_target = va_init(10,free);
     va_t *expected_exclude = va_init(10,free);
 
@@ -140,7 +139,6 @@ static void testxahuman_exclude_unaligned(char *TMPDIR)
     char** argv;
     char target[512];
     char exclude[512];
-    char cmd[512];
     va_t *expected_target = va_init(10,free);
     va_t *expected_exclude = va_init(10,free);
 
@@ -184,7 +182,6 @@ static void testyhuman(char *TMPDIR)
     char** argv;
     char target[512];
     char exclude[512];
-    char cmd[512];
     va_t *expected_target = va_init(10,free);
     va_t *expected_exclude = va_init(10,free);
 
@@ -255,6 +252,7 @@ int main(int argc, char**argv)
 
     testxahuman(TMPDIR);
     testxahuman_exclude_unaligned(TMPDIR);
+    testyhuman(TMPDIR);
 
     printf("chrsplit tests: %s\n", failure ? "FAILED" : "Passed");
     return failure ? EXIT_FAILURE : EXIT_SUCCESS;

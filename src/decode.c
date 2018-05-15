@@ -707,7 +707,7 @@ static int countMismatches(char *tag, char *barcode, int maxval)
  */
 static bc_details_t *check_tag_hopping(char *barcode, va_t *barcodeArray, HashTable *tagHopHash, opts_t *opts)
 {
-    bc_details_t *bcd=NULL, *best_match1, *best_match2;
+    bc_details_t *bcd = NULL, *best_match1 = NULL, *best_match2 = NULL;
     char stack_idx1[STACK_BC_LEN], stack_idx2[STACK_BC_LEN];
     char *idx1 = stack_idx1, *idx2 = stack_idx2;
     int nmBest1 = opts->idx1_len + opts->idx2_len + 1;
@@ -746,6 +746,8 @@ static bc_details_t *check_tag_hopping(char *barcode, va_t *barcodeArray, HashTa
         HashItem *hi;
         char stack_key[STACK_BC_LEN];
         char *key = stack_key;
+
+        assert(best_match1 != NULL && best_match2 != NULL);
         if (opts->idx1_len + opts->idx2_len + 2 >= sizeof(stack_key)) {
             key = malloc(opts->idx1_len + opts->idx2_len + 2);
             if (!key) die("Out of memory");
@@ -913,6 +915,7 @@ static void add_suffix(bam1_t *rec, char *suffix)
  */
 static void addNewRG(SAM_hdr *sh, char *entry, char *bcname, char *lib, char *sample, char *desc)
 {
+    assert(entry != NULL);
     char *saveptr;
     char *p = strtok_r(entry,"\t",&saveptr);
     char *newtag = malloc(strlen(p)+1+strlen(bcname)+1);

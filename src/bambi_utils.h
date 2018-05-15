@@ -1,4 +1,4 @@
-/* bambi.h
+/* bambi_utils.h
 
     Copyright (C) 2016 Genome Research Ltd.
 
@@ -18,26 +18,16 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef __BAMBI_H__
-#define __BAMBI_H__
+#ifndef BAMBI_UTILS_H
+#define BAMBI_UTILS_H
 
-#include "config.h"
-#include "hts_addendum.h"
-#include "array.h"
-#include "bambi_utils.h"
+void display(const char *fmt, ...);
+void die(const char *fmt, ...);
 
-#define INDEX_SEPARATOR "-"
-#define QUAL_SEPARATOR " "
+#define smalloc(s) _s_malloc((s), __FILE__, __LINE__, __func__)
+#define srealloc(p, s) _s_realloc((p), (s), __FILE__, __LINE__, __func__)
+void * _s_malloc(size_t size, const char *file, unsigned int line, const char *func);
+void * _s_realloc(void *ptr, size_t size, const char *file, unsigned int line, const char *func);
 
-// Machine Type is used by i2b 
-typedef enum { MT_UNKNOWN,
-               MT_MISEQ,           // MiSeq and HiSeq 2000/2500
-               MT_NEXTSEQ,         // MiniSeq and NextSeq 500/550
-               MT_HISEQX,          // HiSeq X and HiSeq 3000/4000
-               MT_NOVASEQ          // NovaSeq
-             } MACHINE_TYPE;
-
-const char *bambi_version(void);
 
 #endif
-

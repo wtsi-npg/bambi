@@ -897,6 +897,7 @@ static ia_t *getTileList(opts_t *opts)
             for (int n=0; n < ptr->nodesetval->nodeNr; n++) {
                 char *t = (char *)ptr->nodesetval->nodeTab[n]->children->content;
                 char *saveptr;
+                assert(t != NULL);
                 char *lane = strtok_r(t, "_", &saveptr);
                 char *tileno = strtok_r(NULL, "_", &saveptr);
                 if (lane && tileno) {
@@ -984,7 +985,7 @@ static ia_t *getTileList(opts_t *opts)
 static char *getCycleName(int readCount, bool isIndex)
 {
     // implements naming convention used by Illumina2Bam
-    char *cycleName = calloc(1,16);
+    char *cycleName = calloc(1,20);
 ;
     if (isIndex) {
         if (readCount==1) { strcpy(cycleName,"readIndex"); }

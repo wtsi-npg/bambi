@@ -162,12 +162,12 @@ static HashTable *readSnpFile(opts_t *opts)
     if (snp_hash) die("ERROR: creating snp hash table\n");
 
     while (fgets(line, line_size, fp)) {
-        char key[100];
+        char key[128];
         HashData hd;
         int bin, start, end;
         char chrom[100];
 
-        if (4 != sscanf(line, "%d\t%s\t%d\t%d", &bin, chrom, &start, &end)) {
+        if (4 != sscanf(line, "%d\t%99s\t%d\t%d", &bin, chrom, &start, &end)) {
             die("ERROR: reading snp file\n%s\n", line);
         }
 
@@ -1009,7 +1009,6 @@ static int findRegion(opts_t *s, RegionTable ***rts, int ntiles, int x, int y)
     int ix = x2region(x, s->region_size);
     int iy = x2region(y, s->region_size);
     char key[100];
-    char *cp;
     HashItem *hi;
 
     makeRegionKey(key, ix, iy);
@@ -1244,7 +1243,6 @@ static RegionTable ***makeRegionTable(opts_t *s, BAMit_t *fp_bam, int *bam_ntile
  */
 static int filter_bam(opts_t *s, BAMit_t *fp_in_bam, BAMit_t *fp_out_bam)
 {
-	int lane = -1;
     char *rgid;
 	bam1_t *bam;
     bool ignore = false;
@@ -1427,11 +1425,8 @@ static void applyFilter(opts_t *s)
 	BAMit_t *fp_input_bam;
 	BAMit_t *fp_output_bam;
 	FILE *apply_stats_fd = NULL;
-	char out_mode[5] = "wb";
 	char *out_bam_file = NULL;
 	char *apply_stats_file = NULL;
-	FILE *fp;
-    int read;
 
     openFilters(s->filters,s->rgids);
 
