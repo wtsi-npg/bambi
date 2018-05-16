@@ -28,6 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "htslib/hts.h"
 #include "bambi.h"
+#include "bambi_utils.h"
 
 int main_decode(int argc, char *argv[]);
 int main_i2b(int argc, char *argv[]);
@@ -39,38 +40,6 @@ int main_spatial_filter(int argc, char *argv[]);
 const char *bambi_version()
 {
     return VERSION;
-}
-
-void display(const char *fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  vfprintf(stderr, fmt, ap);
-  va_end(ap);
-}
-
-void die(const char *fmt, ...)
-{
-    va_list ap;
-    va_start(ap,fmt);
-    fflush(stdout);
-    vfprintf(stderr, fmt, ap);
-    va_end(ap);
-    fflush(stderr);
-    exit(EXIT_FAILURE);
-}
-
-void * _s_malloc(size_t size, const char *file, unsigned int line, const char *func)
-{
-    void *m = malloc(size);
-    if (!m) die("Couldn't allocate %zd bytes in %s at %s line %u: %s\n", size, func, file, line, strerror(errno));
-    return m;
-}
-
-void * _s_realloc(void *ptr, size_t size, const char *file, unsigned int line, const char *func)
-{
-    void *m = realloc(ptr, size);
-    if (!m) die("Couldn't reallocate %zd bytes in %s at %s line %u: %s\n", size, func, file, line, strerror(errno));
-    return m;
 }
 
 static void usage(FILE *fp)

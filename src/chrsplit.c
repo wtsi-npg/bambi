@@ -36,6 +36,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "array.h"
 #include "bamit.h"
+#include "parse.h"
 
 char *strptime(const char *s, const char *format, struct tm *tm);
 
@@ -340,7 +341,7 @@ static int processFiles(BAMit_t *in_bam, BAMit_t *target_bam, BAMit_t *exclude_b
             bam1_t *rec = recordSet->entries[n];
             if (!(rec->core.flag & BAM_FUNMAP)) {
                 bool notfound = (find_in_subset(opts->subset,getReferenceName(rec,in_bam->h))==-1);
-                if (( opts->invert) ^ (find_in_subset(opts->subset,getReferenceName(rec,in_bam->h))==-1))
+                if (opts->invert ^ notfound)
                 {
                     outBam = exclude_bam;
                     break;

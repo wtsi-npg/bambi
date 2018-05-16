@@ -36,11 +36,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "array.h"
 #include "bamit.h"
+#include "parse.h"
 
 char *strptime(const char *s, const char *format, struct tm *tm);
 
-static void closeSamFile(void *f) { hts_close((samFile *)f); }
-static void freeBamHdr(void *h) { if (h) bam_hdr_destroy((bam_hdr_t *)h); h=NULL; }
+// static void closeSamFile(void *f) { hts_close((samFile *)f); }
+// static void freeBamHdr(void *h) { if (h) bam_hdr_destroy((bam_hdr_t *)h); h=NULL; }
 static void freeRecord(void *r) { bam_destroy1((bam1_t *)r); }
 static void freeRecordSet(void *s) { va_free((va_t *)s); }
 static void freeChimera(void *s) { ia_free((ia_t *)s); }
@@ -574,7 +575,6 @@ static void checkNextReadsForChimera(va_t *recordSetList, metrics_t *metrics)
 static int processFiles(va_t *in_bit, va_t *out_bit, BAMit_t *unaligned_bam, opts_t *opts)
 {
     BAMit_t *outBam;
-    BAMit_t *bit;
     metrics_t *metrics = metrics_init(in_bit->end);
     int n;
 

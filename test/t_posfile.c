@@ -61,8 +61,6 @@ void icheckEqual(char *name, int expected, int actual)
 
 int main(int argc, char**argv)
 {
-    int n;
-
     posfile_t *posfile;
 
     /*

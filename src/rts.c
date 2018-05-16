@@ -24,6 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdarg.h>
 #include <string.h>
 #include <search.h>
+#include <errno.h>
 
 #include "bambi.h"
 #include "rts.h"
@@ -75,7 +76,7 @@ static void readFilterData(FILE *fp, Header *hdr)
 {
     int i, n=0;
     for (i=0; i < hdr->nreads; i++) n += hdr->readLength[i];
-    if ((hdr->ntiles * n * hdr->nregions)) {
+    if ((hdr->ntiles * n * hdr->nregions) > 0) {
         hdr->filterData = malloc(hdr->ntiles * n * hdr->nregions);
         if (fread(hdr->filterData, hdr->ntiles * n * hdr->nregions, 1, fp) != 1) {
             die("Error reading filter file\n");
@@ -86,8 +87,8 @@ static void readFilterData(FILE *fp, Header *hdr)
 
 Header *readHeader(char *fname)
 {
-    int len = 1024;
-    char line[1024];
+    const int len = 1024;
+    char line[len];
     int i;
     char *p;
     Header *hdr;
@@ -100,11 +101,11 @@ Header *readHeader(char *fname)
     fp = fopen(fname, "rb");
     if (!fp) die("readHeader(): Can't open %s\n", fname);
 
-    p=fgets(line, len, fp); chomp(line); hdr->region_magic = strdup(line);
-    p=fgets(line, len, fp); hdr->coord_shift = atoi(line);
-    p=fgets(line, len, fp); hdr->coord_factor = atoi(line);
-    p=fgets(line, len, fp); hdr->region_size = atoi(line);
-    p=fgets(line, len, fp); hdr->ntiles = atoi(line);
+    p=fgets(line, len, fp); if (p) { chomp(line); hdr->region_magic = strdup(line); } else goto fail;
+    p=fgets(line, len, fp); if (p) { hdr->coord_shift = atoi(line); } else goto fail;
+    p=fgets(line, len, fp); if (p) { hdr->coord_factor = atoi(line); } else goto fail;
+    p=fgets(line, len, fp); if (p) { hdr->region_size = atoi(line); } else goto fail;
+    p=fgets(line, len, fp); if (p) { hdr->ntiles = atoi(line); } else goto fail;
     hdr->tileArray = NULL;
     hdr->tileReadCountArray = NULL;
     if (hdr->ntiles > 0) {
@@ -113,6 +114,7 @@ Header *readHeader(char *fname)
         for (i=0; i < hdr->ntiles; i++) {
             int n;
             p=fgets(line, len, fp);
+            if (!p) goto fail;
             n = sscanf(line, "%d\t%lu\n", &hdr->tileArray[i], &hdr->tileReadCountArray[i]);
             switch (n) {
                 case 1:	hdr->tileReadCountArray[i] = 0; break;
@@ -123,25 +125,30 @@ Header *readHeader(char *fname)
             }
         }
     }
-    p=fgets(line, len, fp); hdr->nregions = atoi(line);
-    p=fgets(line, len, fp); hdr->nregions_x = atoi(line);
-    p=fgets(line, len, fp); hdr->nregions_y = atoi(line);
-    p=fgets(line, len, fp); hdr->nreads = atoi(line);
+    p=fgets(line, len, fp); if (p) { hdr->nregions = atoi(line); } else goto fail;
+    p=fgets(line, len, fp); if (p) { hdr->nregions_x = atoi(line); } else goto fail;
+    p=fgets(line, len, fp); if (p) { hdr->nregions_y = atoi(line); } else goto fail;
+    p=fgets(line, len, fp); if (p) { hdr->nreads = atoi(line); } else goto fail;
     hdr->totalReadLength = 0;
     for (i=0; i < hdr->nreads; i++) {
-        p=fgets(line, len, fp); hdr->readLength[i] = atoi(line);
+        p=fgets(line, len, fp); if (p) { hdr->readLength[i] = atoi(line); } else goto fail;
         hdr->totalReadLength += hdr->readLength[i];
     }
-    p=fgets(line, len, fp); chomp(line); hdr->cmdLine = strdup(line);
-    p=fgets(line, len, fp); hdr->ncomments = atoi(line);
+    p=fgets(line, len, fp); if (p) { chomp(line); hdr->cmdLine = strdup(line); } else goto fail;
+    p=fgets(line, len, fp); if (p) { hdr->ncomments = atoi(line); } else goto fail;
     for (i=0; i < hdr->ncomments; i++) {
-        p=fgets(line, len, fp); chomp(line); hdr->comments[i] = strdup(line);
+        p=fgets(line, len, fp); if (p) { chomp(line); hdr->comments[i] = strdup(line); } else goto fail;
     }
 
     readFilterData(fp, hdr);
 
     fclose(fp);
     return hdr;
+
+ fail:
+    fprintf(stderr, "Failed to read filter file '%s' : %s\n", fname, ferror(fp) ? strerror(errno) : "Unexpected end of file");
+    fclose(fp);
+    exit(1);
 }
 
 void writeHeader(FILE *fp, Header *hdr)

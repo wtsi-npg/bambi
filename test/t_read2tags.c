@@ -289,9 +289,6 @@ int main(int argc, char**argv)
     int argc_1;
     char** argv_1;
     char outputfile[1024];
-    char unalignedfile[512];
-    char metricsfile[512];
-    char cmd[512];
 
     // minimal options
     sprintf(outputfile,"%s/read2tags_1.bam", TMPDIR);
