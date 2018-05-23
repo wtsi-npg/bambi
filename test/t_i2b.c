@@ -302,7 +302,7 @@ void setup_dualindex_test(int* argc, char*** argv, char *outputfile, bool verbos
     assert(*argc<100);
 }
 
-void setup_tags_test(int* argc, char*** argv, char *outputfile, bool verbose)
+void setup_tags_test(int* argc, char*** argv, char *outputfile, bool verbose, bool decode, char *metricsfile)
 {
     *argc = 0;
     *argv = (char**)calloc(sizeof(char*), 100);
@@ -339,6 +339,14 @@ void setup_tags_test(int* argc, char*** argv, char *outputfile, bool verbose)
     (*argv)[(*argc)++] = strdup("b1,b2,b3");
     (*argv)[(*argc)++] = strdup("--quality-tag");
     (*argv)[(*argc)++] = strdup("q1,q2,q3");
+    if (decode) {
+        (*argv)[(*argc)++] = strdup("--barcode-file");
+        (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/160919_hiseq2500_4966_FC/barcodes_i2"));
+        (*argv)[(*argc)++] = strdup("--barcode-tag-name");
+        (*argv)[(*argc)++] = strdup("b2");
+        (*argv)[(*argc)++] = strdup("--metrics-file");
+        (*argv)[(*argc)++] = strdup(metricsfile);
+    }
 
     assert(*argc<100);
 }
@@ -384,7 +392,7 @@ void no_separator_test(int* argc, char*** argv, char *outputfile, bool verbose)
 
     assert(*argc<100);
 }
-void separator_test(int* argc, char*** argv, char *outputfile, bool verbose)
+void separator_test(int* argc, char*** argv, char *outputfile, bool verbose, bool decode, char *metricsfile)
 {
     *argc = 0;
     *argv = (char**)calloc(sizeof(char*), 100);
@@ -421,12 +429,20 @@ void separator_test(int* argc, char*** argv, char *outputfile, bool verbose)
     (*argv)[(*argc)++] = strdup("b1,b2,b1");
     (*argv)[(*argc)++] = strdup("--quality-tag");
     (*argv)[(*argc)++] = strdup("q1,q2,q1");
+    if (decode) {
+        (*argv)[(*argc)++] = strdup("--barcode-file");
+        (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/160919_hiseq2500_4966_FC/barcodes_i1i3_sep"));
+        (*argv)[(*argc)++] = strdup("--barcode-tag-name");
+        (*argv)[(*argc)++] = strdup("b1");
+        (*argv)[(*argc)++] = strdup("--metrics-file");
+        (*argv)[(*argc)++] = strdup(metricsfile);
+    }
 
     assert(*argc<100);
 }
 
 
-void consecutive_index_test(int* argc, char*** argv, char *outputfile, bool verbose)
+void consecutive_index_test(int* argc, char*** argv, char *outputfile, bool verbose, bool decode, char *metricsfile)
 {
     *argc = 0;
     *argv = (char**)calloc(sizeof(char*), 100);
@@ -459,6 +475,12 @@ void consecutive_index_test(int* argc, char*** argv, char *outputfile, bool verb
     (*argv)[(*argc)++] = strdup("3,5");
     (*argv)[(*argc)++] = strdup("--final-index-cycle");
     (*argv)[(*argc)++] = strdup("4,7");
+    if (decode) {
+        (*argv)[(*argc)++] = strdup("--barcode-file");
+        (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/160919_hiseq2500_4966_FC/barcodes_ci"));
+        (*argv)[(*argc)++] = strdup("--metrics-file");
+        (*argv)[(*argc)++] = strdup(metricsfile);
+    }
 
     assert(*argc<100);
 }
@@ -565,10 +587,29 @@ void checkFiles(char *name, char *outputfile, char *fname)
     }
 }
 
+void compare_metrics(const char *name, const char *expected, const char *result)
+{
+    char cmd[1024];
+    int res;
+
+    snprintf(cmd, sizeof(cmd), "diff -I ID:bambi '%s' '%s'", expected, result);
+    res = system(cmd);
+    if (res == 1) {
+        fprintf(stderr, "%s : files %s and %s differ\n", name, expected, result);
+        failure++;
+    } else if (res) {
+        fprintf(stderr, "Command \"%s\" failed\n", cmd);
+        failure++;
+    } else {
+        success++;
+    }
+}
+
 int main(int argc, char**argv)
 {
     char template[] = "/tmp/bambi.XXXXXX";
     char *TMPDIR = mkdtemp(template);
+    size_t filename_len = strlen(TMPDIR)+64;
     int getopt_char;
     while ((getopt_char = getopt(argc, argv, "v")) != -1) {
         switch (getopt_char) {
@@ -590,7 +631,8 @@ int main(int argc, char**argv)
     } else {
         if (verbose) fprintf(stderr,"Created temporary directory: %s\n", TMPDIR);
     }
-    char *outputfile = calloc(1,strlen(TMPDIR)+64);
+    char *outputfile = calloc(1, filename_len);
+    char *metricsfile = calloc(1, filename_len);
 
     int argc_1;
     char** argv_1;
@@ -606,7 +648,7 @@ int main(int argc, char**argv)
     //
 
     if (verbose) fprintf(stderr,"\n===> Simple test\n");
-    sprintf(outputfile,"%s/i2b_1.bam",TMPDIR);
+    snprintf(outputfile, filename_len, "%s/i2b_1.bam", TMPDIR);
     setup_simple_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1, argv_1+1);
     checkFiles("Simple test", outputfile, MKNAME(DATA_DIR,"/out/test1.bam"));
@@ -617,7 +659,7 @@ int main(int argc, char**argv)
     //
 
     if (verbose) fprintf(stderr,"\n===> Read Group ID test\n");
-    sprintf(outputfile,"%s/i2b_2.bam",TMPDIR);
+    snprintf(outputfile, filename_len, "%s/i2b_2.bam", TMPDIR);
     setup_readgroup_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
     checkFiles("Read Group ID test", outputfile, MKNAME(DATA_DIR,"/out/test2.bam"));
@@ -627,7 +669,7 @@ int main(int argc, char**argv)
     // cycle range test
     //
     if (verbose) fprintf(stderr,"\n===> Cycle Range test\n");
-    sprintf(outputfile,"%s/i2b_4.bam",TMPDIR);
+    snprintf(outputfile, filename_len, "%s/i2b_4.bam", TMPDIR);
     setup_cyclerange_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
     checkFiles("Cycle Range test", outputfile, MKNAME(DATA_DIR,"/out/test4.bam"));
@@ -638,7 +680,7 @@ int main(int argc, char**argv)
     //
 #if 0
     if (verbose) fprintf(stderr,"\n===> bc-read test\n");
-    sprintf(outputfile,"%s/i2b_5.bam",TMPDIR);
+    snprintf(outputfile, filename_len, "%s/i2b_5.bam", TMPDIR);
     setup_bcread_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
     checkFiles("BC_READ test", outputfile, MKNAME(DATA_DIR,"/out/test5.bam"));
@@ -649,7 +691,7 @@ int main(int argc, char**argv)
     // dual index run
     //
     if (verbose) fprintf(stderr,"\n===> Dual Index test\n");
-    sprintf(outputfile,"%s/i2b_6.bam",TMPDIR);
+    snprintf(outputfile, filename_len, "%s/i2b_6.bam", TMPDIR);
     setup_dualindex_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
     checkFiles("Dual Index test", outputfile, MKNAME(DATA_DIR,"/out/test6.bam"));
@@ -659,17 +701,29 @@ int main(int argc, char**argv)
     // multiple barcode tags run
     //
     if (verbose) fprintf(stderr,"\n===> Multiple Tags test\n");
-    sprintf(outputfile,"%s/i2b_7.bam",TMPDIR);
-    setup_tags_test(&argc_1, &argv_1, outputfile, verbose);
+    snprintf(outputfile, filename_len, "%s/i2b_7.bam", TMPDIR);
+    setup_tags_test(&argc_1, &argv_1, outputfile, verbose, false, NULL);
     main_i2b(argc_1-1,argv_1+1);
     checkFiles("Multiple barcode tags test", outputfile, MKNAME(DATA_DIR,"/out/test7.bam"));
+    free_args(argv_1);
+
+    //
+    // multiple barcode tags run with decode
+    //
+    if (verbose) fprintf(stderr,"\n===> Multiple tags with decode test\n");
+    snprintf(outputfile, filename_len, "%s/i2b_7_decode.bam", TMPDIR);
+    snprintf(metricsfile, filename_len, "%s/i2b_7_decode.bam.metrics", TMPDIR);
+    setup_tags_test(&argc_1, &argv_1, outputfile, verbose, true, metricsfile);
+    main_i2b(argc_1-1,argv_1+1);
+    checkFiles("Multiple barcode tags test with decode", outputfile, MKNAME(DATA_DIR,"/out/test7_decode.sam"));
+    compare_metrics("Multiple barcode tags test with decode", MKNAME(DATA_DIR,"/out/test7_decode.bam.metrics"), metricsfile);
     free_args(argv_1);
 
     //
     // no separator test
     //
     if (verbose) fprintf(stderr,"\n===> no Separator test\n");
-    sprintf(outputfile,"%s/i2b_8.bam",TMPDIR);
+    snprintf(outputfile, filename_len, "%s/i2b_8.bam", TMPDIR);
     no_separator_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
     checkFiles("separator test", outputfile, MKNAME(DATA_DIR,"/out/test8.bam"));
@@ -679,27 +733,55 @@ int main(int argc, char**argv)
     // separator test
     //
     if (verbose) fprintf(stderr,"\n===> Separator test\n");
-    sprintf(outputfile,"%s/i2b_9.bam",TMPDIR);
-    separator_test(&argc_1, &argv_1, outputfile, verbose);
+    snprintf(outputfile, filename_len, "%s/i2b_9.bam", TMPDIR);
+    separator_test(&argc_1, &argv_1, outputfile, verbose, false, NULL);
     main_i2b(argc_1-1,argv_1+1);
-    checkFiles("no separator test", outputfile, MKNAME(DATA_DIR,"/out/test9.bam"));
+    checkFiles("separator test", outputfile, MKNAME(DATA_DIR,"/out/test9.bam"));
+    free_args(argv_1);
+
+    //
+    // separator test with decode
+    //
+    if (verbose) fprintf(stderr,"\n===> Separator test with decode\n");
+    snprintf(outputfile, filename_len, "%s/i2b_9_decode.bam", TMPDIR);
+    snprintf(metricsfile, filename_len, "%s/i2b_9_decode.bam.metrics", TMPDIR);
+    separator_test(&argc_1, &argv_1, outputfile, verbose, true, metricsfile);
+    main_i2b(argc_1-1,argv_1+1);
+    checkFiles("separator test with decode", outputfile, MKNAME(DATA_DIR,"/out/test9_decode.sam"));
+    compare_metrics("separator test with decode", MKNAME(DATA_DIR,"/out/test9_decode.bam.metrics"), metricsfile);
+    snprintf(metricsfile, filename_len, "%s/i2b_9_decode.bam.metrics.hops", TMPDIR);
+    compare_metrics("separator test with decode", MKNAME(DATA_DIR,"/out/test9_decode.bam.metrics.hops"), metricsfile);
     free_args(argv_1);
 
     //
     // consecutive index test
     //
     if (verbose) fprintf(stderr,"\n===> consecutive test\n");
-    sprintf(outputfile,"%s/i2b_10.bam",TMPDIR);
-    consecutive_index_test(&argc_1, &argv_1, outputfile, verbose);
+    snprintf(outputfile, filename_len, "%s/i2b_10.bam", TMPDIR);
+    consecutive_index_test(&argc_1, &argv_1, outputfile, verbose, false, NULL);
     main_i2b(argc_1-1,argv_1+1);
     checkFiles("consecutive index test", outputfile, MKNAME(DATA_DIR,"/out/test10.bam"));
+    free_args(argv_1);
+
+    //
+    // consecutive index test with decode
+    //
+    if (verbose) fprintf(stderr,"\n===> consecutive test with decode\n");
+    snprintf(outputfile, filename_len, "%s/i2b_10.bam", TMPDIR);
+    snprintf(metricsfile, filename_len, "%s/i2b_10.bam.metrics", TMPDIR);
+    consecutive_index_test(&argc_1, &argv_1, outputfile, verbose, true, metricsfile);
+    main_i2b(argc_1-1,argv_1+1);
+    checkFiles("consecutive index test", outputfile, MKNAME(DATA_DIR,"/out/test10_decode.sam"));
+    compare_metrics("consecutive index test", MKNAME(DATA_DIR,"/out/test10_decode.bam.metrics"), metricsfile);
+    snprintf(metricsfile, filename_len, "%s/i2b_10.bam.metrics.hops", TMPDIR);
+    compare_metrics("consecutive index test", MKNAME(DATA_DIR,"/out/test10_decode.bam.metrics.hops"), metricsfile);
     free_args(argv_1);
 
     //
     // novaseq test
     //
     if (verbose) fprintf(stderr,"\n===> NovaSeq test\n");
-    sprintf(outputfile,"%s/novaseq_1.sam",TMPDIR);
+    snprintf(outputfile, filename_len, "%s/novaseq_1.sam", TMPDIR);
     novaseq_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
     checkFiles("NovaSeq test", outputfile, MKNAME(DATA_DIR,"/out/novaseq_1.sam"));
