@@ -244,9 +244,11 @@ static int compareTagHops(const void *t1, const void *t2) {
     bc_details_t *th1 = *(bc_details_t **)t1;
     bc_details_t *th2 = *(bc_details_t **)t2;
 
-    int read_diff = th1->reads - th2->reads;
-    //if read count is equal, sort by number of perfect matches
-    return read_diff ? -read_diff : -(th1->perfect - th2->perfect);
+    if (th1->reads != th2->reads) return th1->reads < th2->reads ? 1 : -1;
+    // if read count is equal, sort by number of perfect matches
+    if (th1->perfect != th2->perfect) return th1->perfect < th2->perfect ? 1 : -1;
+    // use the sequence as a final tie-breaker.
+    return strcmp(th1->seq, th2->seq);
 }
 
 static void sortTagHops(va_t *tagHopArray) {
