@@ -10,6 +10,7 @@ src_bambi_SOURCES = src/bambi.c \
                     src/bambi_utils.c \
                     src/bambi_utils.h \
                     src/decode.c \
+                    src/decode.h \
                     src/i2b.c \
                     src/select.c \
                     src/chrsplit.c \
@@ -103,7 +104,7 @@ test_t_filterfile_CFLAGS = $(TEST_CFLAGS)
 test_t_posfile_SOURCES = test/t_posfile.c
 test_t_posfile_CFLAGS = $(TEST_CFLAGS)
 
-test_t_i2b_SOURCES = test/t_i2b.c src/i2b.c src/posfile.c src/bclfile.c src/filterfile.c src/array.c src/parse.c src/hts_addendum.c
+test_t_i2b_SOURCES = test/t_i2b.c src/i2b.c src/posfile.c src/bclfile.c src/filterfile.c src/array.c src/parse.c src/hts_addendum.c src/decode.c src/bamit.c src/hash_table.c
 test_t_i2b_CFLAGS = $(TEST_CFLAGS)
 test_t_i2b_LDADD = $(TEST_LDADD)
 

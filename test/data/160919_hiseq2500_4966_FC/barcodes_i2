@@ -1,0 +1,11 @@
+barcode_sequence	barcode_name	library_name	sample_name	description
+AACCG	1	TestLibrary1	TestSample1	Study TestStudy
+CCTCA	2	TestLibrary2	TestSample2	Study TestStudy
+GGACA	3	TestLibrary3	TestSample3	Study TestStudy
+TAATT	4	TestLibrary4	TestSample4	Study TestStudy
+TGGAC	5	TestLibrary5	TestSample5	Study TestStudy
+GTTAC	6	TestLibrary6	TestSample6	Study TestStudy
+CTACG	7	TestLibrary7	TestSample7	Study TestStudy
+TCTCC	8	TestLibrary8	TestSample8	Study TestStudy
+CGCCT	9	TestLibrary9	TestSample9	Study TestStudy
+AGGTG	10	TestLibrary10	TestSample10	Study TestStudy

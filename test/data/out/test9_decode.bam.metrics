@@ -1,0 +1,44 @@
+##
+# BARCODE_TAG_NAME=b1 MAX_MISMATCHES=1 MIN_MISMATCH_DELTA=1 MAX_NO_CALLS=2 
+##
+# ID:bambi VN:0.11.1-8-g237eff2 (htslib 1.8-7-g518b5f7-dirty) CL:./src/bambi decode --barcode-file test/data/160919_hiseq2500_4966_FC/barcodes_i1i3_sep --barcode-tag-name b1 --metrics-file /tmp/i2b_9_decode.sam.metrics -o /tmp/i2b_9_decode.bam /tmp/i2b_9.bam
+
+##
+BARCODE	BARCODE_NAME	LIBRARY_NAME	SAMPLE_NAME	DESCRIPTION	READS	PF_READS	PERFECT_MATCHES	PF_PERFECT_MATCHES	ONE_MISMATCH_MATCHES	PF_ONE_MISMATCH_MATCHES	PCT_MATCHES	RATIO_THIS_BARCODE_TO_BEST_BARCODE_PCT	PF_PCT_MATCHES	PF_RATIO_THIS_BARCODE_TO_BEST_BARCODE_PCT	PF_NORMALIZED_MATCHES
+GT-AG	1	TestLibrary1	TestSample1	Study TestStudy	3	3	3	3	0	0	0.013	0.429	0.013	0.429	1.125
+AC-TC	2	TestLibrary2	TestSample2	Study TestStudy	6	6	2	2	4	4	0.026	0.857	0.026	0.857	2.250
+TT-AA	3	TestLibrary3	TestSample3	Study TestStudy	2	2	2	2	0	0	0.009	0.286	0.009	0.286	0.750
+AA-GT	4	TestLibrary4	TestSample4	Study TestStudy	7	7	3	3	4	4	0.030	1.000	0.030	1.000	2.625
+GC-TA	5	TestLibrary5	TestSample5	Study TestStudy	2	2	1	1	1	1	0.009	0.286	0.009	0.286	0.750
+GG-AC	6	TestLibrary6	TestSample6	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.375
+CT-TG	7	TestLibrary7	TestSample7	Study TestStudy	3	3	1	1	2	2	0.013	0.429	0.013	0.429	1.125
+GT-CA	8	TestLibrary8	TestSample8	Study TestStudy	5	5	2	2	3	3	0.021	0.714	0.021	0.714	1.875
+GG-GG	9	TestLibrary9	TestSample9	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.375
+TA-AG	10	TestLibrary10	TestSample10	Study TestStudy	3	3	2	2	1	1	0.013	0.429	0.013	0.429	1.125
+AG-GA	11	TestLibrary11	TestSample11	Study TestStudy	2	2	1	1	1	1	0.009	0.286	0.009	0.286	0.750
+TT-GC	12	TestLibrary12	TestSample12	Study TestStudy	7	7	2	2	5	5	0.030	1.000	0.030	1.000	2.625
+CG-AG	13	TestLibrary13	TestSample13	Study TestStudy	3	3	2	2	1	1	0.013	0.429	0.013	0.429	1.125
+CG-TC	14	TestLibrary14	TestSample14	Study TestStudy	3	3	1	1	2	2	0.013	0.429	0.013	0.429	1.125
+TC-CT	15	TestLibrary15	TestSample15	Study TestStudy	7	7	2	2	5	5	0.030	1.000	0.030	1.000	2.625
+AC-AG	16	TestLibrary16	TestSample16	Study TestStudy	2	2	2	2	0	0	0.009	0.286	0.009	0.286	0.750
+TG-TA	17	TestLibrary17	TestSample17	Study TestStudy	3	3	3	3	0	0	0.013	0.429	0.013	0.429	1.125
+AT-AT	18	TestLibrary18	TestSample18	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.375
+GC-AT	19	TestLibrary19	TestSample19	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.375
+TA-GA	20	TestLibrary20	TestSample20	Study TestStudy	3	3	2	2	1	1	0.013	0.429	0.013	0.429	1.125
+AA-TA	21	TestLibrary21	TestSample21	Study TestStudy	2	2	2	2	0	0	0.009	0.286	0.009	0.286	0.750
+AG-CC	22	TestLibrary22	TestSample22	Study TestStudy	5	5	3	3	2	2	0.021	0.714	0.021	0.714	1.875
+GT-GT	23	TestLibrary23	TestSample23	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.375
+GA-AA	24	TestLibrary24	TestSample24	Study TestStudy	2	2	2	2	0	0	0.009	0.286	0.009	0.286	0.750
+TT-CG	25	TestLibrary25	TestSample25	Study TestStudy	3	3	2	2	1	1	0.013	0.429	0.013	0.429	1.125
+CC-AA	26	TestLibrary26	TestSample26	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.375
+CA-CA	27	TestLibrary27	TestSample27	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.375
+GA-GC	28	TestLibrary28	TestSample28	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.375
+TT-TT	29	TestLibrary29	TestSample29	Study TestStudy	3	3	2	2	1	1	0.013	0.429	0.013	0.429	1.125
+CC-CC	30	TestLibrary30	TestSample30	Study TestStudy	3	3	3	3	0	0	0.013	0.429	0.013	0.429	1.125
+AA-AC	31	TestLibrary31	TestSample31	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.375
+CC-GG	32	TestLibrary32	TestSample32	Study TestStudy	2	2	2	2	0	0	0.009	0.286	0.009	0.286	0.750
+AG-TG	33	TestLibrary33	TestSample33	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.375
+GC-CG	34	TestLibrary34	TestSample34	Study TestStudy	3	3	3	3	0	0	0.013	0.429	0.013	0.429	1.125
+TG-AT	35	TestLibrary35	TestSample35	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.375
+GG-CT	36	TestLibrary36	TestSample36	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.375
+NN-NN					138	138	0	0	0	0	0.590	19.714	0.590	19.714	0.000
