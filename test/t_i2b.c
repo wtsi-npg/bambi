@@ -21,13 +21,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <config.h>
 
 #include "bambi.h"
-//#include "../src/i2b.c"
 #include <stdlib.h>
 #include <unistd.h>
 #include <assert.h>
 
+#include "array.h"
+
 #define xMKNAME(d,f) #d f
 #define MKNAME(d,f) xMKNAME(d,f)
+
+ia_t *parseLaneList(char *arg);
 
 int verbose = 0;
 
@@ -138,6 +141,35 @@ void setup_simple_test(int* argc, char*** argv, char *outputfile, bool verbose)
     (*argv)[(*argc)++] = strdup(outputfile);
     (*argv)[(*argc)++] = strdup("--lane");
     (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("--first-tile");
+    (*argv)[(*argc)++] = strdup("1101");
+    (*argv)[(*argc)++] = strdup("--tile-limit");
+    (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("--library-name");
+    (*argv)[(*argc)++] = strdup("Test library");
+    (*argv)[(*argc)++] = strdup("--sample-alias");
+    (*argv)[(*argc)++] = strdup("Test Sample");
+    (*argv)[(*argc)++] = strdup("--study-name");
+    (*argv)[(*argc)++] = strdup("Study testStudy");
+    (*argv)[(*argc)++] = strdup("--run-start-date");
+    (*argv)[(*argc)++] = strdup("2011-03-23T00:00:00+0000");
+    if (verbose) (*argv)[(*argc)++] = strdup("--verbose");
+
+    assert(*argc<100);
+}
+
+void setup_multiple_lane_test(int* argc, char*** argv, char *outputfile, bool verbose)
+{
+    *argc = 0;
+    *argv = (char**)calloc(sizeof(char*), 100);
+    (*argv)[(*argc)++] = strdup("bambi");
+    (*argv)[(*argc)++] = strdup("i2b");
+    (*argv)[(*argc)++] = strdup("-i");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/160916_miseq_0966_FC/Data/Intensities"));
+    (*argv)[(*argc)++] = strdup("-o");
+    (*argv)[(*argc)++] = strdup(outputfile);
+    (*argv)[(*argc)++] = strdup("--lane");
+    (*argv)[(*argc)++] = strdup("all");
     (*argv)[(*argc)++] = strdup("--first-tile");
     (*argv)[(*argc)++] = strdup("1101");
     (*argv)[(*argc)++] = strdup("--tile-limit");
@@ -643,6 +675,26 @@ int main(int argc, char**argv)
         return EXIT_FAILURE;
     }
 
+    // test parseLaneList()
+    ia_t *lanes = parseLaneList("5");
+    if (lanes->end != 1) {
+        fprintf(stderr,"lanes have %d entries: expected 1\n", lanes->end);
+        failure++;
+    }
+    if (lanes->entries[0] != 5) {
+        fprintf(stderr,"lanes[0] is %d: expected 5\n", lanes->entries[0]);
+        failure++;
+    }
+    ia_free(lanes);
+    lanes = parseLaneList("1-3,5");
+    char *s = ia_join(lanes,",");
+    if (strcmp(s, "1,2,3,5")) {
+        fprintf(stderr,"Lanes are '%s': expected '1,2,3,5'\n", ia_join(lanes,","));
+        failure++;
+    }
+    free(s);
+    ia_free(lanes);
+
     //
     // simple test
     //
@@ -652,6 +704,17 @@ int main(int argc, char**argv)
     setup_simple_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1, argv_1+1);
     checkFiles("Simple test", outputfile, MKNAME(DATA_DIR,"/out/test1.bam"));
+    free_args(argv_1);
+
+    //
+    // multiple lane test
+    //
+
+    if (verbose) fprintf(stderr,"\n===> Multiple Lane test\n");
+    snprintf(outputfile, filename_len, "%s/i2b_m.bam", TMPDIR);
+    setup_multiple_lane_test(&argc_1, &argv_1, outputfile, verbose);
+    main_i2b(argc_1-1, argv_1+1);
+    checkFiles("Multiple lane test", outputfile, MKNAME(DATA_DIR,"/out/i2b_m.bam"));
     free_args(argv_1);
 
     //
@@ -788,6 +851,7 @@ int main(int argc, char**argv)
     free_args(argv_1);
 
     free(outputfile);
+    free(metricsfile);
 
     printf("i2b tests: %s\n", failure ? "FAILED" : "Passed");
     return failure ? EXIT_FAILURE : EXIT_SUCCESS;
