@@ -26,8 +26,8 @@ env:
   - DISTCHECK_CONFIGURE_FLAGS=--with-htslib=$HTSDIR
 
 install:
-- .travis/clone ${HTSREPO:-git://github.com/samtools/htslib.git} $HTSLIB master
-- .travis/clone ${HTSREPO:-git://github.com/samtools/samtools.git} $SAMTOOLSDIR master
+- .travis/clone ${HTSREPO:-git://github.com/samtools/htslib.git} $HTSLIB devel
+- .travis/clone ${HTSREPO:-git://github.com/samtools/samtools.git} $SAMTOOLSDIR devel
 - sudo apt-get install -y gdb  # install gdb
 
 before_script:
