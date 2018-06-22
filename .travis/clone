@@ -11,4 +11,4 @@ branch=$3
 [ -n "$branch" ] && ref=$(git ls-remote --heads $repository $branch)
 
 set -x
-git clone --depth=1 ${ref:+--branch=$branch} $repository $localdir
+git clone  ${ref:+--branch=$branch} $repository $localdir
