@@ -39,6 +39,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "decode.h"
 #include "bamit.h"
 #include "hash_table.h"
+#include "seqchksum.h"
 
 #define xstr(s) str(s)
 #define str(s) #s
@@ -74,6 +75,8 @@ struct decode_opts_t {
     char *output_name;
     char *barcode_name;
     char *metrics_name;
+    char *chksum_name;
+    HASH_TYPE hash;
     char *barcode_tag_name;
     char *quality_tag_name;
     bool verbose;
@@ -112,6 +115,8 @@ decode_opts_t *decode_init_opts(int argc, char **argv)
     opts->quality_tag_name = NULL;
     opts->ignore_pf = 0;
     opts->dual_tag = 0;
+    opts->chksum_name = NULL;
+    opts->hash = DEFAULT_HASH_TYPE;
     return opts;
 }
 
@@ -121,6 +126,7 @@ void decode_free_opts(decode_opts_t *opts)
     free(opts->input_name);
     free(opts->output_name);
     free(opts->barcode_name);
+    free(opts->chksum_name);
     free(opts->barcode_tag_name);
     free(opts->quality_tag_name);
     free(opts->argv_list);
@@ -281,6 +287,8 @@ static void usage(FILE *write_to)
 "                                       match [default: " xstr(DEFAULT_MIN_MISMATCH_DELTA) "]\n"
 "       --change-read-name              Change the read name by adding #<barcode> suffix\n"
 "       --metrics-file                  Per-barcode and per-lane metrics written to this file\n"
+"       --seqchksum-file                Chksums for the output file will be written here\n"
+"       --hash                          Hashing algorithm to use for chksums [default: crc32prod]\n"
 "       --barcode-tag-name              Barcode tag name [default: " DEFAULT_BARCODE_TAG "]\n"
 "       --quality-tag-name              Quality tag name [default: " DEFAULT_QUALITY_TAG "]\n"
 "       --input-fmt                     format of input file [sam/bam/cram]\n"
@@ -371,6 +379,8 @@ static decode_opts_t* parse_args(int argc, char *argv[])
         { "min-mismatch-delta",         1, 0, 0 },
         { "change-read-name",           0, 0, 0 },
         { "metrics-file",               1, 0, 0 },
+        { "chksum-file",                1, 0, 0 },
+        { "hash",                       1, 0, 0 },
         { "barcode-tag-name",           1, 0, 0 },
         { "quality-tag-name",           1, 0, 0 },
         { "input-fmt",                  1, 0, 0 },
@@ -400,6 +410,8 @@ static decode_opts_t* parse_args(int argc, char *argv[])
                     break;
         case 0:     arg = lopts[option_index].name;
                          if (strcmp(arg, "metrics-file") == 0)               opts->metrics_name = strdup(optarg);
+                    else if (strcmp(arg, "chksum-file") == 0)                opts->chksum_name = strdup(optarg);
+                    else if (strcmp(arg, "hash") == 0)                       opts->hash = decode_hash_name(optarg);
                     else if (strcmp(arg, "max-low-quality-to-convert") == 0) opts->max_low_quality_to_convert = atoi(optarg);
                     else if (strcmp(arg, "convert-low-quality") == 0)        opts->convert_low_quality = true;
                     else if (strcmp(arg, "max-no-calls") == 0)               opts->max_no_calls = atoi(optarg);
@@ -1215,6 +1227,9 @@ static va_t *loadTemplate(BAMit_t *bit, char *qname)
 static int processTemplatesNoThreads(BAMit_t *bam_in, BAMit_t *bam_out, va_t *barcodeArray, HashTable *barcodeHash, HashTable *tagHopHash, decode_opts_t* opts)
 {
     char qname[257] = {0};
+    chksum_results_t *results = NULL;
+
+    if (opts->chksum_name) results = chksum_init_results(opts->hash);
 
     while (BAMit_hasnext(bam_in)) {
         bam1_t *rec = BAMit_peek(bam_in);
@@ -1224,6 +1239,7 @@ static int processTemplatesNoThreads(BAMit_t *bam_in, BAMit_t *bam_out, va_t *ba
         if (processTemplate(template, barcodeArray, barcodeHash, tagHopHash, opts)) break;
         for (int n = 0; n < template->end; n++) {
             bam1_t *rec_n = template->entries[n];
+            if (opts->chksum_name) seqchksum_processRecord(rec_n, opts->hash, results);
             int r = sam_write1(bam_out->f, bam_out->h, rec_n);
             if (r < 0) {
                 fprintf(stderr, "Could not write sequence\n");
@@ -1231,6 +1247,17 @@ static int processTemplatesNoThreads(BAMit_t *bam_in, BAMit_t *bam_out, va_t *ba
             }
         }
         va_free(template);
+    }
+
+    if (opts->chksum_name) {
+        FILE *f = fopen(opts->chksum_name, "w");
+        if (f) {
+            chksum_print_results(f, results);
+            fclose(f);
+        } else {
+            fprintf(stderr, "WARNING: couldn't open chksum file '%s'\n", opts->chksum_name);
+        }
+        chksum_free_results(results);
     }
     return 0;
 }
@@ -1255,7 +1282,7 @@ static void *decode_job(void *arg)
     return job_data;
 }
 
-static void output_job_results(BAMit_t *bam_out, decode_thread_data_t *job_data)
+static void output_job_results(BAMit_t *bam_out, decode_thread_data_t *job_data, chksum_results_t *chksum_results, HASH_TYPE hash)
 {
     if (job_data->result != 0) {
         die("Processing job failed to return a result\n");
@@ -1264,6 +1291,7 @@ static void output_job_results(BAMit_t *bam_out, decode_thread_data_t *job_data)
     // Write out result records
     for (int i = 0; i < job_data->nrec; i++) {
         bam1_t *rec = job_data->record_set->entries[i];
+        if (chksum_results) seqchksum_processRecord(rec, hash, chksum_results);
         int r = sam_write1(bam_out->f, bam_out->h, rec);
         if (r < 0) {
             die("Could not write sequence\n");
@@ -1374,6 +1402,10 @@ static int processTemplatesThreads(hts_tpool *pool, BAMit_t *bam_in, BAMit_t *ba
     decode_thread_data_t *job_data = init_job(barcodeArray, barcodeHash, opts);
     char qname[257] = { 0 };
 
+    chksum_results_t *chksum_results = NULL;
+
+    if (opts->chksum_name) chksum_results = chksum_init_results(opts->hash);
+
     if (!queue) {
         perror("hts_tpool_process_init");
         return -1;
@@ -1421,7 +1453,7 @@ static int processTemplatesThreads(hts_tpool *pool, BAMit_t *bam_in, BAMit_t *ba
 
                 if (job_result != NULL) {
                     decode_thread_data_t *finished_job = hts_tpool_result_data(job_result);
-                    output_job_results(bam_out, finished_job);
+                    output_job_results(bam_out, finished_job, chksum_results, opts->hash);
                     finished_job->next = job_freelist;
                     job_freelist = finished_job;
                     hts_tpool_delete_result(job_result, 0);
@@ -1458,7 +1490,7 @@ static int processTemplatesThreads(hts_tpool *pool, BAMit_t *bam_in, BAMit_t *ba
             die("Failed to get processing job result");
         }
         decode_thread_data_t *finished_job = hts_tpool_result_data(job_result);
-        output_job_results(bam_out, finished_job);
+        output_job_results(bam_out, finished_job, chksum_results, opts->hash);
         finished_job->next = job_freelist;
         job_freelist = finished_job;
         hts_tpool_delete_result(job_result, 0);
@@ -1472,6 +1504,17 @@ static int processTemplatesThreads(hts_tpool *pool, BAMit_t *bam_in, BAMit_t *ba
     }
 
     hts_tpool_process_destroy(queue);
+
+    if (opts->chksum_name) {
+        FILE *f = fopen(opts->chksum_name, "w");
+        if (f) {
+            chksum_print_results(f, chksum_results);
+            fclose(f);
+        } else {
+            fprintf(stderr, "WARNING: couldn't open chksum file '%s'\n", opts->chksum_name);
+        }
+        chksum_free_results(chksum_results);
+    }
 
     return 0;
 }

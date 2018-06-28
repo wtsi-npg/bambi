@@ -45,6 +45,11 @@ typedef struct {
 } chksum_results_t;
 
 /*
+ * validate and convert hash name
+ */
+HASH_TYPE decode_hash_name(char *name);
+
+/*
  * Initialise results structure
  */
 chksum_results_t *chksum_init_results(HASH_TYPE hash);
@@ -58,6 +63,11 @@ void chksum_free_results(chksum_results_t *results);
  * process one BAM record, and store accumulated results in 'results'
  */
 int seqchksum_processRecord(bam1_t *rec, HASH_TYPE hash, chksum_results_t *results);
+
+/*
+ * print the results
+ */
+void chksum_print_results(FILE *f, chksum_results_t *results);
 
 #endif
 

@@ -100,7 +100,7 @@ test_t_bclfile_SOURCES = test/t_bclfile.c src/bclfile.c src/array.c
 test_t_bclfile_CFLAGS = $(TEST_CFLAGS)
 test_t_bclfile_LDADD = $(TEST_LDADD)
 
-test_t_decode_SOURCES = test/t_decode.c src/array.c src/bamit.c src/hash_table.c
+test_t_decode_SOURCES = test/t_decode.c src/array.c src/bamit.c src/hash_table.c src/seqchksum.c src/crc.c src/parse_bam.c
 test_t_decode_CFLAGS = $(TEST_CFLAGS)
 test_t_decode_LDADD = $(TEST_LDADD)
 
@@ -110,7 +110,7 @@ test_t_filterfile_CFLAGS = $(TEST_CFLAGS)
 test_t_posfile_SOURCES = test/t_posfile.c
 test_t_posfile_CFLAGS = $(TEST_CFLAGS)
 
-test_t_i2b_SOURCES = test/t_i2b.c src/i2b.c src/posfile.c src/bclfile.c src/filterfile.c src/array.c src/parse.c src/hts_addendum.c src/decode.c src/bamit.c src/hash_table.c
+test_t_i2b_SOURCES = test/t_i2b.c src/i2b.c src/posfile.c src/bclfile.c src/filterfile.c src/array.c src/parse.c src/hts_addendum.c src/decode.c src/bamit.c src/hash_table.c src/seqchksum.c src/crc.c src/parse_bam.c
 test_t_i2b_CFLAGS = $(TEST_CFLAGS)
 test_t_i2b_LDADD = $(TEST_LDADD)
 

@@ -46,7 +46,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 //static char *hash_names[] = {"crc32", "crc32prod"};
 
-static HASH_TYPE decode_hash_name(char *name)
+HASH_TYPE decode_hash_name(char *name)
 {
     HASH_TYPE hash = HASH_UNKNOWN;
     if (strcmp(name, "crc32") == 0)     hash = HASH_CRC32;
@@ -299,29 +299,29 @@ static char *dformat(uint32_t v)
     return buffer+2;
 }
 
-static void print_dline(char *key, digest_line_t *dline, int p)
+static void print_dline(FILE *f, char *key, digest_line_t *dline, int p)
 {
-    printf("%s\t%s\t%d\t\t", key, (p ? "pass": "all"), dline->count[p]);
-    printf("%s\t", dformat(dline->chksum[0][p]));
-    printf("%s\t", dformat(dline->chksum[1][p]));
-    printf("%s\t", dformat(dline->chksum[2][p]));
-    printf("%s\n", dformat(dline->chksum[3][p]));
+    fprintf(f,"%s\t%s\t%d\t\t", key, (p ? "pass": "all"), dline->count[p]);
+    fprintf(f,"%s\t", dformat(dline->chksum[0][p]));
+    fprintf(f,"%s\t", dformat(dline->chksum[1][p]));
+    fprintf(f,"%s\t", dformat(dline->chksum[2][p]));
+    fprintf(f,"%s\n", dformat(dline->chksum[3][p]));
 }
 
-static void printResults(chksum_results_t *results)
+void chksum_print_results(FILE *f, chksum_results_t *results)
 {
     digest_line_t *dline = &(results->all);
 
-    printf("###\tset\tcount\t\tb_seq\tname_b_seq\tb_seq_qual\tb_seq_tags(BC,FI,QT,RT,TC)\n");
+    fprintf(f, "###\tset\tcount\t\tb_seq\tname_b_seq\tb_seq_qual\tb_seq_tags(BC,FI,QT,RT,TC)\n");
 
-    print_dline("all", dline, 0);
-    print_dline("all", dline, 1);
+    print_dline(f, "all", dline, 0);
+    print_dline(f, "all", dline, 1);
 
     HashIter *iter = HashTableIterCreate();
     HashItem *hi;
     while ( (hi = HashTableIterNext(results->rgHash, iter)) != NULL) {
-        print_dline(hi->key, hi->data.p, 0);
-        print_dline(hi->key, hi->data.p, 1);
+        print_dline(f, hi->key, hi->data.p, 0);
+        print_dline(f, hi->key, hi->data.p, 1);
     }
     HashTableIterDestroy(iter);
 }
@@ -372,7 +372,7 @@ static int seqchksum(opts_t* opts)
         }
     }
 
-    printResults(results);
+    chksum_print_results(stdout, results);
 
     // tidy up after us
     BAMit_free(bam_in);

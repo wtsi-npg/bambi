@@ -88,7 +88,7 @@ int main(int argc, char**argv)
     checkFiles(outputfile, MKNAME(DATA_DIR,"/out/seqchksum.chksum"), verbose);
 
     // seqchksum crc32
-    if (verbose) fprintf(stderr,"testing crc32prod [default]\n");
+    if (verbose) fprintf(stderr,"testing crc32\n");
     snprintf(outputfile, sizeof(outputfile), "%s/seqchksum.chksum", TMPDIR);
     snprintf(cmd, sizeof(cmd), "%s --hash crc32 %s > %s", prog, MKNAME(DATA_DIR,"/seqchksum.bam"), outputfile);
     if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
