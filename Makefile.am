@@ -30,8 +30,6 @@ src_bambi_SOURCES = src/bambi.c \
                     src/parse.h \
                     src/bamit.c \
                     src/bamit.h \
-                    src/rts.c \
-                    src/rts.h \
                     src/hash_table.c \
                     src/hash_table.h \
                     src/parse_bam.c \
