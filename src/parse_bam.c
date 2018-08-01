@@ -142,6 +142,48 @@ char *complement_seq(char *seq)
     return seq;
 }
 
+/*
+ * reverse complement a sequence in place
+ */
+void rev_comp_seq(char *seq)
+{
+    char *s = reverse_seq(seq);
+    s = complement_seq(s);
+}
+
+uint8_t *get_read(bam1_t *rec)
+{
+    int len = rec->core.l_qseq + 1;
+    uint8_t *read = calloc(1, kroundup32(len));
+    uint8_t *seq = bam_get_seq(rec);
+    int n;
+
+    for (n=0; n < rec->core.l_qseq; n++) {
+        read[n] = "=ACMGRSVTWYHKDBN"[bam_seqi(seq,n)];
+    }
+
+    if (BAM_FREVERSE & rec->core.flag) {
+        rev_comp_seq( (char*) read);
+    }
+
+    return read;
+}
+
+uint8_t *get_quality(bam1_t *rec)
+{
+    uint8_t *quality = calloc(1, rec->core.l_qseq + 1);
+    uint8_t *q = bam_get_qual(rec);
+    int n;
+
+    for (n=0; n < rec->core.l_qseq; n++) {
+        quality[n] = q[n]+33;
+    }
+    if (BAM_FREVERSE & rec->core.flag) {
+        reverse_seq((char *)quality);
+    }
+    return quality;
+}
+
 
 /* cts -simplification of parse_4_int code for single int parse
  */
@@ -216,7 +258,7 @@ const char *parse_next_int(const char *str, int *val, const char *sep)
 }
 
 /*
- * cts - parse bam file line
+ * cns - parse bam file line
  *
  * returns 0 on success, 1 on expected failure.
  */
@@ -292,6 +334,27 @@ bam1_t *parse_bam_readinfo( BAMit_t *fp,
     *bam_read = read;
     if (bam_offset) *bam_offset = offset;
     return bam;
+}
+
+/*
+ * return the length of some aux data
+ */
+int aux_type2size(uint8_t *s)
+{
+    switch (*s) {
+    case 'A': case 'c': case 'C':
+        return 1;
+    case 's': case 'S':
+        return 2;
+    case 'i': case 'I': case 'f':
+        return 4;
+    case 'd':
+        return 8;
+    case 'Z': case 'H': case 'B':
+        return strlen((char *) s+1) + 1;
+    default:
+        return 0;
+    }
 }
 
 
@@ -474,12 +537,10 @@ int parse_bam_alignments(
     }
 
     if (BAM_FREVERSE & bam->core.flag) {
-        read_seq = reverse_seq(read_seq);
-        read_seq = complement_seq(read_seq);
+        rev_comp_seq(read_seq);
         read_qual = reverse_int(read_qual, bam->core.l_qseq);
 		if (read_ref) {
-			read_ref = reverse_seq(read_ref);
-			read_ref = complement_seq(read_ref);
+            rev_comp_seq(read_ref);
 		}
         read_mismatch = reverse_int(read_mismatch, bam->core.l_qseq);
     }

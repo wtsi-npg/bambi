@@ -1,0 +1,11 @@
+###	set	count		b_seq	name_b_seq	b_seq_qual	b_seq_tags(BC,FI,QT,RT,TC)
+all	all	48		ec4d3a19	a1b4f46b	dbac2dfd	9c48458a
+all	pass	47		1bd8754f	2c2f5262	d48d077e	6f4d5106
+	all	2		e9009fb3	e8f5204b	2b5d75d4	39420e54
+	pass	2		e9009fb3	e8f5204b	2b5d75d4	39420e54
+25077_4#3	all	16		c1f52105	ffd43117	ce30971f	1457e653
+25077_4#3	pass	16		c1f52105	ffd43117	ce30971f	1457e653
+25077_3#3	all	14		2f8382ab	18caf38d	64075687	2ddaa8dd
+25077_3#3	pass	13		5f0ebde1	a3455184	5ce83008	dfb459
+25077_5#3	all	16		11d3f6b6	a020af7c	7e16ca83	20d3a806
+25077_5#3	pass	16		11d3f6b6	a020af7c	7e16ca83	20d3a806

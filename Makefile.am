@@ -16,6 +16,8 @@ src_bambi_SOURCES = src/bambi.c \
                     src/chrsplit.c \
                     src/read2tags.c \
                     src/spatial_filter.c \
+                    src/seqchksum.c \
+                    src/seqchksum.h \
                     src/bclfile.c \
                     src/bclfile.h \
                     src/filterfile.c \
@@ -35,7 +37,9 @@ src_bambi_SOURCES = src/bambi.c \
                     src/hash_table.c \
                     src/hash_table.h \
                     src/parse_bam.c \
-                    src/parse_bam.h
+                    src/parse_bam.h \
+                    src/crc.c \
+                    src/crc.h
 
 nobase_include_HEADERS = src/cram/cram_samtools.h src/cram/pooled_alloc.h src/cram/sam_header.h src/cram/string_alloc.h
 
@@ -51,7 +55,8 @@ TESTS = test/t_array \
         test/t_posfile \
         test/t_i2b \
         test/t_read2tags \
-        test/t_sf
+        test/t_sf \
+        test/t_seqchksum
 
 dist_doc_DATA = README.md LICENSE
 
@@ -65,7 +70,8 @@ check_PROGRAMS = test/t_read2tags \
                  test/t_filterfile \
                  test/t_posfile \
                  test/t_i2b \
-                 test/t_sf
+                 test/t_sf \
+                 test/t_seqchksum
 
 TEST_CFLAGS = -I$(top_srcdir)/src $(XML_CFLAGS) -DDATA_DIR=$(top_srcdir)/test/data
 TEST_LDADD = $(HTSLIB_LIBS) -lm
@@ -111,6 +117,10 @@ test_t_i2b_LDADD = $(TEST_LDADD)
 test_t_sf_SOURCES = test/t_sf.c
 test_t_sf_CFLAGS = $(TEST_CFLAGS)
 #test_t_sf_LDADD = $(TEST_LDADD)
+
+test_t_seqchksum_SOURCES = test/t_seqchksum.c
+test_t_seqchksum_CFLAGS = $(TEST_CFLAGS)
+#test_t_seqchksum_LDADD = $(TEST_LDADD)
 
 EXTRA_DIST = test/data
 
