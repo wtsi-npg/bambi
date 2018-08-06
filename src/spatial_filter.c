@@ -1,6 +1,6 @@
 /*  spatial_filter.c - This code looks for spatial features given an aligned bam file
 
-    Copyright (C) 2017 Genome Research Ltd.
+    Copyright (C) 2018 Genome Research Ltd.
 
     Author: Steven Leonard <srl@sanger.ac.uk>
             Jennifer Liddle <js10@sanger.ac.uk>
@@ -38,14 +38,32 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <limits.h>
 
 #include "htslib/sam.h"
+#include "htslib/hfile.h"
 #include "bamit.h"
 #include "hash_table.h"
-#include "rts.h"
 #include "parse_bam.h"
 #include "array.h"
 #include "parse.h"
 
-#define PHRED_QUAL_OFFSET  33  // phred quality values offset
+#define SF_MAX_LANES 17
+
+#define N_READS 3
+
+#define COORD_SHIFT   1000
+#define COORD_FACTOR  10
+
+#define REGION_MAGIC                "RGF2"
+#define REGION_MAGIC_LEN            5
+#define SF_CMDLINE_LEN              1024
+
+#define REGION_SIZE                 200
+
+#define REGION_STATE_COVERAGE   (1<<1)
+#define REGION_STATE_MISMATCH   (1<<2)
+#define REGION_STATE_INSERTION  (1<<3)
+#define REGION_STATE_DELETION   (1<<4)
+#define REGION_STATE_SOFT_CLIP  (1<<5)
+#define REGION_STATE_BAD        (1<<6)
 
 #define REGION_MISMATCH_THRESHOLD   0.016  // threshold for setting region mismatch state
 #define REGION_INSERTION_THRESHOLD  0.016  // threshold for setting region insertion state
@@ -56,6 +74,58 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define MIN_TILE_READ_COUNT  1000 // min number of aligned reads on a tile
 
 #define REGION_STATE_MASK  (REGION_STATE_INSERTION | REGION_STATE_DELETION)  // region mask used to filter reads
+
+// key for the region hash table
+typedef struct {
+    uint32_t x;
+    uint32_t y;
+} region_key_t;
+
+// An internal structure used to create the filter file
+typedef struct {
+    int align;
+    int mismatch;
+    int insertion;
+    int deletion;
+    int soft_clip;
+    int known_snp;
+    float quality;
+    char state;
+} RegionTableEntry_t, ***RegionTable_t;
+
+// The header of the filter file
+typedef struct {
+    char region_magic[REGION_MAGIC_LEN];
+    char cmdLine[SF_CMDLINE_LEN];
+} filter_header_t;
+
+// Header for each Lane of the filter file
+typedef struct {
+    int lane;
+    int coord_shift;
+    int coord_factor;
+    size_t ntiles;
+    int *tileArray;
+    size_t *tileReadCountArray;
+    HashTable *region_hash;
+    int nregions;
+    int *regions;
+    int region_size;
+    int nregions_x;
+    int nregions_y;
+    int nreads;
+    int readLength[N_READS];
+    int totalReadLength;
+    uint32_t filterDataSize;
+    char *filterData;
+    int stats_nreads;       // number of records read
+    int stats_nfiltered;    // number of records filtered out
+    int ngood_tiles;
+    RegionTable_t rts;
+} Header;
+
+static Header *LaneArray[SF_MAX_LANES];
+static filter_header_t Fheader;
 
 enum images { IMAGE_COVERAGE,
               IMAGE_DELETION,
@@ -94,33 +164,24 @@ enum colours { COLOUR_LEVEL_0,
                COLOUR_HIGH_QUAL,
                N_COLOURS };
 
-int *colour_table = NULL;
+static int *colour_table = NULL;
 
 typedef struct {
 	va_t *filters;
-    va_t *rgids;
 	char *snp_file;
 	char *in_bam_file;
 	HashTable *snp_hash;
-	int *tileArray;
-	size_t *tileReadCountArray;
 	char *working_dir;
 	char *output;
 	char *apply_stats_out;
-	int read_length[3];
 	int calculate;
     bool dumpFilter;
 	char *tileviz;
 	int apply;
 	int qcfail;
 	int verbose;
-	HashTable *region_hash;
-	int region_size;
-	int nregions_x;
-	int nregions_y;
-	int nregions;
-	int *regions;
 	int region_min_count;
+    int region_size;
 	float region_mismatch_threshold;
 	float region_insertion_threshold;
 	float region_deletion_threshold;
@@ -139,6 +200,171 @@ int int_cmp(const void *i1, const void *i2) {
 
 int int_sort(const void *i1, const void *i2) {
     return *(int *)i1 > *(int *)i2;
+}
+
+/*
+ * Create and Initialise a header structure with default values
+ */
+static Header *sf_initHdr(void)
+{
+    Header *hdr = smalloc(sizeof(Header));
+    hdr->lane = 0;
+    hdr->coord_shift = COORD_SHIFT;
+    hdr->coord_factor = COORD_FACTOR;
+    hdr->ntiles = 0;
+    hdr->ngood_tiles = 0;
+    hdr->tileArray = NULL;
+    hdr->tileReadCountArray = NULL;
+    hdr->region_size = REGION_SIZE;
+    hdr->region_hash = HashTableCreate(0, HASH_DYNAMIC_SIZE|HASH_FUNC_JENKINS);
+    hdr->regions = NULL;
+    hdr->nregions = 0;
+    hdr->nregions_x = 0;
+    hdr->nregions_y = 0;
+    hdr->nreads = 0;
+    for (int n=0; n < N_READS; n++) hdr->readLength[n] = 0;
+    hdr->totalReadLength = 0;
+    hdr->filterDataSize = 0;
+    hdr->filterData = NULL;
+    hdr->stats_nreads = 0;
+    hdr->stats_nfiltered = 0;
+
+    return hdr;
+}
+
+// which region is x in?
+static uint32_t x2region(Header *hdr, int x)
+{
+    float x_coord = (float)(x - hdr->coord_shift) / (float)hdr->coord_factor;
+    return (int)(x_coord / hdr->region_size);
+}
+
+// which region is (x,y) in?
+static uint32_t xy2region(Header *hdr, int x, int y)
+{
+    return x2region(hdr, x) * hdr->nregions_y + x2region(hdr, y);
+}
+
+// Convert tile to an array index
+static int tile2index(Header *hdr, int tile)
+{
+    void *pitile = lfind(&tile, hdr->tileArray, &hdr->ntiles, sizeof(int), &int_cmp);
+    if (!pitile) return -1;
+    return ((int*)pitile - hdr->tileArray);
+}
+
+// Return filter data for given lane, tile, read, cycle, region
+static char *getFilterData(Header *hdr, int itile, int read, int cycle, int region)
+{
+    int previousReadLength = 0, offset;
+    for (int n=0; n < read; n++) previousReadLength += hdr->readLength[n];
+    offset = itile * hdr->totalReadLength * hdr->nregions + (previousReadLength + cycle) * hdr->nregions + region;
+    return hdr->filterData + offset;
+}
+
+/*
+ * Read the filter header from a filter file
+ */
+static void readFheader(hFILE *fp)
+{
+    if (hread(fp, &Fheader, sizeof(Fheader)) < 0) die("readFheader() failed\n");
+    if (strcmp(Fheader.region_magic,REGION_MAGIC)) die("Not a valid filter file\n");
+}
+
+/*
+ * Read a Lane header from a filter file
+ */
+static Header *readHeader(hFILE *fp)
+{
+    Header *hdr;
+
+    hdr = smalloc(sizeof(Header));
+    hdr->ngood_tiles = 0;
+
+    ssize_t r = hread(fp, &hdr->lane, sizeof(hdr->lane));
+    if (r==0) { free(hdr); return NULL; }   // end of file, no more lanes left
+    if (r <0) goto fail;
+
+    if (hread(fp, &hdr->coord_shift, sizeof(hdr->coord_shift)) < 0) goto fail;
+    if (hread(fp, &hdr->coord_factor, sizeof(hdr->coord_factor)) < 0) goto fail;
+    if (hread(fp, &hdr->ntiles, sizeof(hdr->ntiles)) < 0) goto fail;
+
+    if (hdr->ntiles > 0) {
+        hdr->tileArray = smalloc(hdr->ntiles * sizeof(int));
+        hdr->tileReadCountArray = malloc(hdr->ntiles * sizeof(size_t));
+        for (int i=0; i < hdr->ntiles; i++) {
+            if (hread(fp, &hdr->tileArray[i], sizeof(hdr->tileArray[i])) < 0) die("readHeader() failed\n");
+            if (hread(fp, &hdr->tileReadCountArray[i], sizeof(hdr->tileReadCountArray[i])) < 0) die("readHeader() failed\n");
+        }
+    }
+    if (hread(fp, &hdr->nregions, sizeof(hdr->nregions)) < 0) goto fail;
+    if (hdr->nregions) {
+        size_t n = hdr->nregions * sizeof(*hdr->regions);
+        hdr->regions = smalloc(n);
+        if (hread(fp, hdr->regions, n) < 0) goto fail;
+    }
+
+    if (hread(fp, &hdr->region_size, sizeof(hdr->region_size)) < 0) goto fail;
+    if (hread(fp, &hdr->nregions_x, sizeof(hdr->nregions_x)) < 0) goto fail;
+    if (hread(fp, &hdr->nregions_y, sizeof(hdr->nregions_y)) < 0) goto fail;
+    if (hread(fp, &hdr->nreads, sizeof(hdr->nreads)) < 0) goto fail;
+    if (hread(fp, &hdr->readLength, N_READS * sizeof(*hdr->readLength)) < 0) goto fail;
+
+    if (hread(fp, &hdr->filterDataSize, sizeof(hdr->filterDataSize)) < 0) goto fail;
+    if (hdr->filterDataSize > 0) {
+        hdr->filterData = malloc(hdr->filterDataSize);
+        if (hread(fp, hdr->filterData, hdr->filterDataSize) < 0) die("readFilterData() failed\n");
+    }
+
+    return hdr;
+
+ fail:
+    die("Oops. readHeader() failed\n");
+    return NULL;
+}
+
+void writeHeader(hFILE *fp, Header *hdr)
+{
+    if (hwrite(fp, &hdr->lane, sizeof(hdr->lane)) < 0) goto fail;
+    if (hwrite(fp, &hdr->coord_shift, sizeof(hdr->coord_shift)) < 0) goto fail;
+    if (hwrite(fp, &hdr->coord_factor, sizeof(hdr->coord_factor)) < 0) goto fail;
+    if (hwrite(fp, &hdr->ntiles, sizeof(hdr->ntiles)) < 0) goto fail;
+    for (int n=0; n < hdr->ntiles; n++) {
+        if (hwrite(fp, &hdr->tileArray[n], sizeof(hdr->tileArray[n])) < 0) goto fail;
+        if (hwrite(fp, &hdr->tileReadCountArray[n], sizeof(hdr->tileReadCountArray[n])) < 0) goto fail;
+    }
+    if (hwrite(fp, &hdr->nregions, sizeof(hdr->nregions)) < 0) goto fail;
+    if (hwrite(fp, hdr->regions, hdr->nregions * sizeof(*hdr->regions)) < 0) goto fail;
+    if (hwrite(fp, &hdr->region_size, sizeof(hdr->region_size)) < 0) goto fail;
+    if (hwrite(fp, &hdr->nregions_x, sizeof(hdr->nregions_x)) < 0) goto fail;
+    if (hwrite(fp, &hdr->nregions_y, sizeof(hdr->nregions_y)) < 0) goto fail;
+    if (hwrite(fp, &hdr->nreads, sizeof(hdr->nreads)) < 0) goto fail;
+    if (hwrite(fp, &hdr->readLength, N_READS * sizeof(*hdr->readLength)) < 0) goto fail;
+    return;
+
+fail:
+    die("writeHeader() failed\n");
+}
+
+/*
+ * Open and load a list of filter files
+ */
+static void openFilters(va_t *fnames)
+{
+    for (int n = 0; n < fnames->end; n++) {
+        char *fname = fnames->entries[n];
+        hFILE *fp = hopen(fname, "r");
+        if (!fp) die("Can't open file %s\n", fname);
+        readFheader(fp);
+        while (1) {
+            Header *hdr = readHeader(fp);
+            if (!hdr) break;
+            LaneArray[hdr->lane] = hdr;
+            hdr->stats_nreads = 0;
+            hdr->stats_nfiltered = 0;
+        }
+        if (hclose(fp)) die("Failed to close filter %s\n", fname);
+    }
 }
 
 /*
@@ -184,76 +410,18 @@ static HashTable *readSnpFile(opts_t *opts)
     return snp_hash;
 }
 
-/*
- * Convert an integer to a string
- */
-static char *_itoa(char *cp, int i)
+// create key for region table hash
+static void makeRegionKey(region_key_t *key, uint32_t x, uint32_t y)
 {
-    int j;
-
-    if (i == 0) {
-        *cp++ = '0';
-        return cp;
-    }
-
-    if (i < 0) {
-        *cp++ = '-';
-        if (i == INT_MIN) {
-            *cp++ = '2'; *cp++ = '1'; *cp++ = '4'; *cp++ = '7';
-            *cp++ = '4'; *cp++ = '8'; *cp++ = '3'; *cp++ = '6';
-            *cp++ = '4'; *cp++ = '8';
-            return cp;
-        }
-        i = -i;
-    }
-
-    //if (i < 10)         goto b0;
-    if (i < 100)        goto b1;
-    //if (i < 1000)       goto b2;
-    if (i < 10000)      goto b3;
-    //if (i < 100000)     goto b4;
-    if (i < 1000000)    goto b5;
-    //if (i < 10000000)   goto b6;
-    if (i < 100000000)  goto b7;
-
-     if ((j = i / 1000000000)) {*cp++ = j + '0'; i -= j*1000000000; goto x8;}
-     if ((j = i / 100000000))  {*cp++ = j + '0'; i -= j*100000000;  goto x7;}
- b7: if ((j = i / 10000000))   {*cp++ = j + '0'; i -= j*10000000;   goto x6;}
-     if ((j = i / 1000000))    {*cp++ = j + '0', i -= j*1000000;    goto x5;}
- b5: if ((j = i / 100000))     {*cp++ = j + '0', i -= j*100000;     goto x4;}
-     if ((j = i / 10000))      {*cp++ = j + '0', i -= j*10000;      goto x3;}
- b3: if ((j = i / 1000))       {*cp++ = j + '0', i -= j*1000;       goto x2;}
-     if ((j = i / 100))        {*cp++ = j + '0', i -= j*100;        goto x1;}
- b1: if ((j = i / 10))         {*cp++ = j + '0', i -= j*10;         goto x0;}
-     if (i)                     *cp++ = i + '0';
-    return cp;
-
- x8: *cp++ = i / 100000000 + '0', i %= 100000000;
- x7: *cp++ = i / 10000000  + '0', i %= 10000000;
- x6: *cp++ = i / 1000000   + '0', i %= 1000000;
- x5: *cp++ = i / 100000    + '0', i %= 100000;
- x4: *cp++ = i / 10000     + '0', i %= 10000;
- x3: *cp++ = i / 1000      + '0', i %= 1000;
- x2: *cp++ = i / 100       + '0', i %= 100;
- x1: *cp++ = i / 10        + '0', i %= 10;
- x0: *cp++ = i             + '0';
-
-    return cp;
-}
-
-static void makeRegionKey(char *key, int x, int y)
-{
-    key = _itoa(key, x);
-    *key++ = ':';
-    key = _itoa(key, y);
-    *key = 0;
+    key->x = x;
+    key->y = y;
 }
 
 /*
  * initialise a region table entry
  */
 
-static void initialiseRegionTable(RegionTable *rt)
+static void initialiseRegionTableEntry(RegionTableEntry_t *rt)
 {
     rt->align     = 0;
     rt->mismatch  = 0;
@@ -268,14 +436,14 @@ static void initialiseRegionTable(RegionTable *rt)
 /*
  * Free the Region Table
  */
-static void freeRTS(opts_t *s, int ntiles, RegionTable ***rts)
+static void freeRTS(opts_t *s, Header *hdr, RegionTable_t rts)
 {
     int itile, read, cycle;
 
-    for (itile=0; itile<ntiles; itile++) {
+    for (itile=0; itile<hdr->ntiles; itile++) {
         for (read=0; read<N_READS; read++) {
             if( NULL == rts[itile*N_READS+read]) continue;
-            for (cycle=0; cycle < s->read_length[read]; cycle++)
+            for (cycle=0; cycle < hdr->readLength[read]; cycle++)
                 free(rts[itile*N_READS+read][cycle]);
             free(rts[itile*N_READS+read]);
         }
@@ -290,12 +458,8 @@ static void free_opts(opts_t *opts)
 {
     if (!opts) return;
     va_free(opts->filters);
-    va_free(opts->rgids);
     free(opts->snp_file);
     free(opts->in_bam_file);
-    free(opts->tileArray);
-    free(opts->tileReadCountArray);
-    free(opts->regions);
     free(opts->working_dir);
     free(opts->output);
     free(opts->apply_stats_out);
@@ -358,7 +522,7 @@ static gdImagePtr initImage(int width, int height, char *base, int type, int rea
 /*
  * generate the tileviz report as a HTML file
  */
-static void report(opts_t *opts, int ntiles)
+static void report(opts_t *opts, Header *hdr)
 {
     char *base;
     int filename_sz;
@@ -366,13 +530,13 @@ static void report(opts_t *opts, int ntiles)
     FILE *fp;
     int image, read, cycle;
 
-    if (0 >= ntiles)
+    if (0 >= hdr->ntiles)
         return;
 
     filename_sz = (NULL == opts->tileviz ? 0 : strlen(opts->tileviz)) + 100;
     filename = smalloc(filename_sz);
 
-    sprintf(filename, "%s.html", opts->tileviz);
+    sprintf(filename, "%s_lane%d.html", opts->tileviz, hdr->lane);
     fp = fopen(filename, "w+");
     if (!fp) die("Can't open tileviz file %s: %s\n", filename, strerror(errno));
 
@@ -388,14 +552,14 @@ static void report(opts_t *opts, int ntiles)
     // initialise the report
     fprintf(fp, "<html>\n");
     fprintf(fp, "<head>\n");
-    fprintf(fp, "  <title>Tile Visualisation for %s</title>\n", base);
+    fprintf(fp, "  <title>Tile Visualisation for %s Lane %d</title>\n", base, hdr->lane);
     fprintf(fp, "  <style type=\"text/css\">\n");
     fprintf(fp, "    table {background-color: rgb(200,200,200)}\n");
     fprintf(fp, "    td {padding: 3px;}\n");
     fprintf(fp, "  </style>\n");
     fprintf(fp, "</head>\n");
     fprintf(fp, "<body>\n");
-    fprintf(fp, "  <h3>Tile Visualisation for %s</h3>\n", base);
+    fprintf(fp, "  <h3>Tile Visualisation for %s Lane %d</h3>\n", base, hdr->lane);
 
     // add summary images to the report
     fprintf(fp, "  <h4>Summary</h4>\n");
@@ -403,8 +567,8 @@ static void report(opts_t *opts, int ntiles)
     fprintf(fp, "    <tr>\n");
     for (image=0; image<N_IMAGES; image++) {
         for (read = 0; read < N_READS; read++) {
-            if (0 == opts->read_length[read]) continue;
-            sprintf(filename, "%s/%c_%s.png", base, (read == 2 ? 'R' : 'F'), image_names[image]);
+            if (0 == hdr->readLength[read]) continue;
+            sprintf(filename, "%s_lane%d/%c_%s.png", base, hdr->lane, (read == 2 ? 'R' : 'F'), image_names[image]);
             fprintf(fp, "      <td><img src=\"%s\" /></td>\n", filename);
         }
     }
@@ -413,16 +577,16 @@ static void report(opts_t *opts, int ntiles)
 
     // add cycle by cycle images to the report
     for (read = 0; read < N_READS; read++) {
-        if (0 == opts->read_length[read]) continue;
-        int length = (opts->read_length[read] > 99 ? 3 : (opts->read_length[read] > 9 ? 2 : 1));
+        if (0 == hdr->readLength[read]) continue;
+        int length = (hdr->readLength[read] > 99 ? 3 : (hdr->readLength[read] > 9 ? 2 : 1));
         int image_count = 0;
         fprintf(fp, "  <h4>%s  Read per Cycle</h4>\n", (read == 2 ? "Reverse" : "Forward"));
         fprintf(fp, "  <table>\n");
         fprintf(fp, "    <tr>\n");
-        for (cycle = 0; cycle < opts->read_length[read]; cycle++) {
+        for (cycle = 0; cycle < hdr->readLength[read]; cycle++) {
             for (image=1; image<N_IMAGES; image++) {
 	            fprintf(fp, (image ==(N_IMAGES-1) ? "      <td style=\"padding-right:10px;\">" : "      <td>"));
-                sprintf(filename, "%s/%0*d%c_%s.png", base, length, cycle+1, (read == 2 ? 'R' : 'F'), image_names[image]);
+                sprintf(filename, "%s_lane%d/%0*d%c_%s.png", base, hdr->lane, length, cycle+1, (read == 2 ? 'R' : 'F'), image_names[image]);
 	            fprintf(fp, "<img src=\"%s\" /></td>\n", filename);
                 image_count++;
             }
@@ -431,7 +595,7 @@ static void report(opts_t *opts, int ntiles)
                 fprintf(fp, "    </tr>\n");
                 image_count = 0;
                 // are we going to output another row
-                if ((cycle+1) < opts->read_length[read]) {
+                if ((cycle+1) < hdr->readLength[read]) {
                     fprintf(fp, "    <tr>\n");
                 }
             }
@@ -452,8 +616,7 @@ static void report(opts_t *opts, int ntiles)
 /*
  * generate tileviz images
 */
-
-static void tileviz(opts_t *s, int ntiles, RegionTable ***rts)
+static void tileviz(opts_t *opts, Header *hdr, RegionTable_t rts)
 {
     int num_surfs = 1;
     int num_cols = 1;
@@ -466,15 +629,16 @@ static void tileviz(opts_t *s, int ntiles, RegionTable ***rts)
     FILE *fp;
     int image, iregion, ix, iy, read, itile, cycle;
 
-    if (0 >= ntiles)
+    if (0 >= hdr->ntiles)
         return;
 
-    if (s->verbose) display("Writing tileviz images to %s\n", s->tileviz);
+    if (opts->verbose) display("Writing tileviz images to %s_lane%d\n", opts->tileviz, hdr->lane);
 
     // calculate the number of surfaces, columns and rows, tiles are numbered as follows SCRR where S(surface), C(column) and R(row)
-    if( 1 < ntiles ){
-        for (itile=0; itile<ntiles; itile++) {
-            int tile = s->tileArray[itile];
+    if( 1 < hdr->ntiles ){
+        for (itile=0; itile < hdr->ntiles; itile++) {
+            //int tile = s->tileArray[itile];
+            int tile = hdr->tileArray[itile];
             int surf = tile / 1000;
             int col = (tile - 1000 * surf) / 100;
             int row = tile % 100;
@@ -484,25 +648,25 @@ static void tileviz(opts_t *s, int ntiles, RegionTable ***rts)
         }
     }
 
-    image_width = s->nregions_x * num_cols * num_surfs + (num_surfs > 1 ? IMAGE_COLUMN_GAP : 0);
-    image_height = (s->nregions_y + 1) * num_rows + IMAGE_LABEL_HEIGHT;
+    image_width = hdr->nregions_x * num_cols * num_surfs + (num_surfs > 1 ? IMAGE_COLUMN_GAP : 0);
+    image_height = (hdr->nregions_y + 1) * num_rows + IMAGE_LABEL_HEIGHT;
     
-    filename_sz = (NULL == s->tileviz ? 0 : strlen(s->tileviz)) + 100;
+    filename_sz = (NULL == opts->tileviz ? 0 : strlen(opts->tileviz)) + 100;
     filename = smalloc(filename_sz);
 
-    sprintf(filename, "mkdir -p %s", s->tileviz);
-    if (system(filename)) die("Can't make tileviz directory %s: %s\n", s->tileviz, strerror(errno));
+    sprintf(filename, "mkdir -p %s_lane%d", opts->tileviz, hdr->lane);
+    if (system(filename)) die("Can't make tileviz directory %s_lane%d: %s\n", opts->tileviz, hdr->lane, strerror(errno));
 
-    base = strrchr(s->tileviz, '/');
+    base = strrchr(opts->tileviz, '/');
     if( NULL == base )
-        base = s->tileviz;
+        base = opts->tileviz;
     else {
         base++;
     }
     
     // create the summary images, marking as bad any regions which would be removed or marked as qc failed when the filter is applied
     for (read = 0; read < N_READS; read++) {
-        if (0 == s->read_length[read]) continue;
+        if (0 == hdr->readLength[read]) continue;
 
         im[IMAGE_COVERAGE]  = initImage(image_width, image_height, base, IMAGE_COVERAGE,  read, -1, 0);
         im[IMAGE_DELETION]  = initImage(image_width, image_height, base, IMAGE_DELETION,  read, -1, 0);
@@ -510,30 +674,30 @@ static void tileviz(opts_t *s, int ntiles, RegionTable ***rts)
         im[IMAGE_MISMATCH]  = initImage(image_width, image_height, base, IMAGE_MISMATCH,  read, -1, 0);
         im[IMAGE_QUALITY]   = initImage(image_width, image_height, base, IMAGE_QUALITY,   read, -1, 0);
 
-        for (itile=0; itile<ntiles; itile++) {
-            int tile = s->tileArray[itile];
+        for (itile=0; itile < hdr->ntiles; itile++) {
+            int tile = hdr->tileArray[itile];
             int surf = 1;
             int col = 1;
             int row = 1;
 
-            if( 1 < ntiles ){
+            if( 1 < hdr->ntiles ){
                 surf = tile / 1000;
                 col = (tile - 1000 * surf) / 100;
                 row = tile % 100;
             }
 
             iregion = 0;
-            for (ix = 0; ix < s->nregions_x; ix++) {
-                for (iy = 0; iy < s->nregions_y; iy++) {
-                    if (s->regions[iregion] >= 0) {
-                        RegionTable summary_rt;
-                        initialiseRegionTable(&summary_rt);
+            for (ix = 0; ix < hdr->nregions_x; ix++) {
+                for (iy = 0; iy < hdr->nregions_y; iy++) {
+                    if (hdr->regions[iregion] >= 0) {
+                        RegionTableEntry_t summary_rt;
+                        initialiseRegionTableEntry(&summary_rt);
 
                         int bad_cycle_count = 0;
                         // summary quality is the minimum average quality, initialise to a large value
                         summary_rt.quality = 100.0;
-                        for (cycle = 0; cycle < s->read_length[read]; cycle++) {
-                            RegionTable *rt = rts[itile*N_READS+read][cycle] + s->regions[iregion];
+                        for (cycle = 0; cycle < hdr->readLength[read]; cycle++) {
+                            RegionTableEntry_t *rt = rts[itile*N_READS+read][cycle] + hdr->regions[iregion];
                             int n = rt->align + rt->insertion + rt->deletion + rt->soft_clip + rt->known_snp;
                             if (0 == n) continue;
                             // coverage should be the same for all cycles
@@ -542,7 +706,7 @@ static void tileviz(opts_t *s, int ntiles, RegionTable ***rts)
                             rt->quality /= n;
                             // ignore the last cycle of any read which has a higher error rate and lower quality values
                             // ignore first cycle of the reverse read which has a high error rate and lower quality values due to library prep
-                            if( (read == 2 && cycle == 0) || (cycle == (s->read_length[read]-1)) ) continue;
+                            if( (read == 2 && cycle == 0) || (cycle == (hdr->readLength[read]-1)) ) continue;
                             // for mismatch, insertion and deletion take the maximum over all cycles
                             summary_rt.mismatch = max(summary_rt.mismatch, rt->mismatch);
                             summary_rt.insertion = max(summary_rt.insertion, rt->insertion);
@@ -555,8 +719,8 @@ static void tileviz(opts_t *s, int ntiles, RegionTable ***rts)
 
                         int n = summary_rt.align;
                         if (n) {
-                            int x = (surf-1) * (s->nregions_x * num_cols + IMAGE_COLUMN_GAP) + (col-1) * s->nregions_x + ix;
-                            int y = IMAGE_LABEL_HEIGHT + (row-1) * (s->nregions_y + 1) + iy;
+                            int x = (surf-1) * (hdr->nregions_x * num_cols + IMAGE_COLUMN_GAP) + (col-1) * hdr->nregions_x + ix;
+                            int y = IMAGE_LABEL_HEIGHT + (row-1) * (hdr->nregions_y + 1) + iy;
                             int colour = (n > COLOUR_LEVEL_11 ? COLOUR_LEVEL_11 : n);
                             // mark bad regions with COLOUR_QC_FAIL in coverage image
                             if (summary_rt.state & REGION_STATE_BAD) colour = COLOUR_QC_FAIL;
@@ -588,7 +752,7 @@ static void tileviz(opts_t *s, int ntiles, RegionTable ***rts)
         }
 
         for (image=0; image<N_IMAGES; image++) {
-            sprintf(filename, "%s/%c_%s.png", s->tileviz, (read == 2 ? 'R' : 'F'), image_names[image]);
+            sprintf(filename, "%s_lane%d/%c_%s.png", opts->tileviz, hdr->lane, (read == 2 ? 'R' : 'F'), image_names[image]);
             fp = fopen(filename, "w+");
             if (!fp) die("Can't open tileviz file %s: %s\n", filename, strerror(errno));
             gdImagePng(im[image], fp);
@@ -599,37 +763,37 @@ static void tileviz(opts_t *s, int ntiles, RegionTable ***rts)
 
     // create cycle by cycle images
     for (read = 0; read < N_READS; read++) {
-        if (0 == s->read_length[read]) continue;
+        if (0 == hdr->readLength[read]) continue;
 
-        int length = (s->read_length[read] > 99 ? 3 : (s->read_length[read] > 9 ? 2 : 1));
-        for (cycle = 0; cycle < s->read_length[read]; cycle++) {
+        int length = (hdr->readLength[read] > 99 ? 3 : (hdr->readLength[read] > 9 ? 2 : 1));
+        for (cycle = 0; cycle < hdr->readLength[read]; cycle++) {
 
             im[IMAGE_DELETION]  = initImage(image_width, image_height, base, IMAGE_DELETION,  read, cycle+1, length);
             im[IMAGE_INSERTION] = initImage(image_width, image_height, base, IMAGE_INSERTION, read, cycle+1, length);
             im[IMAGE_MISMATCH]  = initImage(image_width, image_height, base, IMAGE_MISMATCH,  read, cycle+1, length);
             im[IMAGE_QUALITY]   = initImage(image_width, image_height, base, IMAGE_QUALITY,   read, cycle+1, length);
 
-            for (itile=0; itile<ntiles; itile++) {
-                int tile = s->tileArray[itile];
+            for (itile=0; itile < hdr->ntiles; itile++) {
+                int tile = hdr->tileArray[itile];
                 int surf = 1;
                 int col = 1;
                 int row = 1;
 
-                if( 1 < ntiles ){
+                if( 1 < hdr->ntiles ){
                     surf = tile / 1000;
                     col = (tile - 1000 * surf) / 100;
                     row = tile % 100;
                 }
 
                 iregion = 0;
-                for (ix = 0; ix < s->nregions_x; ix++) {
-                    for (iy = 0; iy < s->nregions_y; iy++) {
-                        if (s->regions[iregion] >= 0) {
-                            RegionTable *rt = rts[itile*N_READS+read][cycle] + s->regions[iregion];
+                for (ix = 0; ix < hdr->nregions_x; ix++) {
+                    for (iy = 0; iy < hdr->nregions_y; iy++) {
+                        if (hdr->regions[iregion] >= 0) {
+                            RegionTableEntry_t *rt = rts[itile*N_READS+read][cycle] + hdr->regions[iregion];
                             int n = rt->align + rt->insertion + rt->deletion + rt->soft_clip + rt->known_snp;
                             if (n) {
-                                int x = (surf-1) * (s->nregions_x * num_cols + IMAGE_COLUMN_GAP) + (col-1) * s->nregions_x + ix;
-                                int y = IMAGE_LABEL_HEIGHT + (row-1) * (s->nregions_y + 1) + iy;
+                                int x = (surf-1) * (hdr->nregions_x * num_cols + IMAGE_COLUMN_GAP) + (col-1) * hdr->nregions_x + ix;
+                                int y = IMAGE_LABEL_HEIGHT + (row-1) * (hdr->nregions_y + 1) + iy;
                                 int colour;
                                 // for mismatch, insertion and deletion convert to a percentage and bin 0(<=0), 1(<=10), 2(<=20), ...
                                 colour = (10.0 * rt->deletion) / n + (rt->deletion ? 1 : 0);
@@ -657,7 +821,7 @@ static void tileviz(opts_t *s, int ntiles, RegionTable ***rts)
             }
             
             for (image=1; image<N_IMAGES; image++) {
-                sprintf(filename, "%s/%0*d%c_%s.png", s->tileviz, length, cycle+1, (read == 2 ? 'R' : 'F'), image_names[image]);
+                sprintf(filename, "%s_lane%d/%0*d%c_%s.png", opts->tileviz, hdr->lane, length, cycle+1, (read == 2 ? 'R' : 'F'), image_names[image]);
                 fp = fopen(filename, "w+");
                 if (!fp) die("Can't open tileviz file %s: %s\n", filename, strerror(errno));
                 gdImagePng(im[image], fp);
@@ -668,7 +832,7 @@ static void tileviz(opts_t *s, int ntiles, RegionTable ***rts)
     }
 
     // generate the report
-    report(s, ntiles);
+    report(opts, hdr);
     
     return;
 }
@@ -676,23 +840,21 @@ static void tileviz(opts_t *s, int ntiles, RegionTable ***rts)
 /*
  * setup a mapping between each potential region and the observed regions
  */
-static void regionMapping(opts_t *s)
+static void regionMapping(Header *hdr)
 {
     int iregion, ix, iy;
-    char key[100];
+    region_key_t key;
 
-    free(s->regions);
-    s->regions = NULL;
-    if (s->nregions <= 0) return;
+    if (hdr->nregions <= 0) return;
 
-    s->regions = smalloc(s->nregions * sizeof(int));
+    hdr->regions = smalloc(hdr->nregions * sizeof(int));
     iregion = 0;
-    for (ix = 0; ix < s->nregions_x; ix++) {
-        for (iy = 0; iy < s->nregions_y; iy++) {
-            makeRegionKey(key, ix, iy);
-            HashItem *hi = HashTableSearch(s->region_hash, key, strlen(key));
-            if (hi) s->regions[iregion++] = hi->data.i;
-            else    s->regions[iregion++] = -1;
+    for (ix = 0; ix < hdr->nregions_x; ix++) {
+        for (iy = 0; iy < hdr->nregions_y; iy++) {
+            makeRegionKey(&key, ix, iy);
+            HashItem *hi = HashTableSearch(hdr->region_hash, (char *)&key, sizeof(region_key_t));
+            if (hi) hdr->regions[iregion++] = hi->data.i;
+            else    hdr->regions[iregion++] = -1;
         }
     }
 
@@ -703,42 +865,42 @@ static void regionMapping(opts_t *s)
  * calc the relative size of the regions we use to set the region state
 */
 
-static int setScaleFactor(opts_t *s, int ntiles, size_t nreads, RegionTable ***rts)
+static int setScaleFactor(opts_t *opts, Header *hdr, RegionTable_t rts)
 {
     int scale_factor = 1, region_min_count = 0;
     
-	if (0 >= ntiles)
+	if (0 >= hdr->ntiles)
 		return scale_factor;
 
     // set the region_min_count so that at least 2 reads are required to pass all thresholds
-    if ((region_min_count * s->region_mismatch_threshold) < 2.0 )
-        region_min_count = ceil(2.0 / s->region_mismatch_threshold);
-    if ((region_min_count * s->region_insertion_threshold) < 2.0 )
-        region_min_count = ceil(2.0 / s->region_insertion_threshold);
-    if ((region_min_count * s->region_deletion_threshold) < 2.0 )
-        region_min_count = ceil(2.0 / s->region_deletion_threshold);
-    if (s->verbose) display("State region: region_min_count=%d\n", region_min_count);
-    s->region_min_count = region_min_count;
+    if ((region_min_count * opts->region_mismatch_threshold) < 2.0 )
+        region_min_count = ceil(2.0 / opts->region_mismatch_threshold);
+    if ((region_min_count * opts->region_insertion_threshold) < 2.0 )
+        region_min_count = ceil(2.0 / opts->region_insertion_threshold);
+    if ((region_min_count * opts->region_deletion_threshold) < 2.0 )
+        region_min_count = ceil(2.0 / opts->region_deletion_threshold);
+    if (opts->verbose) display("State region: region_min_count=%d\n", region_min_count);
+    opts->region_min_count = region_min_count;
 
-    int region_size = s->region_size;
-    int nregions_x = s->nregions_x;
-    int nregions_y = s->nregions_y;
-    int nregions = s->nregions;
+    int region_size = hdr->region_size;
+    int nregions_x = hdr->nregions_x;
+    int nregions_y = hdr->nregions_y;
+    int nregions = hdr->nregions;
 
     // what is the average #reads per region, assume coverage is reasonably uniform over the whole lane
-    int region_count = (float)nreads / (float)(ntiles * nregions);
-    if (s->verbose) display("State region: nregions_x=%d nregions_y=%d nregions=%d region_size=%d region_count=%d\n",
+    int region_count = (float)hdr->nreads / (float)(hdr->ntiles * nregions);
+    if (opts->verbose) display("State region: nregions_x=%d nregions_y=%d nregions=%d region_size=%d region_count=%d\n",
             nregions_x, nregions_y, nregions, region_size, region_count);
 
     // increase the region size until at the average region count exceeds the minimum region count
-    while ( region_count < s->region_min_count ){
+    while ( region_count < opts->region_min_count ){
         scale_factor++;
-        region_size = scale_factor * s->region_size;
-        nregions_x = ceil((float)s->nregions_x / (float)scale_factor);
-        nregions_y = ceil((float)s->nregions_y / (float)scale_factor);
+        region_size = scale_factor * hdr->region_size;
+        nregions_x = ceil((float)hdr->nregions_x / (float)scale_factor);
+        nregions_y = ceil((float)hdr->nregions_y / (float)scale_factor);
         nregions = nregions_x * nregions_y;
-        region_count = (float)nreads / (float)(ntiles * nregions);
-        if (s->verbose) display("State region: nregions_x=%d nregions_y=%d nregions=%d region_size=%d region_count=%d\n",
+        region_count = (float)hdr->nreads / (float)(hdr->ntiles * nregions);
+        if (opts->verbose) display("State region: nregions_x=%d nregions_y=%d nregions=%d region_size=%d region_count=%d\n",
                 nregions_x, nregions_y, nregions, region_size, region_count);
         // the region size cannot exceed the tile size
         if (nregions == 1) break;
@@ -751,46 +913,46 @@ static int setScaleFactor(opts_t *s, int ntiles, size_t nreads, RegionTable ***r
  * set the region state
 */
 
-static void setRegionState(opts_t *s, int ntiles, size_t nreads, RegionTable ***rts)
+static void setRegionState(opts_t *opts, Header *hdr, RegionTable_t rts)
 {
     int scale_factor, nregions_x_state, nregions_y_state, nregions_state;
-    RegionTable *state_rts = NULL;
+    RegionTableEntry_t *state_rts = NULL;
 	int itile, read, cycle, iregion, ix, iy;
 
-	if (0 >= ntiles)
+	if (0 >= hdr->ntiles)
 		return;
 
-    scale_factor = setScaleFactor(s, ntiles, nreads, rts);
+    scale_factor = setScaleFactor(opts, hdr, rts);
 
     if (scale_factor > 1) {
-        if (s->verbose) display("State region: %dx%d filter regions\n", scale_factor, scale_factor);
-        nregions_x_state = ceil((float)s->nregions_x / (float)scale_factor);
-        nregions_y_state = ceil((float)s->nregions_y / (float)scale_factor);
+        if (opts->verbose) display("State region: %dx%d filter regions\n", scale_factor, scale_factor);
+        nregions_x_state = ceil((float)hdr->nregions_x / (float)scale_factor);
+        nregions_y_state = ceil((float)hdr->nregions_y / (float)scale_factor);
         nregions_state = nregions_x_state * nregions_y_state;
-        state_rts = malloc(nregions_state * sizeof(RegionTable));
+        state_rts = malloc(nregions_state * sizeof(RegionTableEntry_t));
     }else{
-        nregions_x_state = s->nregions_x;
-        nregions_y_state = s->nregions_y;
-        nregions_state = s->nregions;
+        nregions_x_state = hdr->nregions_x;
+        nregions_y_state = hdr->nregions_y;
+        nregions_state = hdr->nregions;
     }
     
-    for (itile=0; itile<ntiles; itile++) {
+    for (itile=0; itile<hdr->ntiles; itile++) {
         for (read = 0; read < N_READS; read++) {
-			for (cycle = 0; cycle < s->read_length[read]; cycle++) {
+			for (cycle = 0; cycle < hdr->readLength[read]; cycle++) {
                 if (NULL != state_rts) {
                     /* re-initialise the state RT */
                     for (iregion=0; iregion<nregions_state; iregion++)
-                        initialiseRegionTable(&state_rts[iregion]);
+                        initialiseRegionTableEntry(&state_rts[iregion]);
                     /* fill the state RT */
                     iregion = 0;
-                    for (ix = 0; ix < s->nregions_x; ix++) {
+                    for (ix = 0; ix < hdr->nregions_x; ix++) {
                         int ix_state = ix / scale_factor;
-                        for (iy = 0; iy < s->nregions_y; iy++) {
+                        for (iy = 0; iy < hdr->nregions_y; iy++) {
                             int iy_state = iy / scale_factor;
                             int iregion_state = ix_state * nregions_y_state + iy_state;
-                            RegionTable *state_rt = &state_rts[iregion_state];
-                            if (s->regions[iregion] >= 0) {
-                                RegionTable *rt = rts[itile*N_READS+read][cycle] + s->regions[iregion];
+                            RegionTableEntry_t *state_rt = &state_rts[iregion_state];
+                            if (hdr->regions[iregion] >= 0) {
+                                RegionTableEntry_t *rt = rts[itile*N_READS+read][cycle] + hdr->regions[iregion];
                                 state_rt->align     += rt->align;
                                 state_rt->mismatch  += rt->mismatch;
                                 state_rt->insertion += rt->insertion;
@@ -805,38 +967,38 @@ static void setRegionState(opts_t *s, int ntiles, size_t nreads, RegionTable ***
                 }
                 /* set the state of the state RT */
                 for( iregion = 0; iregion < nregions_state; iregion++) {
-                    RegionTable *rt;
+                    RegionTableEntry_t *rt;
                     if (NULL != state_rts) {
                         rt = &state_rts[iregion];
                     }else{
-                        if (s->regions[iregion] < 0) continue;
-                        rt = rts[itile*N_READS+read][cycle] + s->regions[iregion];
+                        if (hdr->regions[iregion] < 0) continue;
+                        rt = rts[itile*N_READS+read][cycle] + hdr->regions[iregion];
                     }
                     rt->state = 0;
                     // coverage
                     int n = rt->align + rt->insertion + rt->deletion + rt->soft_clip + rt->known_snp;
                     // coverage - mark sparse bins
-                    if (n < s->region_min_count) rt->state |= REGION_STATE_COVERAGE;
+                    if (n < opts->region_min_count) rt->state |= REGION_STATE_COVERAGE;
                     // correct for sparse bins by assuming ALL bins have atleast region_min_count clusters
-                    n = max(n, s->region_min_count);
+                    n = max(n, opts->region_min_count);
                     // mismatch - mark bins with maximum mismatch rate > threshold
-                    if (((float)rt->mismatch  / (float)n) >= s->region_mismatch_threshold)  rt->state |= REGION_STATE_MISMATCH;
+                    if (((float)rt->mismatch  / (float)n) >= opts->region_mismatch_threshold)  rt->state |= REGION_STATE_MISMATCH;
                     // insertion - mark bins with maximum insertion rate > threshold
-                    if (((float)rt->insertion / (float)n) >= s->region_insertion_threshold) rt->state |= REGION_STATE_INSERTION;
+                    if (((float)rt->insertion / (float)n) >= opts->region_insertion_threshold) rt->state |= REGION_STATE_INSERTION;
                     // deletion - mark bins with maximum deletion rate > threshold
-                    if (((float)rt->deletion  / (float)n) >= s->region_deletion_threshold)  rt->state |= REGION_STATE_DELETION;
+                    if (((float)rt->deletion  / (float)n) >= opts->region_deletion_threshold)  rt->state |= REGION_STATE_DELETION;
                 }
                 if (NULL != state_rts) {
                     /* set the state of the regions using the state RT */
                     iregion = 0;
-                    for (ix = 0; ix < s->nregions_x; ix++) {
+                    for (ix = 0; ix < hdr->nregions_x; ix++) {
                         int ix_state = ix / scale_factor;
-                        for (iy = 0; iy < s->nregions_y; iy++) {
+                        for (iy = 0; iy < hdr->nregions_y; iy++) {
                             int iy_state = iy / scale_factor;
                             int iregion_state = ix_state * nregions_y_state + iy_state;
-                            RegionTable *state_rt = &state_rts[iregion_state];
-                            if (s->regions[iregion] >= 0) {
-                                RegionTable *rt = rts[itile*N_READS+read][cycle] + s->regions[iregion];
+                            RegionTableEntry_t *state_rt = &state_rts[iregion_state];
+                            if (hdr->regions[iregion] >= 0) {
+                                RegionTableEntry_t *rt = rts[itile*N_READS+read][cycle] + hdr->regions[iregion];
                                 rt->state = state_rt->state;
                             }
                             iregion++;
@@ -851,13 +1013,13 @@ static void setRegionState(opts_t *s, int ntiles, size_t nreads, RegionTable ***
 
 	// ignoring low coverage, if all regions for each tile/cycle with a non-zero state have the same state
     // and the fraction of regions with this state exceeds a theshold set the state for the whole tile/cycle
-    for (itile=0; itile<ntiles; itile++) {
+    for (itile=0; itile<hdr->ntiles; itile++) {
         for (read = 0; read < N_READS; read++) {
-			for (cycle = 0; cycle < s->read_length[read]; cycle++) {
+			for (cycle = 0; cycle < hdr->readLength[read]; cycle++) {
 				int tile_state = -1, nregions = 0;
-                for (iregion=0; iregion<s->nregions; iregion++) {
-                    if (s->regions[iregion] >= 0) {
-                        RegionTable *rt = rts[itile*N_READS+read][cycle] + s->regions[iregion];
+                for (iregion=0; iregion<hdr->nregions; iregion++) {
+                    if (hdr->regions[iregion] >= 0) {
+                        RegionTableEntry_t *rt = rts[itile*N_READS+read][cycle] + hdr->regions[iregion];
                         int state = rt->state & ~REGION_STATE_COVERAGE;
                         if (!state) continue;
                         if (tile_state == -1) tile_state = state;
@@ -865,10 +1027,10 @@ static void setRegionState(opts_t *s, int ntiles, size_t nreads, RegionTable ***
                         nregions++;
                     }
                 }
-				if (iregion == s->nregions && (((float)nregions/(float)s->nregions) >= TILE_REGION_THRESHOLD)) {
-                    for (iregion=0; iregion<s->nregions; iregion++) {
-                        if (s->regions[iregion] >= 0) {
-                            RegionTable *rt = rts[itile*N_READS+read][cycle] + s->regions[iregion];
+				if (iregion == hdr->nregions && (((float)nregions/(float)hdr->nregions) >= TILE_REGION_THRESHOLD)) {
+                    for (iregion=0; iregion<hdr->nregions; iregion++) {
+                        if (hdr->regions[iregion] >= 0) {
+                            RegionTableEntry_t *rt = rts[itile*N_READS+read][cycle] + hdr->regions[iregion];
                             rt->state = tile_state | (rt->state & REGION_STATE_COVERAGE);
                         }
                     }
@@ -877,18 +1039,18 @@ static void setRegionState(opts_t *s, int ntiles, size_t nreads, RegionTable ***
 		}
 	}
 
-    if (!s->verbose) return;
+    if (!opts->verbose) return;
 
 	// for each tile/cycle output a count of regions with by state
-    for (itile=0; itile<ntiles; itile++) {
-		int tile = s->tileArray[itile];
+    for (itile=0; itile<hdr->ntiles; itile++) {
+		int tile = hdr->tileArray[itile];
         for (read = 0; read < N_READS; read++) {
-			for (cycle = 0; cycle < s->read_length[read]; cycle++) {
+			for (cycle = 0; cycle < hdr->readLength[read]; cycle++) {
                 int mismatch = 0, insertion = 0, deletion = 0, soft_clip = 0;
                 long quality_bases = 0, quality_errors = 0;
-                for (iregion=0; iregion<s->nregions; iregion++) {
-                    if (s->regions[iregion] >= 0) {
-                        RegionTable *rt = rts[itile*N_READS+read][cycle] + s->regions[iregion];
+                for (iregion=0; iregion<hdr->nregions; iregion++) {
+                    if (hdr->regions[iregion] >= 0) {
+                        RegionTableEntry_t *rt = rts[itile*N_READS+read][cycle] + hdr->regions[iregion];
                         if (rt->state & REGION_STATE_MISMATCH)  mismatch++;
                         if (rt->state & REGION_STATE_INSERTION) insertion++;
                         if (rt->state & REGION_STATE_DELETION)  deletion++;
@@ -899,7 +1061,7 @@ static void setRegionState(opts_t *s, int ntiles, size_t nreads, RegionTable ***
                 }
                 float ssc = 1.0;
                 float quality = -10.0 * log10((quality_errors + ssc)/(quality_bases + ssc));
-                if (s->verbose) 
+                if (opts->verbose) 
                     display("tile=%-4d read=%1d cycle=%-3d quality=%.2f mismatch=%-4d insertion=%-4d deletion=%-4d soft_clip=%-4d\n",
                         tile, read, cycle, quality, mismatch, insertion, deletion, soft_clip);
 			}
@@ -954,89 +1116,85 @@ static void removeBadTiles(Header *hdr)
 /*
  * Write the filter file to disk
  */
-static void printFilter(opts_t *s, int ntiles, RegionTable ***rts) 
+static void writeFilter(opts_t *s, RegionTable_t *rtsArray) 
 {
-	FILE *fp;
+	hFILE *fp;
 	int itile, read, cycle, iregion;
-	Header hdr;
+	Header *hdr;
+    RegionTable_t rts;
 
-    fp = fopen(s->filters->entries[0], "w+");
+    fp = hopen(s->filters->entries[0], "w+");
 	if (!fp) die("Can't open filter file %s: %s\n", s->filters->entries[0], strerror(errno));
 
-	hdr.region_magic = strdup(REGION_MAGIC);
-	hdr.coord_shift = COORD_SHIFT; 
-	hdr.coord_factor = COORD_FACTOR;
-	hdr.ntiles = ntiles;
-	if( ntiles > 0 ) {
-        hdr.tileArray = s->tileArray;
-        hdr.tileReadCountArray = s->tileReadCountArray;
-    }
-    hdr.nreads = N_READS;
-	hdr.region_size = s->region_size;
-	hdr.nregions = s->nregions;
-	hdr.nregions_x = s->nregions_x;
-	hdr.nregions_y = s->nregions_y;
-	for (read=0; read < hdr.nreads; read++)
-		hdr.readLength[read] = s->read_length[read];
-	hdr.cmdLine = strdup(s->argv_list);
-	hdr.ncomments = 0;
-	writeHeader(fp,&hdr);
-        
-	free(hdr.region_magic);
-	free(hdr.cmdLine);
+	strncpy(Fheader.region_magic, REGION_MAGIC, sizeof(Fheader.region_magic));
+	strncpy(Fheader.cmdLine, s->argv_list, sizeof(Fheader.cmdLine));
+    if (hwrite(fp, &Fheader, sizeof(Fheader)) < 0) die("writeFheader() failed\n");;
 
-    for (itile=0; itile<ntiles; itile++) {
-		for (read = 0; read < N_READS; read++) {
-			for (cycle = 0; cycle < s->read_length[read]; cycle++) {
-                for (iregion=0; iregion<s->nregions; iregion++) {
-                    int state = 0;
-                    if (s->regions[iregion] >= 0) {
-                        RegionTable *rt = rts[itile*N_READS+read][cycle] + s->regions[iregion];
-                        state = rt->state;
+    for (int lane=1; lane < SF_MAX_LANES; lane++) {
+        hdr = LaneArray[lane];
+        if (!hdr) continue;
+        rts = rtsArray[lane];
+        writeHeader(fp,hdr);
+            
+        int n=0;
+        for (int i=0; i < N_READS; i++) n += hdr->readLength[i];
+        hdr->filterDataSize = hdr->ntiles * n * hdr->nregions;
+        if (hwrite(fp, &hdr->filterDataSize, sizeof(hdr->filterDataSize)) < 0) die("writeHeader() failed\n");;
+
+        for (itile=0; itile<hdr->ntiles; itile++) {
+            for (read = 0; read < N_READS; read++) {
+                for (cycle = 0; cycle < hdr->readLength[read]; cycle++) {
+                    for (iregion=0; iregion<hdr->nregions; iregion++) {
+                        int state = 0;
+                        if (hdr->regions[iregion] >= 0) {
+                            RegionTableEntry_t *rt = rts[itile*N_READS+read][cycle] + hdr->regions[iregion];
+                            state = rt->state;
+                        }
+                        hputc(state, fp);
                     }
-					fputc(state, fp);
                 }
-			}
-		}
-	}
+            }
+        }
 
-	fclose(fp);
+    }
+
+	if (hclose(fp)) die("Failed to close \n", s->filters->entries[0]);
 }
 
-static int findRegion(opts_t *s, RegionTable ***rts, int ntiles, int x, int y)
+static int findRegion(opts_t *opts, RegionTable_t rts, Header *hdr, int x, int y)
 {
     int iregion = -1;
-    int ix = x2region(x, s->region_size);
-    int iy = x2region(y, s->region_size);
-    char key[100];
+    uint32_t ix = x2region(hdr, x);
+    uint32_t iy = x2region(hdr, y);
+    region_key_t key;
     HashItem *hi;
 
-    makeRegionKey(key, ix, iy);
-    hi = HashTableSearch(s->region_hash, key, strlen(key));
+    makeRegionKey(&key, ix, iy);
+    hi = HashTableSearch(hdr->region_hash, (char *)&key, sizeof(key));
     if (!hi) {
         HashData hd;
-        iregion = s->region_hash->nused;
+        iregion = hdr->region_hash->nused;
         hd.i = iregion;
-        if ( NULL == HashTableAdd(s->region_hash, key, strlen(key), hd, NULL) ) {
+        if ( NULL == HashTableAdd(hdr->region_hash, (char *)&key, sizeof(key), hd, NULL) ) {
             die("ERROR: building rts hash table\n");
         }
-        int nregions_x = (ix >= s->nregions_x ? (ix + 1) : s->nregions_x);
-        int nregions_y = (iy >= s->nregions_y ? (iy + 1) : s->nregions_y);
+        int nregions_x = (ix >= hdr->nregions_x ? (ix + 1) : hdr->nregions_x);
+        int nregions_y = (iy >= hdr->nregions_y ? (iy + 1) : hdr->nregions_y);
         int nregions = nregions_x * nregions_y;
-        if (nregions > s->nregions ){
+        if (nregions > hdr->nregions ){
             int itile, read, cycle;
-            s->nregions_x = nregions_x;
-            s->nregions_y = nregions_y;
-            s->nregions = nregions;
-            for (itile=0; itile < ntiles; itile++) {
+            hdr->nregions_x = nregions_x;
+            hdr->nregions_y = nregions_y;
+            hdr->nregions = nregions;
+            for (itile=0; itile < hdr->ntiles; itile++) {
                 for (read=0; read < N_READS; read++) {
                     if (NULL == rts[itile*N_READS+read]) continue;
-                    for (cycle=0; cycle < s->read_length[read]; cycle++) {
+                    for (cycle=0; cycle < hdr->readLength[read]; cycle++) {
                         int new_iregion;
-                        rts[itile*N_READS+read][cycle] = srealloc(rts[itile*N_READS+read][cycle], s->nregions * sizeof(RegionTable));
-                        for (new_iregion = iregion; new_iregion < s->nregions; new_iregion++) {
-                            RegionTable *rt = rts[itile*N_READS+read][cycle] + new_iregion;
-                            initialiseRegionTable(rt);
+                        rts[itile*N_READS+read][cycle] = srealloc(rts[itile*N_READS+read][cycle], hdr->nregions * sizeof(RegionTableEntry_t));
+                        for (new_iregion = iregion; new_iregion < hdr->nregions; new_iregion++) {
+                            RegionTableEntry_t *rt = rts[itile*N_READS+read][cycle] + new_iregion;
+                            initialiseRegionTableEntry(rt);
                         }
                     }
                 }
@@ -1050,12 +1208,12 @@ static int findRegion(opts_t *s, RegionTable ***rts, int ntiles, int x, int y)
      return iregion;
 }
 
-static void updateRegionTable(opts_t *s, RegionTable ***rts, int read, int iregion, int *read_qual, int *read_mismatch)
+static void updateRegionTable(Header *hdr, RegionTable_t rts, int read, int iregion, int *read_qual, int *read_mismatch)
 {
     /* update region table */
 	int cycle;
-    for (cycle = 0; cycle < s->read_length[read]; cycle++) {
-        RegionTable *rt = rts[read][cycle] + iregion;
+    for (cycle = 0; cycle < hdr->readLength[read]; cycle++) {
+        RegionTableEntry_t *rt = rts[read][cycle] + iregion;
         if (read_mismatch[cycle] & BASE_INSERTION) rt->insertion++;
         if (read_mismatch[cycle] & BASE_DELETION) rt->deletion++;
         if (read_mismatch[cycle] & BASE_SOFT_CLIP) rt->soft_clip++;
@@ -1074,36 +1232,35 @@ static void updateRegionTable(opts_t *s, RegionTable ***rts, int read, int iregi
 /*
  * create an ordered array of tiles and re-order the RegionTable by tile
  */
-static RegionTable ***orderRegionTableByTile(opts_t *s, int *tiles, size_t *nreads, int ntiles, RegionTable ***rts)
+static RegionTable_t orderRegionTableByTile(opts_t *s, Header *hdr, RegionTable_t rts)
 {
-    RegionTable ***new_rts = NULL;
+    RegionTable_t new_rts = NULL;
 	int itile, read;
 
-    if (0 >= ntiles)
+    if (0 >= hdr->ntiles)
         return new_rts;
 
     // create a sorted array of tiles
-	s->tileArray = smalloc(ntiles * sizeof(int));
-	s->tileReadCountArray = smalloc(ntiles * sizeof(size_t));
-	for (itile=0; itile < ntiles; itile++)
-        s->tileArray[itile] = tiles[itile];
-    qsort(s->tileArray, ntiles, sizeof(int), int_sort);
+	int *tileArray = smalloc(hdr->ntiles * sizeof(int));
+	size_t *tileReadCountArray = smalloc(hdr->ntiles * sizeof(size_t));
+	for (itile=0; itile < hdr->ntiles; itile++)
+        tileArray[itile] = hdr->tileArray[itile];
+    qsort(tileArray, hdr->ntiles, sizeof(int), int_sort);
 
 	// re-order the region table by tile
-    new_rts = smalloc(ntiles * N_READS * sizeof(RegionTable **));
-	for (itile=0; itile < ntiles; itile++) {
-	    int tile = s->tileArray[itile];
-        size_t nelem = ntiles;
-        void *pitile = lfind(&tile, tiles, &nelem, sizeof(int), &int_cmp);
-        int old_itile = ((int*)pitile - tiles);
+    new_rts = smalloc(hdr->ntiles * N_READS * sizeof(RegionTableEntry_t **));
+	for (itile=0; itile < hdr->ntiles; itile++) {
+	    int tile = tileArray[itile];
+        int old_itile = tile2index(hdr, tile);
    	    for (read=0; read < N_READS; read++) {
-            s->tileReadCountArray[itile] = nreads[old_itile];
+            tileReadCountArray[itile] = hdr->tileReadCountArray[old_itile];
             new_rts[itile*N_READS+read] = rts[old_itile*N_READS+read];
         }
     }
 
     free(rts);
-
+    free(hdr->tileArray); hdr->tileArray = tileArray;
+    free(hdr->tileReadCountArray); hdr->tileReadCountArray = tileReadCountArray;
     return new_rts;
 }
 
@@ -1116,17 +1273,11 @@ static RegionTable ***orderRegionTableByTile(opts_t *s, int *tiles, size_t *nrea
  * Returns: 0 written for success
  *	   -1 for failure
  */
-static RegionTable ***makeRegionTable(opts_t *s, BAMit_t *fp_bam, int *bam_ntiles, size_t *bam_nreads)
+static RegionTable_t *makeRegionTable(opts_t *opts, BAMit_t *fp_bam)
 {
-    RegionTable ***rts = NULL;
-
-    int *tiles = NULL;
-    size_t *tileReadCounts = NULL;
-    int ntiles = 0;
-
-	size_t nreads = 0;
-
-	int lane = -1;
+    RegionTable_t rts = NULL;
+    RegionTable_t *rtsArray = smalloc(SF_MAX_LANES * sizeof(rts));
+    Header *hdr;
 
 	static const int bam_read_buff_size = 1024;
 	char bam_read_seq[bam_read_buff_size];
@@ -1134,6 +1285,8 @@ static RegionTable ***makeRegionTable(opts_t *s, BAMit_t *fp_bam, int *bam_ntile
 	int bam_read_mismatch[bam_read_buff_size];
 
 	bam1_t *bam;
+
+    for (int lane=0; lane < SF_MAX_LANES; lane++) rtsArray[lane] = NULL;
 
 	/* loop over reads in the bam file */
 	while (1) {
@@ -1154,85 +1307,81 @@ static RegionTable ***makeRegionTable(opts_t *s, BAMit_t *fp_bam, int *bam_ntile
 			}
 		}
         
+        rts = rtsArray[bam_lane];
+        hdr = LaneArray[bam_lane];
+        if (!hdr) {
+            hdr = sf_initHdr();
+            hdr->region_size = opts->region_size;
+            hdr->lane = bam_lane;
+            LaneArray[bam_lane] = hdr;
+        }
         read_length = bam->core.l_qseq;
-        if (0 == s->read_length[bam_read]) {
-            s->read_length[bam_read] = read_length;
+        if (0 == hdr->readLength[bam_read]) {
+            hdr->readLength[bam_read] = read_length;
         }
 
-        if (s->read_length[bam_read] != read_length) {
+        if (hdr->readLength[bam_read] != read_length) {
             fprintf(stderr,
                     "Error: inconsistent read lengths "
                     "within bam file for read %d.\n"
                     "have length %ld, previously it was %d.\n",
-                    bam_read, (long) read_length, s->read_length[bam_read]);
+                    bam_read, (long) read_length, hdr->readLength[bam_read]);
             exit(EXIT_FAILURE);
         }
 
-        if (lane == -1) {
-            lane = bam_lane;
-        }
-        if (bam_lane != lane){
-            die("Error: Inconsistent lane: have %d previously it was %d.\n", bam_lane, lane);
-        }
-
 		parse_bam_alignments(fp_bam, bam, bam_read_seq, bam_read_qual, NULL, bam_read_mismatch,
-                                                  bam_read_buff_size, s->snp_hash);
+                                                  bam_read_buff_size, opts->snp_hash);
 
         // lookup tile in tile array
-        size_t nelem = ntiles;
-	    void *pitile;
-	    int itile;
-        pitile = lfind(&bam_tile, tiles, &nelem, sizeof(int), &int_cmp);
-	    if (NULL == pitile) {
-            int read;
-            itile = ntiles;
-            ntiles++;
-            tiles = srealloc(tiles, ntiles * sizeof(int));
-            tileReadCounts = srealloc(tileReadCounts, ntiles * sizeof(size_t));
-            tiles[itile] = bam_tile;
-            tileReadCounts[itile] = 0;
-            rts = srealloc(rts, ntiles * N_READS * sizeof(RegionTable **));
-            for (read=0;read<N_READS;read++)
+        int itile = tile2index(hdr,bam_tile);
+	    if (itile < 0) {
+            itile = hdr->ntiles;
+            hdr->ntiles++;
+            hdr->tileArray = srealloc(hdr->tileArray, hdr->ntiles * sizeof(int));
+            hdr->tileReadCountArray = srealloc(hdr->tileReadCountArray, hdr->ntiles * sizeof(size_t));
+            hdr->tileArray[itile] = bam_tile;
+            hdr->tileReadCountArray[itile] = 0;
+            rts = srealloc(rts, hdr->ntiles * N_READS * sizeof(RegionTableEntry_t **));
+            rtsArray[bam_lane] = rts;
+            for (int read=0;read<N_READS;read++)
                 rts[itile*N_READS+read] = NULL;
-            if (s->verbose) fprintf(stderr, "Processing tile %i (%lu)\n", bam_tile, nreads);
-        }else{
-            itile = ((int*)pitile - tiles);
+            if (opts->verbose) fprintf(stderr, "Processing lane %d tile %i (%d)\n", bam_lane, bam_tile, hdr->nreads);
         }
-        tileReadCounts[itile]++;
+        hdr->tileReadCountArray[itile]++;
 
         if (NULL == rts[itile*N_READS+bam_read]) {
             int cycle, iregion;
-            rts[itile*N_READS+bam_read] = smalloc(read_length * sizeof(RegionTable *));
+            rts[itile*N_READS+bam_read] = smalloc(read_length * sizeof(RegionTableEntry_t *));
             for(cycle=0;cycle<read_length;cycle++) {
-                rts[itile*N_READS+bam_read][cycle] = smalloc(s->nregions * sizeof(RegionTable));
-                for(iregion=0;iregion<s->nregions;iregion++) {
-                    RegionTable *rt = rts[itile*N_READS+bam_read][cycle] + iregion;
-                    initialiseRegionTable(rt);
+                rts[itile*N_READS+bam_read][cycle] = smalloc(hdr->nregions * sizeof(RegionTableEntry_t));
+                for(iregion=0;iregion<hdr->nregions;iregion++) {
+                    RegionTableEntry_t *rt = rts[itile*N_READS+bam_read][cycle] + iregion;
+                    initialiseRegionTableEntry(rt);
                 }
             }
         }
 
-        int iregion = findRegion(s, rts, ntiles, bam_x, bam_y);
-        updateRegionTable(s, &rts[itile*N_READS], bam_read, iregion, bam_read_qual, bam_read_mismatch);
+        int iregion = findRegion(opts, rts, hdr, bam_x, bam_y);
+        updateRegionTable(hdr, &rts[itile*N_READS], bam_read, iregion, bam_read_qual, bam_read_mismatch);
 
-        nreads++;
+        hdr->nreads++;
 	}
 
 	bam_destroy1(bam);
 
     /* re-order the RegionTable by tile */
-	rts = orderRegionTableByTile(s, tiles, tileReadCounts, ntiles, rts);
+    for (int lane=1; lane < SF_MAX_LANES; lane++) {
+        Header *hdr = LaneArray[lane];
+        if (!hdr) continue;
+	    rtsArray[lane] = orderRegionTableByTile(opts, hdr, rtsArray[lane]);
+    }
 
     /* setup a mapping between each potential region and the observed regions */
-    regionMapping(s);
+    for (int lane=1; lane < SF_MAX_LANES; lane++) {
+        if (LaneArray[lane]) regionMapping(LaneArray[lane]);
+    }
 
-    if (NULL != tiles) free(tiles);
-    if (NULL != tileReadCounts) free(tileReadCounts);
-
-    *bam_ntiles = ntiles;
-	*bam_nreads = nreads;
-
-    return rts;
+    return rtsArray;
 }
 
 /*
@@ -1241,9 +1390,8 @@ static RegionTable ***makeRegionTable(opts_t *s, BAMit_t *fp_bam, int *bam_ntile
  * Returns: 0 written for success
  *	   -1 for failure
  */
-static int filter_bam(opts_t *s, BAMit_t *fp_in_bam, BAMit_t *fp_out_bam)
+static int filter_bam(opts_t *opts, BAMit_t *fp_in_bam, BAMit_t *fp_out_bam)
 {
-    char *rgid;
 	bam1_t *bam;
     bool ignore = false;
 
@@ -1259,39 +1407,32 @@ static int filter_bam(opts_t *s, BAMit_t *fp_in_bam, BAMit_t *fp_out_bam)
             break;	/* break on end of BAM file */
         }
 
-        // select filter file depending on RG tag
-        if ( (s->rgids->end == 1) && (strcmp(s->rgids->entries[0],"null")==0)) {
-            rgid = "null";
-        } else {
-            uint8_t *p = bam_aux_get(bam,"RG");
-            rgid = p ? bam_aux2Z(p) : "null";
-        }
-
-        if (setCurrentHdr(rgid)) {
-            if (getHdrngood_tiles()) {
-                int iregion = xy2region(bam_x, bam_y);
-                char* state = getFilterData(bam_tile, 0, 0, iregion);
+        Header *hdr = LaneArray[bam_lane];
+        if (hdr) {
+            if (hdr->ngood_tiles) {
+                int iregion = xy2region(hdr, bam_x, bam_y);
+                char *state = getFilterData(hdr, tile2index(hdr,bam_tile), 0, 0, iregion);
                 if (state != NULL) {
                     int read, cycle, bad_cycle_count = 0;
                     for (read = 0; read < N_READS; read++) {
-                        int maxCycle = getHdrReadLength(read);
+                        int maxCycle = hdr->readLength[read];
                         for (cycle = 0; cycle < maxCycle; cycle++) {
                             if (*state & REGION_STATE_MASK)
                                 bad_cycle_count++;
-                            state += getHdrnregions();
+                            state += hdr->nregions;
                         }
                     }
 
                     if (bad_cycle_count) {
-                        incHdrStatsnfiltered();
-                        if (s->qcfail) 
+                        hdr->stats_nfiltered++;
+                        if (opts->qcfail) 
                             bam->core.flag |= BAM_FQCFAIL;
                         else
                             ignore = true;
                     }
                 }
             }
-            incHdrStatsnreads();
+            hdr->stats_nreads++;
         }
 
 		if (!ignore) {
@@ -1329,7 +1470,6 @@ static void usage(FILE *usagefp)
 	fprintf(usagefp, "                  no default: must be supplied\n");
 	fprintf(usagefp, "                  or\n");
 	fprintf(usagefp, "                  comma separated list of filter files (for apply filter only).\n");
-    fprintf(usagefp, "                  There must be a corresponding list of RG IDs (see --rg)\n\n");
 	fprintf(usagefp, "\n");
 	fprintf(usagefp, "    create filter:\n");
 	fprintf(usagefp, "      -s --snp_file file\n");
@@ -1348,7 +1488,6 @@ static void usage(FILE *usagefp)
 	fprintf(usagefp, "                 default %-6.4f\n", REGION_DELETION_THRESHOLD);
 	fprintf(usagefp, "      -t prefix\n");
 	fprintf(usagefp, "                 generate tileviz files in this directory\n");
-    fprintf(usagefp, "      -R --rg    Comma separated list of RG IDs. Must correspond to list of filter files\n");
 	fprintf(usagefp, "\n");
 	fprintf(usagefp, "    apply filter:\n");
 	fprintf(usagefp, "      -o         output\n");
@@ -1362,14 +1501,13 @@ static void usage(FILE *usagefp)
 	fprintf(usagefp, "\n");
 }
 
-
+/*
+ * Create filter command
+ */
 static void calculateFilter(opts_t *opts)
 {
 	BAMit_t *fp_input_bam;
-	int ntiles = 0;
-	size_t nreads = 0;
-
-	RegionTable ***rts = NULL;
+	RegionTable_t *rtsArray;
     
 	fp_input_bam = BAMit_open(opts->in_bam_file, 'r', opts->input_fmt, 0, NULL);
 	if (NULL == fp_input_bam) {
@@ -1379,15 +1517,15 @@ static void calculateFilter(opts_t *opts)
     /* read the snp_file */
     opts->snp_hash = readSnpFile(opts);
 
-    opts->region_hash = HashTableCreate(0, HASH_DYNAMIC_SIZE|HASH_FUNC_JENKINS);
-
-	rts = makeRegionTable(opts, fp_input_bam, &ntiles, &nreads);
+	rtsArray = makeRegionTable(opts, fp_input_bam);
 
 	/* close the bam file */
 	BAMit_free(fp_input_bam);
 
 	if (opts->verbose) {
-		display("Processed %8lu traces\n", nreads);
+        uint32_t traces = 0;
+        for (int n=1; n < SF_MAX_LANES; n++) if (LaneArray[n]) traces += LaneArray[n]->nreads;
+		display("Processed %" PRIu32 " traces\n", traces);
 		if (opts->snp_hash) {
 			size_t nsnps = 0;
 			int ibucket;
@@ -1400,26 +1538,31 @@ static void calculateFilter(opts_t *opts)
 		}
 	}
 
-	/* back to where we belong */
-	if (chdir(opts->working_dir)) {
-        fprintf(stderr,"chdir(%s) failed\n", opts->working_dir);
-        exit(EXIT_FAILURE);
+    for (int lane=1; lane < SF_MAX_LANES; lane++) {
+        if (LaneArray[lane]) setRegionState(opts, LaneArray[lane], rtsArray[lane]);
     }
-
-    setRegionState(opts, ntiles, nreads, rts);
 
     if (!opts->filters) {
         display("Writing filter to stdout\n");
         va_push(opts->filters,"/dev/stdout");
     }
-    printFilter(opts, ntiles, rts);
+    writeFilter(opts, rtsArray);
 
-    if (opts->tileviz) tileviz(opts, ntiles, rts);
+    if (opts->tileviz) {
+        for (int n=1; n < SF_MAX_LANES; n++) {
+            if (LaneArray[n]) tileviz(opts, LaneArray[n], rtsArray[n]);
+        }
+    }
     
-    HashTableDestroy(opts->region_hash, 0);
-	freeRTS(opts, ntiles, rts);
+    for (int lane=1; lane < SF_MAX_LANES; lane++) {
+	    if (LaneArray[lane]) freeRTS(opts, LaneArray[lane], rtsArray[lane]);
+    }
+    free(rtsArray);
 }
 
+/*
+ * Apply filter command
+ */
 static void applyFilter(opts_t *s)
 {
 	BAMit_t *fp_input_bam;
@@ -1428,14 +1571,12 @@ static void applyFilter(opts_t *s)
 	char *out_bam_file = NULL;
 	char *apply_stats_file = NULL;
 
-    openFilters(s->filters,s->rgids);
+    openFilters(s->filters);
 
     /* remove bad tiles from region table */
-    for (int n=0; n < s->rgids->end; n++) {
-        char *rgid = s->rgids->entries[n];
-        Header *hdr = getHdr(rgid);
-        if (!hdr) die("Can't find filter file for %s\n", rgid);
-        removeBadTiles(hdr);
+    for (int lane=1; lane < SF_MAX_LANES; lane++) {
+        Header *hdr = LaneArray[lane];
+        if (hdr) removeBadTiles(hdr);
     }
 
     // Create output BAM filename
@@ -1470,12 +1611,6 @@ static void applyFilter(opts_t *s)
     bam_hdr_destroy(fp_output_bam->h); fp_output_bam->h = bam_hdr_dup(fp_input_bam->h);
 
 	char concat_cmd[2048];
-    for (int n=0; n < s->rgids->end; n++) {
-        char *rgid = s->rgids->entries[n];
-        Header *hdr = getHdr(rgid);
-	    strcpy(concat_cmd, hdr->cmdLine);
-	    strcat(concat_cmd, " ; ");
-    }
 	strcat(concat_cmd, s->argv_list);
 	bam_header_add_pg("spf", "spatial_filter", "A program to apply a spatial filter", concat_cmd, fp_output_bam->h);
     if (sam_hdr_write(fp_output_bam->f, fp_output_bam->h) < 0) die("Can't write %s header\n", out_bam_file);
@@ -1496,64 +1631,68 @@ static void applyFilter(opts_t *s)
 		die("ERROR: failed to open apply status log %s\n", apply_stats_file);
 	}
 
-    va_t *va = HdrHash2Array();
-    for (int n=0; n < va->end; n++) {
-        Header *hdr = (Header *)va->entries[n];
-        fprintf(apply_stats_fd, "%s\t", (strcmp(hdr->rgid,"null") ? hdr->rgid : "Total"));
+    for (int n=0; n < SF_MAX_LANES; n++) {
+        Header *hdr = LaneArray[n];
+        if (!hdr) continue;
+        fprintf(apply_stats_fd, "Lane %d\t", hdr->lane);
         fprintf(apply_stats_fd, "Processed %d \t", hdr->stats_nreads);
         fprintf(apply_stats_fd, "%s %d traces\n", (s->qcfail ? "Failed" : "Removed"), hdr->stats_nfiltered);
     }
     fprintf(apply_stats_fd, "\n");
 
 	fclose(apply_stats_fd);
-
-	/* back to where we belong */
-	if (chdir(s->working_dir)) {
-        fprintf(stderr,"chdir(%s) failed\n", s->working_dir);
-        exit(EXIT_FAILURE);
-    }
+    free(apply_stats_file);
 }
 
+/*
+ * Dump filter file command
+ */
 static void dumpFilterFile(opts_t *opts)
 {
-	Header *hdr;
-	int i;
+    openFilters(opts->filters);
 
-    openFilters(opts->filters, opts->rgids);
-	hdr = getHdr(NULL);
-    setCurrentHdr(NULL);
+	printf("Magic:          %s\n", Fheader.region_magic);
+	printf("Command Line:   %s\n", Fheader.cmdLine);
 
-	printf("Magic:          %s\n", hdr->region_magic);
-	printf("Coord Shift:    %-5d\n", hdr->coord_shift);
-	printf("Coord Factor:   %-5d\n", hdr->coord_shift);
-	printf("Region Size:    %-5d\n", hdr->region_size);
-	printf("Num Regions:    %-5d\n", hdr->nregions);
-	printf("Num Tiles:      %-5d\n", hdr->ntiles);
-	for (i=0; i < hdr->ntiles; i++) printf("%-5d %-12lu", hdr->tileArray[i], hdr->tileReadCountArray[i]);
-	printf("\n");
-	printf("Read Length:    ");
-	for (i=0; i < hdr->nreads; i++) printf("%-5d ", hdr->readLength[i]);
-	printf("\n");
-	printf("Command Line:   %s\n", hdr->cmdLine);
-	for (i=0; i < hdr->ncomments; i++) {
-		if (i) printf("                %s\n", hdr->comments[i]);
-		else   printf("Comments:       %s\n", hdr->comments[i]);
-	}
+    for (int laneNo=1; laneNo < SF_MAX_LANES; laneNo++) {
+        Header *hdr = LaneArray[laneNo];;
+        if (!hdr) continue;
 
-	if (opts->verbose) {
-        int tile, read, cycle, region;
-        for (tile=0; tile<hdr->ntiles; tile++)
-            for (read=0; read<hdr->nreads; read++)
-                for (cycle=0; cycle<hdr->readLength[read]; cycle++) {
-                    char* state = getFilterData(hdr->tileArray[tile], read, cycle, 0);
-                    if (state != NULL) {
-                        for (region=0; region<hdr->nregions; region++) {
-                            if (*state & REGION_STATE_MASK)
-                                printf("filtering tile=%d read=%d cycle=%d region=%d\n", hdr->tileArray[tile], read, cycle, region);
-                            state++;
+        printf("\n");
+        printf("Lane:           %-5d\n", hdr->lane);
+        printf("Coord Shift:    %-5d\n", hdr->coord_shift);
+        printf("Coord Factor:   %-5d\n", hdr->coord_shift);
+        printf("Region Size:    %-5d\n", hdr->region_size);
+        printf("Num Regions:    %-5d\n", hdr->nregions);
+        printf("Num Regions X:  %-5d\n", hdr->nregions_x);
+        printf("Num Regions Y:  %-5d\n", hdr->nregions_y);
+        for (int n=0; n < hdr->nregions; n++) printf("%d ", hdr->regions[n]); 
+        printf("\n");
+        printf("Num Tiles:      %-5d\n", (int)hdr->ntiles);
+        for (int i=0; i < hdr->ntiles; i++) printf("%-5d %-12lu", hdr->tileArray[i], hdr->tileReadCountArray[i]);
+        printf("\n");
+        printf("Read Length:    ");
+        for (int i=0; i < N_READS; i++) printf("%-5d ", hdr->readLength[i]);
+        printf("\n");
+        printf("Filter Size:    %" PRIu32 "\n", hdr->filterDataSize);
+
+        if (opts->verbose) {
+            int itile, read, cycle, region;
+            for (itile=0; itile<hdr->ntiles; itile++) {
+                for (read=0; read < N_READS; read++) {
+                    for (cycle=0; cycle<hdr->readLength[read]; cycle++) {
+                        char* state = getFilterData(hdr, itile, read, cycle, 0);
+                        if (state != NULL) {
+                            for (region=0; region<hdr->nregions; region++) {
+                                if (*state & REGION_STATE_MASK)
+                                    printf("filtering tile=%d read=%d cycle=%d region=%d\n", hdr->tileArray[itile], read, cycle, region);
+                                state++;
+                            }
                         }
                     }
                 }
+            }
+        }
     }
 
 }
@@ -1604,7 +1743,6 @@ opts_t* spatial_filter_parse_args(int argc, char *argv[])
 	opts->region_insertion_threshold = REGION_INSERTION_THRESHOLD;
 	opts->region_deletion_threshold = REGION_DELETION_THRESHOLD;
     opts->filters = NULL;
-    opts->rgids = NULL;
 
     int opt;
     int ncmd = 0;
@@ -1620,7 +1758,6 @@ opts_t* spatial_filter_parse_args(int argc, char *argv[])
 			case 'o': opts->output = strdup(optarg);      break;
 			case 's': opts->snp_file = strdup(optarg);    break;
 			case 'F': opts->filters = parseList(optarg);  break;
-            case 'R': opts->rgids = parseList(optarg);    break;
 			case 'r': opts->region_size = atoi(optarg);   break;
 			case 'z': opts->region_mismatch_threshold = atof(optarg); break;
 			case 'b': opts->region_insertion_threshold = atof(optarg); break;
@@ -1669,9 +1806,6 @@ opts_t* spatial_filter_parse_args(int argc, char *argv[])
 
     if (!opts->apply_stats_out) opts->apply_stats_out = strdup("/dev/stderr");
     if (!opts->output) opts->output = strdup("/dev/stdout");
-
-    if (!opts->rgids) opts->rgids = parseList("null");
-    if (opts->rgids->end != opts->filters->end) die("Not the same number of filter files and RG IDs\n");
 
     return opts;
 }
