@@ -127,7 +127,7 @@ typedef struct {
     char *run_folder;
     char *intensity_dir;
     char *basecalls_dir;
-    int lane;
+    ia_t *lane;
     int nthreads;
     int pool_size;
     char *output_file;
@@ -192,6 +192,7 @@ typedef struct {
     HashTable *barcodes_hash;
     HashTable *tag_hops;
     size_t longest_barcode_name;
+    int lane;
 } job_data_t;
 
 
@@ -219,7 +220,9 @@ void i2b_free_opts(opts_t* opts)
     free(opts->platform);
     va_free(opts->barcode_tag);
     va_free(opts->quality_tag);
+    va_free(opts->barcodeArray);
     ia_free(opts->bc_read);
+    ia_free(opts->lane);
     ia_free(opts->first_cycle);
     ia_free(opts->final_cycle);
     ia_free(opts->first_index_cycle);
@@ -230,6 +233,57 @@ void i2b_free_opts(opts_t* opts)
     xmlFreeDoc(opts->runinfoConfig);
     decode_free_opts(opts->decode_opts);
     free(opts);
+}
+
+static ia_t *fillLaneList(char *basecalls_dir)
+{
+    ia_t *lanes = ia_init(8);
+    struct dirent *dir;
+    DIR *d = opendir(basecalls_dir);
+    if (!d) die("Can't open basecalls directory: %s\n", basecalls_dir);
+
+    while ( (dir = readdir(d)) != NULL) {
+        // Look for a lane directory
+        if (dir->d_type == DT_DIR && dir->d_name[0] == 'L') {
+            ia_push(lanes, atoi(dir->d_name+1));
+        }
+    }
+    closedir(d);
+    ia_sort(lanes);
+    return lanes;
+}
+
+/*
+ * Parse lane input of the form
+ * --lane 1
+ * or
+ * --lane 1,2,4,6
+ * or
+ * --lane 1-6,8
+ * or
+ * --lane all
+ *
+ * and return an integer array of lanes
+ */
+ia_t *parseLaneList(char *arg)
+{
+    ia_t *lanes = ia_init(8);
+    char *argstr = strdup(arg);
+    char *s = strtok(argstr,",");
+    while (s) {
+        char *p = strchr(s,'-');
+        if (p) {
+            *p = 0;
+            for (int i = atoi(s); i <= atoi((p+1)); i++) {
+                ia_push(lanes, i);
+            }
+        } else {
+            ia_push(lanes,atoi(s));
+        }
+        s = strtok(NULL,",");
+    }
+    free(argstr);
+    return lanes;
 }
 
 /*
@@ -401,7 +455,7 @@ static void usage(FILE *write_to)
 "  -b   --basecalls-dir                 Illumina basecalls directory including config xml file, and filter files,\n"
 "                                       bcl files under lane cycle directory\n"
 "                                       [default: BaseCalls directory under intensities]\n"
-"  -l   --lane                          Lane number. Required\n"
+"  -l   --lane                          Lane number(s). May be a comma separated list or range, or both (eg '1-4,6,8'). Required.\n"
 "  -o   --output-file                   Output file name. May be '-' for stdout. Required\n"
 "       --no-filter                     Do not filter cluster [default: false]\n"
 "       --read-group-id                 ID used to link RG header record with RG tag in SAM record. [default: '1']\n"
@@ -440,7 +494,7 @@ static void usage(FILE *write_to)
 "       --convert-low-quality           convert low quality bases in barcode reads to N\n"
 "       --max-low-quality-to-convert    max low quality phred value to convert bases in barcode\n"
 "       --max-no-calls                  Max allowable number of no-calls in a barcode\n"
-"read before it is considered unmatchable.\n"
+"                                       read before it is considered unmatchable.\n"
 "       --max-mismatches                Maximum mismatches for a barcode to be considered a match\n"
 "       --min-mismatch-delta            Minimum difference between number of mismatches in the best\n"
 "                                       and second best barcodes for a barcode to be considered a\n"
@@ -457,6 +511,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
     if (argc == 1) { usage(stdout); return NULL; }
 
     const char* optstring = "vSr:i:b:l:o:t:q:p:";
+    char *lane_arg = NULL;
 
     static const struct option lopts[] = {
         { "verbose",                    0, 0, 'v' },
@@ -538,7 +593,8 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
                     break;
         case 'o':   opts->output_file = strdup(optarg);
                     break;
-        case 'l':   opts->lane = atoi(optarg);
+        case 'l':   lane_arg = strdup(optarg);
+                    break;
                     break;
         case 'v':   opts->verbose++;
                     break;
@@ -615,16 +671,6 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
         usage(stderr); return NULL;
     }
 
-    if (opts->lane <= 0) {
-        fprintf(stderr,"You must specify a lane number (-l or --lane)\n");
-        usage(stderr); return NULL;
-    }
-
-    if (opts->lane > 999) {
-        fprintf(stderr,"I can't handle a lane number greater than 999\n");
-        usage(stderr); return NULL;
-    }
-
     if (!opts->output_file) {
         fprintf(stderr,"You must specify an output file (-o or --output-file)\n");
         usage(stderr); return NULL;
@@ -666,6 +712,18 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
         sprintf(opts->basecalls_dir, "%s/%s", opts->intensity_dir, "BaseCalls");
     }
 
+    if (!lane_arg) {
+        fprintf(stderr,"You must specify a lane number (-l or --lane)\n");
+        usage(stderr); return NULL;
+    }
+
+    if (strcmp(lane_arg,"all") != 0) opts->lane = parseLaneList(lane_arg);
+    else                             opts->lane = fillLaneList(opts->basecalls_dir);
+
+    if (opts->verbose) {
+        fprintf(stderr,"Lanes specified: %s\n", ia_join(opts->lane,","));
+    }
+
     // rationalise directories
     char *tmp;
     tmp = opts->intensity_dir; 
@@ -691,7 +749,11 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
         // default is runfolder + lane
         char *rf = basename(opts->run_folder);
         opts->platform_unit = calloc(1, strlen(rf) + 5);
-        sprintf(opts->platform_unit, "%s_%d", rf, opts->lane);
+        if (opts->lane->end == 1) {
+            sprintf(opts->platform_unit, "%s_%d", rf, opts->lane->entries[0]);
+        } else {
+            sprintf(opts->platform_unit, "%s", rf);
+        }
     }
 
     // Once we have a basecalls directory, we can find the machine type
@@ -782,6 +844,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
         }
     }
 
+    free(lane_arg);
     return opts;
 }
 
@@ -928,7 +991,7 @@ static char *getId(opts_t *opts)
         experiment = getXMLVal(opts->parametersConfig, "//Setup/ExperimentName");
         computer = getXMLVal(opts->parametersConfig, "//Setup/ComputerName");
         if (experiment && computer) {
-            id = calloc(1, strlen(experiment) + strlen(computer) + 2);
+            id = calloc(1, strlen(experiment) + strlen(computer) + 10);
             sprintf(id, "%s_%s", computer, experiment);
         }
     }
@@ -942,12 +1005,12 @@ static char *getId(opts_t *opts)
  * Load the tile index array (the BCI file)
  * This is only for NextSeq 
  */
-static va_t *getTileIndex(opts_t *opts)
+static va_t *getTileIndex(opts_t *opts, int lane)
 {
     va_t *tileIndex = NULL;
     if (machineType != MT_NEXTSEQ) return tileIndex;
     char *fname = calloc(1,strlen(opts->basecalls_dir)+64);
-    sprintf(fname, "%s/L%03d/s_%d.bci", opts->basecalls_dir, opts->lane, opts->lane);
+    sprintf(fname, "%s/L%03d/s_%d.bci", opts->basecalls_dir, lane, lane);
     FILE *fhandle = fopen(fname, "rb");
     if (fhandle == NULL) die("Can't open BCI file %s\n", fname);
     tileIndex = va_init(100,free);
@@ -976,7 +1039,7 @@ static va_t *getTileIndex(opts_t *opts)
 /*
  * load tile list from basecallsConfig or intensityConfig
  */
-static ia_t *getTileList(opts_t *opts)
+static ia_t *getTileList(opts_t *opts, int lane)
 {
     ia_t *tiles = ia_init(100);
     xmlXPathObjectPtr ptr;
@@ -985,7 +1048,7 @@ static ia_t *getTileList(opts_t *opts)
 
     doc = opts->basecallsConfig ? opts->basecallsConfig : opts->intensityConfig;
 
-    sprintf(xpath, "//TileSelection/Lane[@Index=\"%d\"]/Tile", opts->lane);
+    sprintf(xpath, "//TileSelection/Lane[@Index=\"%d\"]/Tile", lane);
     assert(strlen(xpath) < 64);
     ptr = getnodeset(doc, xpath);
     free(xpath);
@@ -1008,10 +1071,10 @@ static ia_t *getTileList(opts_t *opts)
                 char *t = (char *)ptr->nodesetval->nodeTab[n]->children->content;
                 char *saveptr;
                 assert(t != NULL);
-                char *lane = strtok_r(t, "_", &saveptr);
+                char *lan = strtok_r(t, "_", &saveptr);
                 char *tileno = strtok_r(NULL, "_", &saveptr);
-                if (lane && tileno) {
-                    if (atoi(lane) == opts->lane) {
+                if (lan && tileno) {
+                    if (atoi(lan) == lane) {
                         ia_push(tiles,atoi(tileno));
                     }
                 }
@@ -1236,18 +1299,18 @@ static int findClusters(int tile, va_t *tileIndex)
  * Open and return the first one found, or NULL if not found.
  */
 
-static posfile_t *openPositionFile(int tile, va_t *tileIndex, opts_t *opts)
+static posfile_t *openPositionFile(int tile, va_t *tileIndex, opts_t *opts, int lane)
 {
     posfile_t *posfile = NULL;
 
     char *fname = calloc(1, strlen(opts->intensity_dir)+64);
 
-    sprintf(fname, "%s/L%03d/s_%d_%04d.clocs", opts->intensity_dir, opts->lane, opts->lane, tile);
+    sprintf(fname, "%s/L%03d/s_%d_%04d.clocs", opts->intensity_dir, lane, lane, tile);
     posfile = posfile_open(fname);
 
     if (posfile->errmsg) {
         posfile_close(posfile);
-        sprintf(fname, "%s/L%03d/s_%d_%04d.locs", opts->intensity_dir, opts->lane, opts->lane, tile);
+        sprintf(fname, "%s/L%03d/s_%d_%04d.locs", opts->intensity_dir, lane, lane, tile);
         posfile = posfile_open(fname);
     }
 
@@ -1260,12 +1323,12 @@ static posfile_t *openPositionFile(int tile, va_t *tileIndex, opts_t *opts)
     // if still not found, try NewSeq format files
     if (posfile->errmsg) {
         posfile_close(posfile);
-        sprintf(fname, "%s/L%03d/s_%d.clocs", opts->intensity_dir, opts->lane, opts->lane);
+        sprintf(fname, "%s/L%03d/s_%d.clocs", opts->intensity_dir, lane, lane);
         posfile = posfile_open(fname);
 
         if (posfile->errmsg) {
             posfile_close(posfile);
-            sprintf(fname, "%s/L%03d/s_%d.locs", opts->intensity_dir, opts->lane, opts->lane);
+            sprintf(fname, "%s/L%03d/s_%d.locs", opts->intensity_dir, lane, lane);
             posfile = posfile_open(fname);
         }
 
@@ -1291,21 +1354,21 @@ static posfile_t *openPositionFile(int tile, va_t *tileIndex, opts_t *opts)
 /*
  * find and open the filter file
  */
-static filter_t *openFilterFile(int tile, va_t *tileIndex, opts_t *opts)
+static filter_t *openFilterFile(int tile, va_t *tileIndex, opts_t *opts, int lane)
 {
     filter_t *filter = NULL;
     char *fname = calloc(1,strlen(opts->basecalls_dir)+128); // a bit arbitrary :-(
 
-    sprintf(fname, "%s/L%03d/s_%d_%04d.filter", opts->basecalls_dir, opts->lane, opts->lane, tile);
+    sprintf(fname, "%s/L%03d/s_%d_%04d.filter", opts->basecalls_dir, lane, lane, tile);
     filter = filter_open(fname);
     if (filter->errmsg) {
         filter_close(filter);
-        sprintf(fname, "%s/s_%d_%04d.filter", opts->basecalls_dir, opts->lane, tile);
+        sprintf(fname, "%s/s_%d_%04d.filter", opts->basecalls_dir, lane, tile);
         filter = filter_open(fname);
     }
     if (filter->errmsg) {
         filter_close(filter);
-        sprintf(fname, "%s/L%03d/s_%d.filter", opts->basecalls_dir, opts->lane, opts->lane);
+        sprintf(fname, "%s/L%03d/s_%d.filter", opts->basecalls_dir, lane, lane);
         filter = filter_open(fname);
     }
 
@@ -1427,6 +1490,7 @@ struct bcl_opt {
     va_t *bclFileArray;
     lockable_bcl_cache *bcl_cache;
     pthread_mutex_t *lock;
+    int lane;
 };
 
 static void *bcl_thread(void *arg)
@@ -1434,12 +1498,12 @@ static void *bcl_thread(void *arg)
     struct bcl_opt *o = (struct bcl_opt *)arg;
     bclfile_t *bcl = NULL;
     if (o->bcl_cache) {
-        bcl = get_cached_bclfile(o->bcl_cache, o->opts->lane, o->cycle, o->surface);
+        bcl = get_cached_bclfile(o->bcl_cache, o->lane, o->cycle, o->surface);
     }
     if (!bcl) {
-        bcl = openBclFile(o->opts->basecalls_dir, o->opts->lane, o->tile, o->cycle, o->surface, o->tileIndex, o->filter);
+        bcl = openBclFile(o->opts->basecalls_dir, o->lane, o->tile, o->cycle, o->surface, o->tileIndex, o->filter);
         if (o->bcl_cache) {
-            insert_bclfile_to_cache(bcl, o->bcl_cache, o->opts->lane, o->cycle, o->surface);
+            insert_bclfile_to_cache(bcl, o->bcl_cache, o->lane, o->cycle, o->surface);
         }
     }
 
@@ -1464,7 +1528,7 @@ static void *bcl_thread(void *arg)
     return NULL;
 }
 
-static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, int next_tile, va_t *tileIndex, filter_t *filter, hts_tpool *p, lockable_bcl_cache *bcl_cache)
+static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, int next_tile, va_t *tileIndex, filter_t *filter, hts_tpool *p, lockable_bcl_cache *bcl_cache, int lane)
 {
     pthread_mutex_t bcl_array_lock = PTHREAD_MUTEX_INITIALIZER;
     va_t *bclReadArray = va_init(cycleRange->end * 2, freeBCLReadArray);
@@ -1484,7 +1548,7 @@ static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, int next_til
 
             va_push(bclReadArray,ra);
 
-            struct bcl_opt o = { p, q, cr, opts, tile, 0, surface, next_tile, tileIndex, filter, ra->bclFileArray, bcl_cache, &bcl_array_lock };
+            struct bcl_opt o = { p, q, cr, opts, tile, 0, surface, next_tile, tileIndex, filter, ra->bclFileArray, bcl_cache, &bcl_array_lock, lane };
 
             for (int cycle = cr->first; cycle <= cr->last; cycle++) {
                 va_push(ra->bclFileArray, NULL);
@@ -2154,7 +2218,7 @@ static void processTile(job_data_t *job_data)
 
     if (opts->verbose) fprintf(stderr,"Processing Tile %d\n", tile);
 
-    filter_t *filter = openFilterFile(tile,tileIndex,opts);
+    filter_t *filter = openFilterFile(tile,tileIndex,opts, job_data->lane);
     if (filter->errmsg) {
         die("Can't find filter file for tile %d\n%s\n", tile, filter->errmsg);
     }
@@ -2162,20 +2226,20 @@ static void processTile(job_data_t *job_data)
     if (tileIndex) max_cluster = findClusters(tile, tileIndex);
     else           max_cluster = filter->total_clusters;
 
-    posfile_t *posfile = openPositionFile(tile, tileIndex, opts);
+    posfile_t *posfile = openPositionFile(tile, tileIndex, opts, job_data->lane);
     if (posfile->errmsg) {
         die("Can't find position file for Tile %d\n%s\n", tile, posfile->errmsg);
     }
     posfile_load(posfile, max_cluster, (machineType == MT_NOVASEQ) ? filter : NULL);
     max_cluster = posfile->size;
 
-    bclReadArray = openBclFiles(cycleRange, opts, tile, next_tile, tileIndex, filter, p, job_data->bcl_cache);
+    bclReadArray = openBclFiles(cycleRange, opts, tile, next_tile, tileIndex, filter, p, job_data->bcl_cache, job_data->lane);
     char *id = getId(opts);
 
     if (opts->verbose) fprintf(stderr,"Tile %d : opened all BCL files\n", tile);
 
     // This part of the read name is the same for all clusters in this tile
-    read_name_prefix_len = getReadNamePrefix(read_name_prefix, sizeof(read_name_prefix), id, opts->lane, tile);
+    read_name_prefix_len = getReadNamePrefix(read_name_prefix, sizeof(read_name_prefix), id, job_data->lane, tile);
 
     //
     // write all the records
@@ -2392,15 +2456,15 @@ void getBarcodeSpecs(va_t *specs[2], va_t *tags_array, ia_t *bc_read) {
 /*
  * process all the tiles and write all the BAM records
  */
-static int createBAM(samFile *output_file, bam_hdr_t *output_header, hts_tpool *thread_p, opts_t *opts)
+static int createBAM(samFile *output_file, bam_hdr_t *output_header, hts_tpool *thread_p, opts_t *opts, int lane)
 {
     int retcode = 0;
 
     hts_tpool_process *thread_q = hts_tpool_process_init(thread_p, 2 * opts->pool_size, 0);
 
-    ia_t *tiles = getTileList(opts);
-    va_t *cycleRange = getCycleRange(opts);;
-    va_t *tileIndex = getTileIndex(opts);
+    ia_t *tiles = getTileList(opts, lane);
+    va_t *cycleRange = getCycleRange(opts);
+    va_t *tileIndex = getTileIndex(opts, lane);
     va_t *barcode_calls[2];
     va_t *barcode_quals[2];
     HashTable *barcodeHash = NULL;
@@ -2464,6 +2528,7 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, hts_tpool *
         job_data->barcodes_hash = barcodeHash;
         job_data->tag_hops = tag_hops;
         job_data->longest_barcode_name = longest_barcode_name;
+        job_data->lane = lane;
 
         processTile(job_data);
     }
@@ -2476,6 +2541,7 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, hts_tpool *
         clear_bcl_cache(&bcl_cache);
 
     HashTableDestroy(barcodeHash, 0);
+    HashTableDestroy(tag_hops,0);
     va_free(barcode_calls[0]);
     va_free(barcode_calls[1]);
     va_free(barcode_quals[0]);
@@ -2543,7 +2609,10 @@ static int i2b(opts_t* opts)
             break;
         }
 
-        retcode = createBAM(output_file, output_header, hts_threads.pool, opts);
+        for (int n=0; n < opts->lane->end; n++) {
+            retcode = createBAM(output_file, output_header, hts_threads.pool, opts, opts->lane->entries[n]);
+            if (retcode) break;
+        }
         break;
     }
 
