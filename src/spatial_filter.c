@@ -1666,7 +1666,8 @@ static void dumpFilterFile(opts_t *opts)
         printf("Num Regions:    %-5d\n", hdr->nregions);
         printf("Num Regions X:  %-5d\n", hdr->nregions_x);
         printf("Num Regions Y:  %-5d\n", hdr->nregions_y);
-        for (int n=0; n < hdr->nregions; n++) printf("%d ", hdr->regions[n]); printf("\n");
+        for (int n=0; n < hdr->nregions; n++) printf("%d ", hdr->regions[n]); 
+        printf("\n");
         printf("Num Tiles:      %-5d\n", (int)hdr->ntiles);
         for (int i=0; i < hdr->ntiles; i++) printf("%-5d %-12lu", hdr->tileArray[i], hdr->tileReadCountArray[i]);
         printf("\n");
