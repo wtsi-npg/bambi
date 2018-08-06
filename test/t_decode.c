@@ -85,10 +85,10 @@ void setup_test_1(int* argc, char*** argv, char *outputfile, char *metricsfile,
     }
 }
 
-void setup_test_2(int* argc, char*** argv, char *outputfile, char *metricsfile,
+void setup_test_2(int* argc, char*** argv, char *outputfile, char *metricsfile, char *chksumfile,
                   int threads)
 {
-    *argc = 18 + (threads ? 2 : 0);
+    *argc = 20 + (threads ? 2 : 0);
     *argv = (char**)calloc(sizeof(char*), *argc);
     (*argv)[0] = strdup("bambi");
     (*argv)[1] = strdup("decode");
@@ -108,16 +108,18 @@ void setup_test_2(int* argc, char*** argv, char *outputfile, char *metricsfile,
     (*argv)[15] = strdup(metricsfile);
     (*argv)[16] = strdup("--barcode-tag-name");
     (*argv)[17] = strdup("RT");
+    (*argv)[18] = strdup("--chksum-file");
+    (*argv)[19] = strdup(chksumfile);
     if (threads) {
-        (*argv)[18] = strdup("-t");
-        (*argv)[19] = itoa(threads);
+        (*argv)[20] = strdup("-t");
+        (*argv)[21] = itoa(threads);
     }
 }
 
-void setup_test_3(int* argc, char*** argv, char *outputfile, char *metricsfile,
+void setup_test_3(int* argc, char*** argv, char *outputfile, char *metricsfile, char *chksumfile,
                   int threads)
 {
-    *argc = 15 + (threads ? 2 : 0);
+    *argc = 19 + (threads ? 2 : 0);
     *argv = (char**)calloc(sizeof(char*), *argc);
     (*argv)[0] = strdup("bambi");
     (*argv)[1] = strdup("decode");
@@ -134,9 +136,13 @@ void setup_test_3(int* argc, char*** argv, char *outputfile, char *metricsfile,
     (*argv)[12] = strdup("--convert-low-quality");
     (*argv)[13] = strdup("--max-no-calls");
     (*argv)[14] = strdup("6");
+    (*argv)[15] = strdup("--hash");
+    (*argv)[16] = strdup("crc32");
+    (*argv)[17] = strdup("--chksum-file");
+    (*argv)[18] = strdup(chksumfile);
     if (threads) {
-        (*argv)[15] = strdup("--threads");
-        (*argv)[16] = itoa(threads);
+        (*argv)[19] = strdup("--threads");
+        (*argv)[20] = itoa(threads);
     }
 }
 
@@ -248,6 +254,7 @@ int main(int argc, char**argv)
     unsigned int max_path_length = strlen(TMPDIR) + 100;
     char *outputfile = calloc(1,max_path_length);
     char *metricsfile = calloc(1,max_path_length);
+    char *chksumfile = calloc(1,max_path_length);
     char cmd[1024];
     
     // minimal options
@@ -289,7 +296,8 @@ int main(int argc, char**argv)
         int result;
         snprintf(outputfile, max_path_length, "%s/decode_2%s.sam", TMPDIR, threads ? "threads" : "");
         snprintf(metricsfile, max_path_length, "%s/decode_2%s.metrics", TMPDIR, threads ? "threads" : "");
-        setup_test_2(&argc_2, &argv_2, outputfile, metricsfile, threads);
+        snprintf(chksumfile, max_path_length, "%s/decode_2%s.chksum", TMPDIR, threads ? "threads" : "");
+        setup_test_2(&argc_2, &argv_2, outputfile, metricsfile, chksumfile, threads);
         main_decode(argc_2-1, argv_2+1);
         free_argv(argc_2,argv_2);
 
@@ -297,6 +305,15 @@ int main(int argc, char**argv)
         result = system(cmd);
         if (result) {
             fprintf(stderr, "test 2 failed\n");
+            failure++;
+        } else {
+            success++;
+        }
+
+        snprintf(cmd, sizeof(cmd), "diff %s %s", chksumfile, MKNAME(DATA_DIR,"/out/decode_2.chksum"));
+        result = system(cmd);
+        if (result) {
+            fprintf(stderr, "test 2 (chksum) failed\n");
             failure++;
         } else {
             success++;
@@ -310,7 +327,8 @@ int main(int argc, char**argv)
         int result;
         snprintf(outputfile, max_path_length, "%s/decode_3%s.sam", TMPDIR, threads ? "threads" : "");
         snprintf(metricsfile, max_path_length, "%s/decode_3%s.metrics", TMPDIR, threads ? "threads" : "");
-        setup_test_3(&argc_3, &argv_3, outputfile, metricsfile, threads);
+        snprintf(chksumfile, max_path_length, "%s/decode_3%s.chksum", TMPDIR, threads ? "threads" : "");
+        setup_test_3(&argc_3, &argv_3, outputfile, metricsfile, chksumfile, threads);
         main_decode(argc_3-1, argv_3+1);
         free_argv(argc_3,argv_3);
 
@@ -318,6 +336,15 @@ int main(int argc, char**argv)
         result = system(cmd);
         if (result) {
             fprintf(stderr, "test 3 failed\n");
+            failure++;
+        } else {
+            success++;
+        }
+
+        snprintf(cmd, sizeof(cmd), "diff %s %s", chksumfile, MKNAME(DATA_DIR,"/out/decode_3.chksum"));
+        result = system(cmd);
+        if (result) {
+            fprintf(stderr, "test 3 (chksum) failed\n");
             failure++;
         } else {
             success++;

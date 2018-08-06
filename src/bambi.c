@@ -36,6 +36,7 @@ int main_select(int argc, char *argv[]);
 int main_chrsplit(int argc, char *argv[]);
 int main_read2tags(int argc, char *argv[]);
 int main_spatial_filter(int argc, char *argv[]);
+int main_seqchksum(int argc, char *argv[]);
 
 const char *bambi_version()
 {
@@ -58,6 +59,7 @@ static void usage(FILE *fp)
 "     chrsplit       split reads by chromosome\n"
 "     read2tags      convert reads into tags\n"
 "     spatial_filter spatial filtering\n"
+"     seqchksum      calculate checksums for a bam file\n"
 "\n"
 "bambi <command> for help on a particular command\n"
 "\n");
@@ -84,6 +86,7 @@ int main(int argc, char *argv[])
     else if (strcmp(argv[1], "chrsplit") == 0)  ret = main_chrsplit(argc-1, argv+1);
     else if (strcmp(argv[1], "read2tags") == 0) ret = main_read2tags(argc-1, argv+1);
     else if (strcmp(argv[1], "spatial_filter") == 0) ret = main_spatial_filter(argc-1, argv+1);
+    else if (strcmp(argv[1], "seqchksum") == 0) ret = main_seqchksum(argc-1, argv+1);
     else if (strcmp(argv[1], "--version") == 0) {
         printf( "bambi %s\n"
                 "Using htslib %s\n"

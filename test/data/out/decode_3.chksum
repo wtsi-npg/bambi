@@ -1,0 +1,5 @@
+###	set	count		b_seq	name_b_seq	b_seq_qual	b_seq_tags(BC,FI,QT,RT,TC)
+all	all	2		747d527d	737c2c7d	f39494b	27c52e
+all	pass	2		747d527d	737c2c7d	f39494b	27c52e
+#888	all	2		747d527d	737c2c7d	f39494b	27c52e
+#888	pass	2		747d527d	737c2c7d	f39494b	27c52e

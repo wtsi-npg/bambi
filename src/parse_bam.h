@@ -57,5 +57,12 @@ void bam_header_add_pg(       char *id,
                               char *ds,
                               char *cl,
                       bam_hdr_t *bam_header);
+
+void rev_comp_seq(char *seq);
+char *reverse_seq(char *str);
+int aux_type2size(uint8_t *s);
+uint8_t *get_read(bam1_t *rec);
+uint8_t *get_quality(bam1_t *rec);
+
 #endif
 
