@@ -299,20 +299,30 @@ static char *dformat(uint32_t v)
     return buffer+2;
 }
 
-static void print_dline(FILE *f, char *key, digest_line_t *dline, int p)
+static void hputi(int n, hFILE *f)
 {
-    fprintf(f,"%s\t%s\t%d\t\t", key, (p ? "pass": "all"), dline->count[p]);
-    fprintf(f,"%s\t", dformat(dline->chksum[0][p]));
-    fprintf(f,"%s\t", dformat(dline->chksum[1][p]));
-    fprintf(f,"%s\t", dformat(dline->chksum[2][p]));
-    fprintf(f,"%s\n", dformat(dline->chksum[3][p]));
+    char b[64];
+    sprintf(b,"%d",n);
+    hputs(b,f);
 }
 
-void chksum_print_results(FILE *f, chksum_results_t *results)
+static void print_dline(hFILE *f, char *key, digest_line_t *dline, int p)
+{
+    hputs(key, f); hputc('\t',f); 
+    hputs((p ? "pass": "all"), f); hputc('\t',f);
+    hputi(dline->count[p], f); hputc('\t',f);
+    hputc('\t',f);
+    hputs(dformat(dline->chksum[0][p]), f); hputc('\t',f);
+    hputs(dformat(dline->chksum[1][p]), f); hputc('\t',f);
+    hputs(dformat(dline->chksum[2][p]), f); hputc('\t',f);
+    hputs(dformat(dline->chksum[3][p]), f); hputc('\n',f);
+}
+
+void chksum_print_results(hFILE *f, chksum_results_t *results)
 {
     digest_line_t *dline = &(results->all);
 
-    fprintf(f, "###\tset\tcount\t\tb_seq\tname_b_seq\tb_seq_qual\tb_seq_tags(BC,FI,QT,RT,TC)\n");
+    hputs("###\tset\tcount\t\tb_seq\tname_b_seq\tb_seq_qual\tb_seq_tags(BC,FI,QT,RT,TC)\n", f);
 
     print_dline(f, "all", dline, 0);
     print_dline(f, "all", dline, 1);
@@ -372,7 +382,10 @@ static int seqchksum(opts_t* opts)
         }
     }
 
-    chksum_print_results(stdout, results);
+    hFILE *f = hdopen(fileno(stdout),"w");
+    if (!f) die("Can't open stdout");
+    chksum_print_results(f, results);
+    if (hclose(f)) die("Can't close stdout");
 
     // tidy up after us
     BAMit_free(bam_in);

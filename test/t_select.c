@@ -38,6 +38,18 @@ const char * bambi_version(void)
 int success = 0;
 int failure = 0;
 
+void die(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap,fmt);
+    fflush(stdout);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+    fflush(stderr);
+    exit(EXIT_FAILURE);
+}
+
+
 void setup_test_1(int* argc, char*** argv, char *outputfile, char *metricsfile)
 {
     *argc = 0;
