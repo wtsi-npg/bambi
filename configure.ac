@@ -2,9 +2,8 @@ AC_INIT([bambi], m4_esyscmd_s([git describe --dirty --always --tags]), [js10@san
 AC_CONFIG_MACRO_DIR([m4])
 AC_ARG_VAR(HTSDIR,Directory to look for hts)
 AM_INIT_AUTOMAKE([subdir-objects foreign tar-pax no-dependencies])
-AM_PROG_CC_C_O
-
 AC_PROG_CC
+AM_PROG_CC_C_O
 dnl Turn on compiler warnings, if possible
 HTS_PROG_CC_WARNINGS
 dnl Flags to treat warnings as errors.  These need to be applied to CFLAGS

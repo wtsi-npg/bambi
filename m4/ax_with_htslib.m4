@@ -68,10 +68,10 @@ AC_DEFUN([AX_WITH_HTSLIB], [
                ], [
                    HTSLIB_HOME="$with_htslib"
                    CPPFLAGS="-I$HTSLIB_HOME/include $CPPFLAGS"
-                   LDFLAGS="-L$HTSLIB_HOME/lib $LDFLAGS"
+                   LDFLAGS="-L$HTSLIB_HOME/lib -Wl,-R$HTSLIB_HOME/lib $LDFLAGS"
                ])
 
-               LIBS="$HTSLIB_HOME/lib/libhts.a -lz -ldl -lbz2 -llzma -lpthread -lcurl -lcrypto"
+               LIBS="-lhts -lz -ldl -lbz2 -llzma -lpthread -lcurl -lcrypto"
 
                AC_MSG_CHECKING([checking htslib version])
                AC_RUN_IFELSE([AC_LANG_PROGRAM([
