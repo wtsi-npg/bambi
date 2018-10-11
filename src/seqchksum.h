@@ -22,6 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define __SEQCHKSUM_H__
 
 #include "hash_table.h"
+#include "htslib/hfile.h"
 
 typedef enum {
     HASH_UNKNOWN,
@@ -67,7 +68,7 @@ int seqchksum_processRecord(bam1_t *rec, HASH_TYPE hash, chksum_results_t *resul
 /*
  * print the results
  */
-void chksum_print_results(FILE *f, chksum_results_t *results);
+void chksum_print_results(hFILE *f, chksum_results_t *results);
 
 #endif
 

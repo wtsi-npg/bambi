@@ -372,7 +372,7 @@ static void openFilters(va_t *fnames)
  */
 static HashTable *readSnpFile(opts_t *opts)
 {
-    FILE *fp;
+    hFILE *fp;
     HashTable *snp_hash;
     static const int line_size = 8192;
     char line[line_size];
@@ -381,13 +381,13 @@ static HashTable *readSnpFile(opts_t *opts)
 
     if (opts->verbose) display("reading snp file %s\n", opts->snp_file);
 
-    fp = fopen(opts->snp_file, "rb");
+    fp = hopen(opts->snp_file, "rb");
     if (!fp) die("ERROR: can't open known snp file %s: %s\n", opts->snp_file, strerror(errno));
 
     snp_hash = HashTableCreate(0, HASH_DYNAMIC_SIZE | HASH_FUNC_JENKINS);
     if (snp_hash) die("ERROR: creating snp hash table\n");
 
-    while (fgets(line, line_size, fp)) {
+    while (hgets(line, line_size, fp)) {
         char key[128];
         HashData hd;
         int bin, start, end;
@@ -405,7 +405,7 @@ static HashTable *readSnpFile(opts_t *opts)
         }
     }
 
-    fclose(fp);
+    if (hclose(fp)) die("Can't close SNP file");
 
     return snp_hash;
 }
@@ -1123,7 +1123,7 @@ static void writeFilter(opts_t *s, RegionTable_t *rtsArray)
 	Header *hdr;
     RegionTable_t rts;
 
-    fp = hopen(s->filters->entries[0], "w+");
+    fp = hopen(s->filters->entries[0], "w");
 	if (!fp) die("Can't open filter file %s: %s\n", s->filters->entries[0], strerror(errno));
 
 	strncpy(Fheader.region_magic, REGION_MAGIC, sizeof(Fheader.region_magic));
@@ -1567,7 +1567,7 @@ static void applyFilter(opts_t *s)
 {
 	BAMit_t *fp_input_bam;
 	BAMit_t *fp_output_bam;
-	FILE *apply_stats_fd = NULL;
+	hFILE *apply_stats_fd = NULL;
 	char *out_bam_file = NULL;
 	char *apply_stats_file = NULL;
 
@@ -1627,20 +1627,24 @@ static void applyFilter(opts_t *s)
 //
 //  Display stats
 //
-	if (NULL == (apply_stats_fd=fopen(apply_stats_file, "w"))) {
+	if (NULL == (apply_stats_fd=hopen(apply_stats_file, "w"))) {
 		die("ERROR: failed to open apply status log %s\n", apply_stats_file);
 	}
 
     for (int n=0; n < SF_MAX_LANES; n++) {
         Header *hdr = LaneArray[n];
         if (!hdr) continue;
-        fprintf(apply_stats_fd, "Lane %d\t", hdr->lane);
-        fprintf(apply_stats_fd, "Processed %d \t", hdr->stats_nreads);
-        fprintf(apply_stats_fd, "%s %d traces\n", (s->qcfail ? "Failed" : "Removed"), hdr->stats_nfiltered);
+        char buffer[64];
+        sprintf(buffer, "Lane %d\t", hdr->lane);
+        hputs(buffer, apply_stats_fd);
+        sprintf(buffer, "Processed %d \t", hdr->stats_nreads);
+        hputs(buffer, apply_stats_fd);
+        sprintf(buffer, "%s %d traces\n", (s->qcfail ? "Failed" : "Removed"), hdr->stats_nfiltered);
+        hputs(buffer, apply_stats_fd);
     }
-    fprintf(apply_stats_fd, "\n");
+    hputs("\n", apply_stats_fd);
 
-	fclose(apply_stats_fd);
+	if (hclose(apply_stats_fd)) die("Can't close stats file");
     free(apply_stats_file);
 }
 
