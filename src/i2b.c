@@ -36,6 +36,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <fcntl.h>
 #include <errno.h>
 #include <pthread.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include <cram/sam_header.h>
 #include <htslib/thread_pool.h>
@@ -235,6 +237,22 @@ void i2b_free_opts(opts_t* opts)
     free(opts);
 }
 
+static int isDirectory(char *dir, char *fname)
+{
+    struct stat buf;
+    int is_directory = 0;
+    char *path = malloc(strlen(dir) + strlen(fname) + 2);
+    if (!path) die("Out of memory in isDirectory");
+    strcpy(path, dir);
+    strcat(path, "/");
+    strcat(path, fname);
+    if (stat(path, &buf) == 0) {
+        is_directory = S_ISDIR(buf.st_mode);
+    }
+    free(path);
+    return is_directory;
+}
+
 static ia_t *fillLaneList(char *basecalls_dir)
 {
     ia_t *lanes = ia_init(8);
@@ -244,7 +262,7 @@ static ia_t *fillLaneList(char *basecalls_dir)
 
     while ( (dir = readdir(d)) != NULL) {
         // Look for a lane directory
-        if (dir->d_type == DT_DIR && dir->d_name[0] == 'L') {
+        if (isDirectory(basecalls_dir, dir->d_name) && dir->d_name[0] == 'L') {
             ia_push(lanes, atoi(dir->d_name+1));
         }
     }
@@ -306,14 +324,14 @@ MACHINE_TYPE determineMachineType(char *basecalls_dir)
 
     while ( (dir = readdir(d)) != NULL) {
         // Look for a lane directory
-        if (dir->d_type == DT_DIR && dir->d_name[0] == 'L') {
+        if (isDirectory(basecalls_dir, dir->d_name) && dir->d_name[0] == 'L') {
             lane_n = malloc(strlen(basecalls_dir)+strlen(dir->d_name)+16);
             sprintf(lane_n, "%s/%s", basecalls_dir, dir->d_name);
             DIR *lane_d = opendir(lane_n);
             if (!lane_d) die("Can't open lane directory: %s\n", dir->d_name);
             while ( (dir = readdir(lane_d)) != NULL) {
                 // Look for either a Cycle directory, or a .bcl.bgzf file
-                if (dir->d_type == DT_DIR && dir->d_name[0] == 'C') {
+                if (isDirectory(lane_n, dir->d_name) && dir->d_name[0] == 'C') {
                     cycle_n = malloc(strlen(lane_n)+strlen(dir->d_name)+16);
                     sprintf(cycle_n, "%s/%s", lane_n, dir->d_name);
                     DIR *cycle_d = opendir(cycle_n);
