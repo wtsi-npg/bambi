@@ -1,6 +1,6 @@
 /*  decode.c -- index decoder subcommand.
 
-    Copyright (C) 2017 Genome Research Ltd.
+    Copyright (C) 2017-2018 Genome Research Ltd.
 
     Author: Jennifer Liddle <js10@sanger.ac.uk>
 
@@ -21,6 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <bambi.h>
 #include <assert.h>
 #include <htslib/sam.h>
+#include <htslib/hfile.h>
 #include <string.h>
 #include <getopt.h>
 #include <ctype.h>
@@ -57,6 +58,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef STACK_BC_LEN
 #define STACK_BC_LEN 32
 #endif
+
+static inline void hputi(int n, hFILE *f)
+{
+    char b[64];
+    sprintf(b,"%d",n);
+    hputs(b,f);
+}
 
 enum match {
     MATCHED_NONE,
@@ -179,51 +187,53 @@ static bc_details_t *bcd_init(void)
 /*
  * Print metrics file header
  */
-static void print_header(FILE* f, decode_opts_t* opts, bool metrics) {
+static void print_header(hFILE* f, decode_opts_t* opts, bool metrics) {
     // print header
-    fprintf(f, "##\n");
-    fprintf(f, "# BARCODE_TAG_NAME=%s ", opts->barcode_tag_name);
-    fprintf(f, "MAX_MISMATCHES=%d ", opts->max_mismatches);
-    fprintf(f, "MIN_MISMATCH_DELTA=%d ", opts->min_mismatch_delta);
-    fprintf(f, "MAX_NO_CALLS=%d ", opts->max_no_calls);
-    fprintf(f, "\n");
-    fprintf(f, "##\n");
-    fprintf(f, "# ID:bambi VN:%s (htslib %s) CL:%s\n", bambi_version(), hts_version(), opts->argv_list);
-    fprintf(f, "\n");
-    fprintf(f, "##\n");
-    fprintf(f, "BARCODE\t");
+    hputs("##\n", f);
+    hputs("# BARCODE_TAG_NAME=", f); hputs(opts->barcode_tag_name,f); hputc(' ',f);
+    hputs("MAX_MISMATCHES=", f); hputi(opts->max_mismatches,f); hputc(' ',f);
+    hputs("MIN_MISMATCH_DELTA=", f); hputi(opts->min_mismatch_delta,f); hputc(' ',f);
+    hputs("MAX_NO_CALLS=", f); hputi(opts->max_no_calls,f); hputc(' ',f);
+    hputs("\n", f);
+    hputs("##\n", f);
+    hputs("# ID:bambi VN:", f); hputs(bambi_version(), f); 
+    hputs(" (htslib ", f); hputs(hts_version(), f);
+    hputs(") CL:", f); hputs(opts->argv_list, f); hputs("\n", f);
+    hputs("\n", f);
+    hputs("##\n", f);
+    hputs("BARCODE\t", f);
     if (metrics) {
-        fprintf(f, "BARCODE_NAME\t");
-        fprintf(f, "LIBRARY_NAME\t");
-        fprintf(f, "SAMPLE_NAME\t");
-        fprintf(f, "DESCRIPTION\t");
+        hputs("BARCODE_NAME\t", f);
+        hputs("LIBRARY_NAME\t", f);
+        hputs("SAMPLE_NAME\t", f);
+        hputs("DESCRIPTION\t", f);
     }
-    fprintf(f, "READS\t");
+    hputs("READS\t", f);
     if (!opts->ignore_pf) {
-        fprintf(f, "PF_READS\t");
+        hputs("PF_READS\t", f);
     }
-    fprintf(f, "PERFECT_MATCHES\t");
+    hputs("PERFECT_MATCHES\t", f);
     if (!opts->ignore_pf) {
-        fprintf(f, "PF_PERFECT_MATCHES\t");
+        hputs("PF_PERFECT_MATCHES\t", f);
     }
     if (metrics) {
-        fprintf(f, "ONE_MISMATCH_MATCHES\t");
+        hputs("ONE_MISMATCH_MATCHES\t", f);
         if (!opts->ignore_pf) {
-            fprintf(f, "PF_ONE_MISMATCH_MATCHES\t");
+            hputs("PF_ONE_MISMATCH_MATCHES\t", f);
         }
     }
-    fprintf(f, "PCT_MATCHES\t");
-    fprintf(f, "RATIO_THIS_BARCODE_TO_BEST_BARCODE_PCT");
+    hputs("PCT_MATCHES\t", f);
+    hputs("RATIO_THIS_BARCODE_TO_BEST_BARCODE_PCT", f);
     if (!opts->ignore_pf) {
-        fprintf(f, "\tPF_PCT_MATCHES");
+        hputs("\tPF_PCT_MATCHES", f);
     }
     if (!opts->ignore_pf) {
-        fprintf(f, "\tPF_RATIO_THIS_BARCODE_TO_BEST_BARCODE_PCT");
+        hputs("\tPF_RATIO_THIS_BARCODE_TO_BEST_BARCODE_PCT", f);
     }
     if (!opts->ignore_pf) {
-        fprintf(f, "\tPF_NORMALIZED_MATCHES");
+        hputs("\tPF_NORMALIZED_MATCHES", f);
     }
-    fprintf(f, "\n");
+    hputs("\n", f);
 }
 
 void free_bcd(void *entry)
@@ -489,43 +499,46 @@ static void checkBarcodeQuality(char *newBarcode,
     }
 }
 
-void writeMetricsLine(FILE *f, bc_details_t *bcd, decode_opts_t *opts, uint64_t total_reads, uint64_t max_reads, uint64_t total_pf_reads, uint64_t max_pf_reads, uint64_t total_pf_reads_assigned, uint64_t nReads, bool metrics)
+void writeMetricsLine(hFILE *f, bc_details_t *bcd, decode_opts_t *opts, uint64_t total_reads, uint64_t max_reads, uint64_t total_pf_reads, uint64_t max_pf_reads, uint64_t total_pf_reads_assigned, uint64_t nReads, bool metrics)
 {
-    fprintf(f, "%s", bcd->idx1);
-    if (bcd->idx2 && *bcd->idx2) fprintf(f, "-%s", bcd->idx2);
-    fprintf(f, "\t");
+    char b[64];
+
+    sprintf(b, "%s", bcd->idx1); hputs(b,f);
+    if (bcd->idx2 && *bcd->idx2) { sprintf(b, "-%s", bcd->idx2); hputs(b,f); }
+    hputc('\t', f);
     if (metrics) {
-        fprintf(f, "%s\t", bcd->name);
-        fprintf(f, "%s\t", bcd->lib);
-        fprintf(f, "%s\t", bcd->sample);
-        fprintf(f, "%s\t", bcd->desc);
+        hputs(bcd->name, f); hputc('\t',f);
+        hputs(bcd->lib, f); hputc('\t',f);
+        hputs(bcd->sample, f); hputc('\t',f);
+        hputs(bcd->desc, f); hputc('\t',f);
     }
-    fprintf(f, "%"PRIu64"\t", bcd->reads);
+    sprintf(b, "%"PRIu64"\t", bcd->reads); hputs(b,f);
     if (!opts->ignore_pf) {
-        fprintf(f, "%"PRIu64"\t", bcd->pf_reads); 
+        sprintf(b, "%"PRIu64"\t", bcd->pf_reads);  hputs(b,f);
     }
-    fprintf(f, "%"PRIu64"\t", bcd->perfect);
+    sprintf(b, "%"PRIu64"\t", bcd->perfect); hputs(b,f);
     if (!opts->ignore_pf) {
-        fprintf(f, "%"PRIu64"\t", bcd->pf_perfect); 
+        sprintf(b, "%"PRIu64"\t", bcd->pf_perfect);  hputs(b,f);
     }
     if (metrics) {
-        fprintf(f, "%"PRIu64"\t", bcd->one_mismatch);
+        sprintf(b, "%"PRIu64"\t", bcd->one_mismatch); hputs(b,f);
         if (!opts->ignore_pf) {
-            fprintf(f, "%"PRIu64"\t", bcd->pf_one_mismatch); 
+            sprintf(b, "%"PRIu64"\t", bcd->pf_one_mismatch); hputs(b,f);
         }
     }
-    fprintf(f, "%.3f\t", total_reads ? bcd->reads / (double)total_reads : 0 );
-    fprintf(f, "%.3f", max_reads ? bcd->reads / (double)max_reads  : 0 );
+    sprintf(b, "%.3f\t", total_reads ? bcd->reads / (double)total_reads : 0 ); hputs(b,f);
+    sprintf(b, "%.3f", max_reads ? bcd->reads / (double)max_reads  : 0 ); hputs(b,f);
     if (!opts->ignore_pf) {
-        fprintf(f, "\t%.3f", total_pf_reads ? bcd->pf_reads / (double)total_pf_reads  : 0 ); 
+        sprintf(b, "\t%.3f", total_pf_reads ? bcd->pf_reads / (double)total_pf_reads  : 0 ); hputs(b,f);
     }
     if (!opts->ignore_pf) {
-        fprintf(f, "\t%.3f", max_pf_reads ? bcd->pf_reads / (double)max_pf_reads  : 0 ); 
+        sprintf(b, "\t%.3f", max_pf_reads ? bcd->pf_reads / (double)max_pf_reads  : 0 ); hputs(b,f);
     }
     if (!opts->ignore_pf) {
-        fprintf(f, "\t%.3f", total_pf_reads_assigned ? bcd->pf_reads * nReads / (double)total_pf_reads_assigned  : 0);
+        sprintf(b, "\t%.3f", total_pf_reads_assigned ? bcd->pf_reads * nReads / (double)total_pf_reads_assigned  : 0);
+        hputs(b,f);
     }
-    fprintf(f, "\n");
+    hputc('\n', f);
 }
 
 
@@ -546,7 +559,7 @@ int writeMetrics(va_t *barcodeArray, HashTable *tagHopHash, decode_opts_t *opts)
     int n;
 
     // Open the metrics file
-    FILE *f = fopen(opts->metrics_name, "w");
+    hFILE *f = hopen(opts->metrics_name, "w");
     if (!f) {
         fprintf(stderr,"Can't open metrics file %s\n", opts->metrics_name);
         return 1;
@@ -599,7 +612,7 @@ int writeMetrics(va_t *barcodeArray, HashTable *tagHopHash, decode_opts_t *opts)
     bcd->name[0] = 0;
     writeMetricsLine(f, bcd, opts, total_reads, max_reads, total_pf_reads, max_pf_reads, 0, nReads, true);
 
-    fclose(f);
+    if (hclose(f)) die("Can't close metrics file");
 
     /*
      * Now write tag hop metrics file - if there are any
@@ -609,17 +622,24 @@ int writeMetrics(va_t *barcodeArray, HashTable *tagHopHash, decode_opts_t *opts)
         char *metrics_hops_name = malloc(strlen(opts->metrics_name)+6);
         strcpy(metrics_hops_name, opts->metrics_name);
         strcat(metrics_hops_name, ".hops");
-        FILE *g = fopen(metrics_hops_name, "w");
+        hFILE *g = hopen(metrics_hops_name, "w");
         if (!g) {
             fprintf(stderr,"Can't open tag hops file %s\n", metrics_hops_name);
         } else {
-            fprintf(g, "##\n");
-            fprintf(g, "# TOTAL_READS=%"PRIu64", ", total_reads);
-            fprintf(g, "TOTAL_ORIGINAL_TAG_READS=%"PRIu64", ", total_original_reads);
-            fprintf(g, "TOTAL_TAG_HOP_READS=%"PRIu64", ", total_hop_reads);
-            fprintf(g, "MAX_READ_ON_A_TAG=%"PRIu64", ", max_reads);
-            fprintf(g, "TOTAL_TAG_HOPS=%d, ", (tagHopArray ? tagHopArray->end : 0));
-            fprintf(g, "PCT_TAG_HOPS=%f\n", total_reads ? ((float)total_hop_reads / total_reads * 100) : 0.00) ;
+            char b[128];
+            hputs("##\n",g);
+            sprintf(b, "# TOTAL_READS=%"PRIu64", ", total_reads);
+            hputs(b,g);
+            sprintf(b, "TOTAL_ORIGINAL_TAG_READS=%"PRIu64", ", total_original_reads);
+            hputs(b,g);
+            sprintf(b, "TOTAL_TAG_HOP_READS=%"PRIu64", ", total_hop_reads);
+            hputs(b,g);
+            sprintf(b, "MAX_READ_ON_A_TAG=%"PRIu64", ", max_reads);
+            hputs(b,g);
+            sprintf(b, "TOTAL_TAG_HOPS=%d, ", (tagHopArray ? tagHopArray->end : 0));
+            hputs(b,g);
+            sprintf(b, "PCT_TAG_HOPS=%f\n", total_reads ? ((float)total_hop_reads / total_reads * 100) : 0.00) ;
+            hputs(b,g);
             print_header(g, opts, false);
 
             if (tagHopArray) {
@@ -629,7 +649,7 @@ int writeMetrics(va_t *barcodeArray, HashTable *tagHopHash, decode_opts_t *opts)
                     writeMetricsLine(g, bcd, opts, total_reads, max_reads, total_pf_reads, max_pf_reads, total_pf_reads_assigned, nReads, false);
                 }
             }
-            fclose(g);
+            if (hclose(g)) die("Can't close tag hop metrics file");
         }
         free(metrics_hops_name);
     }
@@ -683,22 +703,21 @@ va_t *loadBarcodeFile(decode_opts_t *opts)
     bcd->desc   = strdup("");
     va_push(barcodeArray,bcd);
 
-    FILE *fh = fopen(opts->barcode_name,"r");
+    hFILE *fh = hopen(opts->barcode_name,"r");
     if (!fh) {
         fprintf(stderr,"ERROR: Can't open barcode file %s\n", opts->barcode_name);
         return NULL;
     }
     
-    char *buf = NULL;
-    size_t n;
+    char buf[256];
+    size_t n = 256;
     lineno++;
-    if (getline(&buf,&n,fh) < 0) {    // burn first line which is a header
+    if (0 >= hgets(buf,n,fh)) {    // burn first line which is a header
         fprintf(stderr,"ERROR: problem reading barcode file\n");
         return NULL;
     }
-    free(buf); buf=NULL;
 
-    while (getline(&buf, &n, fh) > 0) {
+    while (hgets(buf, n, fh) > 0) {
         lineno++;
         char *s;
         if (buf[strlen(buf)-1] == '\n') buf[strlen(buf)-1]=0;   // remove trailing lf
@@ -714,7 +733,6 @@ va_t *loadBarcodeFile(decode_opts_t *opts)
         split_index(bcd->seq, strlen(bcd->seq), opts->dual_tag, &bcd->idx1, &bcd->idx2, 0, 0);
 
         va_push(barcodeArray,bcd);
-        free(buf); buf=NULL;
 
         if (idx1_len == 0) {
             idx1_len = strlen(bcd->idx1);
@@ -737,8 +755,7 @@ va_t *loadBarcodeFile(decode_opts_t *opts)
     if (idx2_len) strcat(bcd->seq,INDEX_SEPARATOR);
     strcat(bcd->seq,bcd->idx2);
 
-    free(buf);
-    fclose(fh);
+    if (hclose(fh)) die("Can't close barcode file");
     return barcodeArray;
 }
 
@@ -1250,10 +1267,10 @@ static int processTemplatesNoThreads(BAMit_t *bam_in, BAMit_t *bam_out, va_t *ba
     }
 
     if (opts->chksum_name) {
-        FILE *f = fopen(opts->chksum_name, "w");
+        hFILE *f = hopen(opts->chksum_name, "w");
         if (f) {
             chksum_print_results(f, results);
-            fclose(f);
+            if (hclose(f)) die("Can't close chksum file");
         } else {
             fprintf(stderr, "WARNING: couldn't open chksum file '%s'\n", opts->chksum_name);
         }
@@ -1506,10 +1523,10 @@ static int processTemplatesThreads(hts_tpool *pool, BAMit_t *bam_in, BAMit_t *ba
     hts_tpool_process_destroy(queue);
 
     if (opts->chksum_name) {
-        FILE *f = fopen(opts->chksum_name, "w");
+        hFILE *f = hopen(opts->chksum_name, "w");
         if (f) {
             chksum_print_results(f, chksum_results);
-            fclose(f);
+            if (hclose(f)) die("Can't close chksum file");
         } else {
             fprintf(stderr, "WARNING: couldn't open chksum file '%s'\n", opts->chksum_name);
         }

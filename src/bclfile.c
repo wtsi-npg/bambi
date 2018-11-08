@@ -259,7 +259,10 @@ static bclfile_t *_bclfile_open_novaseq(char *fname, int tile)
     if (bcl->bits_per_qual != 2) {
         store_msg(&bcl->errmsg,"CBCL file '%s' has bits_per_qual %d : expecting 2\n", fname, bcl->bits_per_qual);
     }
+
     if (bcl->errmsg) return bcl;
+
+    bcl->total_clusters = bcl->current_tile->nclusters;
 
 #if (USE_POSIX_FADVISE & 1) > 0
     if (tile >= 0) {
@@ -332,6 +335,7 @@ int bclfile_seek_tile(bclfile_t *bcl, int tile, filter_t *filter, int next_tile)
     }
 
     bcl->current_tile = ti;
+    bcl->total_clusters = bcl->current_tile->nclusters;
 
     // Read and uncompress the record for this tile
     if (fseeko(bcl->fhandle, offset, SEEK_SET) < 0) {

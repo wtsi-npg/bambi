@@ -1517,6 +1517,11 @@ static void *bcl_thread(void *arg)
             break;
     }
 
+    // Check BCL file and Filter have the same number of clusters
+    if (bcl->total_clusters != o->filter->total_clusters) {
+        die("Cluster mismatch: BCL file (%s): %d  Filter file: %d\n", bcl->filename, bcl->total_clusters, o->filter->total_clusters);
+    }
+
     if (pthread_mutex_lock(o->lock) < 0) die("Mutex lock failed\n");
     assert(o->cycle - o->cr->first < o->bclFileArray->end);
     assert(o->bclFileArray->entries[o->cycle - o->cr->first] == NULL);
