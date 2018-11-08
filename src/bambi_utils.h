@@ -21,6 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef BAMBI_UTILS_H
 #define BAMBI_UTILS_H
 
+void store_msg(char **str, const char *fmt, ...);
 void display(const char *fmt, ...);
 void die(const char *fmt, ...);
 

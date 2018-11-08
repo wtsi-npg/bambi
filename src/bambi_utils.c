@@ -25,11 +25,23 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string.h>
 #include <errno.h>
 
-void display(const char *fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  vfprintf(stderr, fmt, ap);
-  va_end(ap);
+#include "bambi_utils.h"
+
+void store_msg(char **str, const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    free(*str);
+    *str = smalloc(1024);
+    vsnprintf(*str, 1023, fmt, ap);
+}
+
+void display(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
 }
 
 void die(const char *fmt, ...)
