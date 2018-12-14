@@ -4,7 +4,7 @@ AM_CPPFLAGS = -I$(top_srcdir)/src $(HTSLIB_CPPFLAGS) -std=gnu99
 AM_CFLAGS = $(XML_CFLAGS) -std=gnu99
 AM_LDFLAGS = -rdynamic $(HTSLIB_LDFLAGS)
 
-bin_PROGRAMS = src/bambi
+bin_PROGRAMS = src/bambi src/check_bcl
 src_bambi_SOURCES = src/bambi.c \
                     src/bambi.h \
                     src/bambi_utils.c \
@@ -39,9 +39,12 @@ src_bambi_SOURCES = src/bambi.c \
                     src/crc.c \
                     src/crc.h
 
+src_check_bcl_SOURCES = src/check_bcl.c src/bclfile.c src/bambi_utils.c src/array.c
+
 nobase_include_HEADERS = src/cram/cram_samtools.h src/cram/pooled_alloc.h src/cram/sam_header.h src/cram/string_alloc.h
 
 src_bambi_LDADD = $(HTSLIB_LIBS) -lm
+src_check_bcl_LDADD = $(HTSLIB_LIBS) -lm
 
 TESTS = test/t_array \
         test/t_bamit \
@@ -94,7 +97,7 @@ test_t_array_SOURCES = test/t_array.c src/array.c
 test_t_array_CFLAGS = $(TEST_CFLAGS)
 test_t_array_LDADD = $(TEST_LDADD)
 
-test_t_bclfile_SOURCES = test/t_bclfile.c src/bclfile.c src/array.c
+test_t_bclfile_SOURCES = test/t_bclfile.c src/bclfile.c src/array.c src/bambi_utils.c
 test_t_bclfile_CFLAGS = $(TEST_CFLAGS)
 test_t_bclfile_LDADD = $(TEST_LDADD)
 
@@ -108,7 +111,7 @@ test_t_filterfile_CFLAGS = $(TEST_CFLAGS)
 test_t_posfile_SOURCES = test/t_posfile.c
 test_t_posfile_CFLAGS = $(TEST_CFLAGS)
 
-test_t_i2b_SOURCES = test/t_i2b.c src/i2b.c src/posfile.c src/bclfile.c src/filterfile.c src/array.c src/parse.c src/hts_addendum.c src/decode.c src/bamit.c src/hash_table.c src/seqchksum.c src/crc.c src/parse_bam.c
+test_t_i2b_SOURCES = test/t_i2b.c src/i2b.c src/posfile.c src/bclfile.c src/filterfile.c src/array.c src/parse.c src/hts_addendum.c src/decode.c src/bamit.c src/hash_table.c src/seqchksum.c src/crc.c src/parse_bam.c src/bambi_utils.c
 test_t_i2b_CFLAGS = $(TEST_CFLAGS)
 test_t_i2b_LDADD = $(TEST_LDADD)
 

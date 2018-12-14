@@ -1458,12 +1458,6 @@ static bclfile_t *openBclFile(char *basecalls, int lane, int tile, int cycle, in
 
     bcl = bclfile_open(fname, machineType, tile);
 
-    if (bcl->errmsg) {
-        bclfile_close(bcl);
-        bcl = NULL;
-        die("Can't open BCL file %s\n", fname);
-    }
-
     free(fname);
 
     bcl->surface = surface;
@@ -1502,18 +1496,22 @@ static void *bcl_thread(void *arg)
     }
     if (!bcl) {
         bcl = openBclFile(o->opts->basecalls_dir, o->lane, o->tile, o->cycle, o->surface, o->tileIndex, o->filter);
+        if (bcl->errmsg) { display("%s", bcl->errmsg); bcl = NULL; }
         if (o->bcl_cache) {
-            insert_bclfile_to_cache(bcl, o->bcl_cache, o->lane, o->cycle, o->surface);
+            if (bcl) insert_bclfile_to_cache(bcl, o->bcl_cache, o->lane, o->cycle, o->surface);
         }
     }
 
     switch (machineType) {
         case MT_NEXTSEQ:
             assert(o->tileIndex);
-            bclfile_load_tile(bcl, findClusterNumber(o->tile, o->tileIndex), o->filter, -1);
+            if (bcl) bclfile_load_tile(bcl, findClusterNumber(o->tile, o->tileIndex), o->filter, -1);
             break;
         case MT_NOVASEQ:
-            bclfile_load_tile(bcl, o->tile, o->filter, o->next_tile);
+            if (bcl) {
+                bclfile_load_tile(bcl, o->tile, o->filter, o->next_tile);
+                if (bcl->errmsg) bcl = NULL;
+            }
             break;
         default:
             break;
@@ -1585,7 +1583,7 @@ static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, int next_til
         }
     }
     if (pthread_mutex_unlock(&bcl_array_lock) < 0) die("Mutex unlock failed\n");
-    if (missing > 0) die("Missing %d bcl files\b", missing);
+    if (missing > 0) die("Missing %d bcl files\n", missing);
 
     return bclReadArray;
 }
