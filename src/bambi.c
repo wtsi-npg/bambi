@@ -1,6 +1,6 @@
 /*  bambi.c -- main bambi command front-end.
 
-    Copyright (C) 2016 Genome Research Ltd.
+    Copyright (C) 2016-2019 Genome Research Ltd.
 
     Author: Jennifer Liddle <js10@sanger.ac.uk>
 
@@ -37,6 +37,7 @@ int main_chrsplit(int argc, char *argv[]);
 int main_read2tags(int argc, char *argv[]);
 int main_spatial_filter(int argc, char *argv[]);
 int main_seqchksum(int argc, char *argv[]);
+int main_adapters(int argc, char *argv[]);
 
 const char *bambi_version()
 {
@@ -60,6 +61,7 @@ static void usage(FILE *fp)
 "     read2tags      convert reads into tags\n"
 "     spatial_filter spatial filtering\n"
 "     seqchksum      calculate checksums for a bam file\n"
+"     adapters       find and remove adapters\n"
 "\n"
 "bambi <command> for help on a particular command\n"
 "\n");
@@ -87,6 +89,7 @@ int main(int argc, char *argv[])
     else if (strcmp(argv[1], "read2tags") == 0) ret = main_read2tags(argc-1, argv+1);
     else if (strcmp(argv[1], "spatial_filter") == 0) ret = main_spatial_filter(argc-1, argv+1);
     else if (strcmp(argv[1], "seqchksum") == 0) ret = main_seqchksum(argc-1, argv+1);
+    else if (strcmp(argv[1], "adapters") == 0) ret = main_adapters(argc-1, argv+1);
     else if (strcmp(argv[1], "--version") == 0) {
         printf( "bambi %s\n"
                 "Using htslib %s\n"
