@@ -26,6 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <dirent.h>
 #include <pthread.h>
 #include <htslib/thread_pool.h>
+
 #include "bclfile.h"
 
 #define NTHREADS 16
@@ -34,6 +35,31 @@ int nFailed = 0, nPassed = 0;
 pthread_mutex_t nFailed_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t nPassed_lock = PTHREAD_MUTEX_INITIALIZER;
 int check_opts_verbose = 0;
+
+static char *reverse_str(char *seq)
+{
+    char *t = seq, *s = seq + strlen(seq) - 1;
+    char c;
+
+    while (t < s) {
+        c = *s;
+        *s = *t;
+        *t = c;
+        t++;
+        s--;
+    }
+
+    return seq;
+}
+
+static bool rev_strstr(char *str, char *ext)
+{
+    char *rev_str = strdup(str); rev_str = reverse_str(rev_str);
+    char *rev_ext = strdup(ext); rev_ext = reverse_str(rev_ext);
+    int r = strncmp(rev_str, rev_ext, strlen(rev_ext));
+    free(rev_str); free(rev_ext);
+    return r==0;
+}
 
 static void Usage(FILE *f)
 {
@@ -175,9 +201,9 @@ static int checkBclFile(char *fname, int verbose)
     MACHINE_TYPE mt = MT_UNKNOWN;
 
          if (strstr(fname, ".bcl.gz")) mt = MT_HISEQX;
-    else if (strstr(fname, ".bcl")) mt = MT_MISEQ;
     else if (strstr(fname, ".cbcl")) mt = MT_NOVASEQ;
     else if (strstr(fname, ".bcl.bgzf")) mt = MT_NEXTSEQ;
+    else if (strstr(fname, ".bcl")) mt = MT_MISEQ;
 
     bclfile_t *bcl;
     bcl = bclfile_open(fname, mt, tile);
@@ -267,7 +293,11 @@ static void recurseThroughDirectory(char *dirname, hts_tpool *p, hts_tpool_proce
             free(fullname);
         } else {
             // Look for bcl or cbcl files
-            if (strstr(dir->d_name, ".cbcl") || strstr(dir->d_name,".bcl")) {
+            if (rev_strstr(dir->d_name, ".cbcl")   || 
+                rev_strstr(dir->d_name, ".bcl")    ||
+                rev_strstr(dir->d_name, ".bcl.gz") ||
+                rev_strstr(dir->d_name, ".bcl.bgzf")
+            ) {
                 if (check_opts_verbose) display("%s\n",fullname);
                 hts_tpool_dispatch(p, q, checkBclFileThread, fullname);
             }
