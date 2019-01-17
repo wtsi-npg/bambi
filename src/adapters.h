@@ -35,7 +35,7 @@ typedef struct {
     int seqstart;
 } adapter_t;
 
-adapter_t adapterArray[] = {
+adapter_t DefaultAdapterArray[] = {
     {"DpnII-Gex-Adapter1-1", "GATCGTCGGACTGTAGAACTCTGAAC", "GTTCAGAGTTCTACAGTCCGACGATC" },
     {"DpnII-Gex-Adapter1-2", "ACAGGTTCAGAGTTCTACAGTCCGAC", "GTCGGACTGTAGAACTCTGAACCTGT" },
 //    {"DpnII-Gex-Adapter2-1", "CAAGCAGAAGACGGCATACGANN", "NNTCGTATGCCGTCTTCTGCTTG" },

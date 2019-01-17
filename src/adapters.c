@@ -32,6 +32,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <regex.h>
 #include <errno.h>
 #include <htslib/thread_pool.h>
+#include <htslib/hfile.h>
 #include <cram/sam_header.h>
 #include <inttypes.h>
 #include <math.h>
@@ -81,6 +82,7 @@ typedef struct {
     char *input_name;
     char *output_name;
     char *metrics_name;
+    va_t *adapterArray;
     bool verbose;
     char *argv_list;
     char *input_fmt;
@@ -92,12 +94,60 @@ typedef struct {
     double minpfrac;
 } adapter_opts_t;
 
+static void freeAdapter(void *r)
+{
+    adapter_t *a = (adapter_t *)r;
+    if (!a) return;
+    free(a->name);
+    free(a->fwd);
+    free(a->rev);
+    free(a);
+}
+
+/*
+ * trim whitespace from string
+ */
+static void trim(char *str)
+{
+    char *end = str + strlen(str) - 1;
+    while(end > str && isspace((unsigned char)*end)) end--;
+    end[1] = 0;
+}
+
+/*
+ * Read the adapter array from a FASTA file
+ */
+static va_t *loadAdapterFile(char *fname)
+{
+    char buf[1024];
+    size_t n = 1024;
+    va_t *a = va_init(50,freeAdapter);
+
+    hFILE *f = hopen(fname, "r");
+    if (!f) die("Can't open adapter file '%s'", fname);
+
+    while (hgets(buf,n,f) > 0) {
+        adapter_t *adapter = smalloc(sizeof(adapter_t));
+        if (*buf != '>') die("problem reading adapter file '%s'\nThis does not look like a FASTA file", fname);
+        trim(buf); adapter->name = strdup(buf+1);
+        if (hgets(buf,n,f) <= 0) die("Incomplete adapter file");
+        trim(buf); adapter->fwd = strdup(buf);
+        adapter->rev = strdup(buf);
+        rev_comp_seq(adapter->rev);
+        va_push(a,adapter);
+    }
+
+    if (hclose(f)) die("Can't close adapter file '%s'", fname);
+    return a;
+}
+
 static adapter_opts_t *adapter_init_opts(int argc, char **argv)
 {
     adapter_opts_t *opts = calloc(1, sizeof(*opts));
     if (!opts) die("Out of memory");
     opts->argv_list = stringify_argv(argc, argv);
     if (opts->argv_list[strlen(opts->argv_list)-1] == ' ') opts->argv_list[strlen(opts->argv_list)-1] = 0;
+    opts->adapterArray = NULL;
 
     // set defaults
     opts->minscore = DEFAULT_MIN_SCORE;
@@ -116,6 +166,7 @@ static void adapter_free_opts(adapter_opts_t *opts)
     free(opts->input_fmt);
     free(opts->output_fmt);
     free(opts->metrics_name);
+    va_free(opts->adapterArray);
     free(opts);
 }
 
@@ -123,7 +174,7 @@ static void adapter_free_opts(adapter_opts_t *opts)
 typedef struct adapter_thread_data_t {
     va_t *record_set;                   // records to process
     ia_t *template_counts;              // records in each template
-    adapter_t *adapter_array;                // job-local copy of adapters array
+    va_t *adapter_array;                // job-local copy of adapters array
     adapter_t *adapter;             // memory for job-local adapter
     adapter_opts_t *opts;                       // pointer to shared opts
     int nrec;                           // number of live records in record_set
@@ -176,14 +227,14 @@ static void updateMetrics(HashTable *m, bam1_t *rec, adapter_t *adapter)
         rgm->total_rev++;
         if (adapter) {
             rgm->contam_rev++;
-            if (adapter->seqstart > rgm->hist_len) { resize_hist(rgm, adapter->seqstart); }
+            if (adapter->seqstart >= rgm->hist_len) { resize_hist(rgm, adapter->seqstart); }
             rgm->hist_rev[adapter->seqstart]++;
         }
     } else {
         rgm->total_fwd++;
         if (adapter) {
             rgm->contam_fwd++;
-            if (adapter->seqstart > rgm->hist_len) { resize_hist(rgm, adapter->seqstart); }
+            if (adapter->seqstart >= rgm->hist_len) { resize_hist(rgm, adapter->seqstart); }
             rgm->hist_fwd[adapter->seqstart]++;
         }
     }
@@ -201,6 +252,8 @@ static void usage(FILE *write_to)
 "  -o   --output                        output file [default: stdout]\n"
 "  -v   --verbose                       verbose output\n"
 "       --metrics-file                  metrics written to this file\n"
+"  -a   --adapter-file                  use file of adapters instead of built-in list\n"
+"                                       The file must be in FASTA format\n"
 "       --input-fmt                     format of input file [sam/bam/cram]\n"
 "       --output-fmt                    format of output file [sam/bam/cram]\n"
 "       --compression-level             Compression level of output file [0..9]\n"
@@ -215,13 +268,14 @@ static adapter_opts_t* parse_args(int argc, char *argv[])
 {
     if (argc == 1) { usage(stdout); return NULL; }
 
-    const char* optstring = "i:o:vb:t:";
+    const char* optstring = "a:i:o:vb:t:";
 
     static const struct option lopts[] = {
         { "input",                      1, 0, 'i' },
         { "output",                     1, 0, 'o' },
         { "verbose",                    0, 0, 'v' },
         { "metrics-file",               1, 0, 0 },
+        { "adapter-file",               1, 0, 'a' },
         { "input-fmt",                  1, 0, 0 },
         { "output-fmt",                 1, 0, 0 },
         { "compression-level",          1, 0, 0 },
@@ -242,6 +296,8 @@ static adapter_opts_t* parse_args(int argc, char *argv[])
         case 'v':   opts->verbose = true;
                     break;
         case 't':   opts->nthreads = atoi(optarg);
+                    break;
+        case 'a':   opts->adapterArray = loadAdapterFile(optarg);
                     break;
         case 0:     arg = lopts[option_index].name;
                          if (strcmp(arg, "metrics-file") == 0)               opts->metrics_name = strdup(optarg);
@@ -266,15 +322,25 @@ static adapter_opts_t* parse_args(int argc, char *argv[])
     if (argc > 0) opts->input_name = strdup(argv[0]);
     optind = 0;
 
-    // some validation and tidying
-    if (!opts->input_name) {
-        fprintf(stderr,"You must specify an input file (-i or --input)\n");
-        usage(stderr); adapter_free_opts(opts);
-        return NULL;
-    }
+    // input defaults to stdin
+    if (!opts->input_name) opts->input_name = strdup("-");
 
     // output defaults to stdout
     if (!opts->output_name) opts->output_name = strdup("-");
+
+    // use built-in adapters if adapter file not specified
+    if (!opts->adapterArray) {
+        opts->adapterArray = va_init(50,freeAdapter);
+        adapter_t *src = DefaultAdapterArray;
+        while (src->name) {
+            adapter_t *dest = smalloc(sizeof(adapter_t));
+            dest->name = strdup(src->name);
+            dest->fwd = strdup(src->fwd);
+            dest->rev = strdup(src->rev);
+            va_push(opts->adapterArray, dest);
+            src++;
+        }
+    }
 
     return opts;
 }
@@ -399,15 +465,15 @@ static void matchAdapter(char *seq, adapter_t *adapter, adapter_opts_t *opts, bo
 /*
  * find the adapter with the best match.
  */
-static adapter_t *findBestMatch(bam1_t *rec, adapter_t *adapterArray, adapter_opts_t *opts)
+static adapter_t *findBestMatch(bam1_t *rec, va_t *adapterArray, adapter_opts_t *opts)
 {
     adapter_t *best_match = NULL;
     int hiscore = 0;
     uint8_t *seq = get_read(rec);
 
 
-    for (int n=0; adapterArray[n].name; n++) {
-        adapter_t *adapter = &adapterArray[n];
+    for (int n=0; n < adapterArray->end; n++) {
+        adapter_t *adapter = adapterArray->entries[n];
         matchAdapter((char *)seq, adapter, opts, bam_is_rev(rec));
         if (!best_match || adapter->score > hiscore) {
             best_match = adapter;
@@ -547,7 +613,7 @@ static void checkOverlap(va_t *template, bool verbose)
 /*
  * Process one template
  */
-static int processTemplate(va_t *template, adapter_t *adapterArray, adapter_opts_t *opts)
+static int processTemplate(va_t *template, va_t *adapterArray, adapter_opts_t *opts)
 {
     int error_code = 0;
     adapter_t *adapter = NULL;
@@ -593,7 +659,7 @@ static va_t *loadTemplate(BAMit_t *bit, char *qname)
     return recordSet;
 }
 
-static int processTemplatesNoThreads(BAMit_t *bam_in, BAMit_t *bam_out, adapter_t *adapterArray, adapter_opts_t* opts)
+static int processTemplatesNoThreads(BAMit_t *bam_in, BAMit_t *bam_out, va_t *adapterArray, adapter_opts_t* opts)
 {
     char qname[257] = {0};
     adapter_t *adapter = NULL;
@@ -664,52 +730,34 @@ static void output_job_results(BAMit_t *bam_out, adapter_thread_data_t *job_data
         if (r < 0) die("Could not write sequence\n");
     }
 
-    // lock metrics
-    // foreach (job_data->metrics) {
-        // metrics.xxx += job_data->metrics.xxx
-    // unlock metrics
 }
 
-adapter_t *copy_adapter_array(adapter_t *adapter_array)
+static va_t *copy_adapter_array(va_t *adapter_array)
 {
-    adapter_t *a;
-    int n=0;
-    for (n=0; adapter_array[n].name; n++);
-    n++;
+    va_t *dest = va_init(adapter_array->end, freeAdapter);
 
-    a = calloc(n, sizeof(*a));
-    if (!a) die("Out of memory");
-
-    for (int i = 0; adapter_array[i].name; i++) {
-        adapter_t *src = &adapter_array[i];
-        adapter_t *dest = &a[i];
-        dest->name  = src->name;
-        dest->fwd   = src->fwd;
-        dest->rev   = src->rev;
+    for (int n = 0; n < adapter_array->end; n++) {
+        adapter_t *src = adapter_array->entries[n];
+        va_push(dest,src);
     }
-    return a;
-}
-
-void delete_adapter_array_copy(adapter_t *adapter_array)
-{
-    free(adapter_array);
+    return dest;
 }
 
 static void job_free(adapter_thread_data_t *job_data)
 {
     va_free(job_data->record_set);
     ia_free(job_data->template_counts);
-    delete_adapter_array_copy(job_data->adapter_array);
+    free(job_data->adapter_array);
     free(job_data);
 }
 
-static adapter_thread_data_t *init_job(adapter_t *adapter_array, adapter_opts_t *opts)
+static adapter_thread_data_t *init_job(va_t *adapter_array, adapter_opts_t *opts)
 {
     adapter_thread_data_t *job_data = calloc(1, sizeof(*job_data));
     if (!job_data) die("Out of memory\n");
 
     job_data->adapter_array = copy_adapter_array(adapter_array);
-    job_data->adapter = &job_data->adapter_array[0];
+    job_data->adapter = job_data->adapter_array->entries[0];
     job_data->opts = opts;
     job_data->result = -1;
     job_data->next = NULL;
@@ -717,7 +765,7 @@ static adapter_thread_data_t *init_job(adapter_t *adapter_array, adapter_opts_t 
     return job_data;
 }
 
-static int processTemplatesThreads(hts_tpool *pool, BAMit_t *bam_in, BAMit_t *bam_out, adapter_t *adapterArray, adapter_opts_t* opts)
+static int processTemplatesThreads(hts_tpool *pool, BAMit_t *bam_in, BAMit_t *bam_out, va_t *adapterArray, adapter_opts_t* opts)
 {
     hts_tpool_result *job_result = NULL;
     hts_tpool_process *queue = hts_tpool_process_init(pool, 2 * opts->nthreads, 0);
@@ -904,9 +952,9 @@ static int findAdapters(adapter_opts_t* opts)
 
         // Read and process each template in the input BAM
         if (opts->nthreads < 2) {
-            if (processTemplatesNoThreads(bam_in, bam_out, adapterArray, opts) < 0) break;
+            if (processTemplatesNoThreads(bam_in, bam_out, opts->adapterArray, opts) < 0) break;
         } else {
-            if (processTemplatesThreads(hts_threads.pool, bam_in, bam_out, adapterArray, opts) < 0) break;
+            if (processTemplatesThreads(hts_threads.pool, bam_in, bam_out, opts->adapterArray, opts) < 0) break;
         }
 
         if (BAMit_hasnext(bam_in)) break;   // we must has exited the above loop early
