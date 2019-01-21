@@ -388,14 +388,9 @@ static void dumpAdapterResult(bam1_t *rec, adapter_t *a)
     char *seq = (char *)get_read(rec);
     char *aseq = (a->revmatch ? a->rev : a->fwd);
     int len = min(strlen(seq), a->len);
-    uint8_t *s;
-    float af=0.0, ar=0.0;
-
-    s = bam_aux_get(rec,"af");  if (s) af = bam_aux2f(s);
-    s = bam_aux_get(rec,"ar");  if (s) ar = bam_aux2f(s);
 
     fprintf(stderr,"sco: %d  beg: %d  end: %d  len:%d  mat:%d  ", a->score, a->begin, a->end, a->end-a->begin, a->begin+a->seqstart);
-    fprintf(stderr,"af:%f  ar:%f\n", af, ar);
+    fprintf(stderr,"af:%f  frac:%f\n", a->pfrac, a->frac);
     fprintf(stderr,"%s\n", bam_get_qname(rec));
     fprintf(stderr,"%s\n", a->name);
     fprintf(stderr,"%.*s\n", len, seq + a->seqstart);
@@ -411,7 +406,7 @@ static void dumpAdapterResult(bam1_t *rec, adapter_t *a)
     free(seq);
 }
 
-static int calcAdapterScore(char *seq, int seqstart, char *aseq, adapter_t *a, adapter_opts_t *opts, bool rev)
+static void calcAdapterScore(char *seq, int seqstart, char *aseq, adapter_t *a, adapter_opts_t *opts, bool rev)
 {
     int const SCORE_MATCH = 1;
     int const PEN_MISMATCH = -2;
@@ -444,9 +439,9 @@ static int calcAdapterScore(char *seq, int seqstart, char *aseq, adapter_t *a, a
         a->seqstart = seqstart;
         a->frac = (double) (a->end - a->begin) / (double) a->len;
         a->pfrac = (double) (a->end - a->begin) / (double) comlen;
+        // doesn't matter how good the score is, if it fails the other criteria
+        if (a->frac < opts->minfrac || a->pfrac < opts->minpfrac) a->score = 0;
     }
-
-    return score;
 }
 
 static void matchAdapter(char *seq, adapter_t *adapter, adapter_opts_t *opts, bool isReverse)
@@ -475,6 +470,7 @@ static adapter_t *findBestMatch(bam1_t *rec, va_t *adapterArray, adapter_opts_t 
     for (int n=0; n < adapterArray->end; n++) {
         adapter_t *adapter = adapterArray->entries[n];
         matchAdapter((char *)seq, adapter, opts, bam_is_rev(rec));
+//dumpAdapterResult(rec,adapter);
         if (!best_match || adapter->score > hiscore) {
             best_match = adapter;
             hiscore = best_match->score;
