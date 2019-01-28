@@ -734,7 +734,12 @@ static va_t *copy_adapter_array(va_t *adapter_array)
 
     for (int n = 0; n < adapter_array->end; n++) {
         adapter_t *src = adapter_array->entries[n];
-        va_push(dest,src);
+        adapter_t *d = smalloc(sizeof(adapter_t));
+        memset(d, 0, sizeof(adapter_t));
+        d->name = strdup(src->name);
+        d->fwd = strdup(src->fwd);
+        d->rev = strdup(src->rev);
+        va_push(dest,d);
     }
     return dest;
 }
@@ -743,7 +748,7 @@ static void job_free(adapter_thread_data_t *job_data)
 {
     va_free(job_data->record_set);
     ia_free(job_data->template_counts);
-    free(job_data->adapter_array);
+    va_free(job_data->adapter_array);
     free(job_data);
 }
 
