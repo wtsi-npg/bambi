@@ -400,7 +400,7 @@ static void dumpAdapterResult(bam1_t *rec, adapter_t *a)
     }
     fprintf(stderr, "\n");
     for (int n=0; n < len; n++) {
-        fprintf(stderr, "%c", (n<a->begin || n>a->end) ? ' ' : '*');
+        fprintf(stderr, "%c", (n<a->begin || n>=a->end) ? ' ' : '*');
     }
     fprintf(stderr, "\n\n");
     free(seq);
@@ -431,8 +431,8 @@ static void calcAdapterScore(char *seq, int seqstart, char *aseq, adapter_t *a, 
         }
     }
 
-    if (score > a->score) {
-        a->score = score;
+    if (maxscore > a->score) {
+        a->score = maxscore;
         a->begin = maxstart;
         a->end = maxend;
         a->revmatch = rev;
