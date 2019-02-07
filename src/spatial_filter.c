@@ -1761,6 +1761,7 @@ opts_t* spatial_filter_parse_args(int argc, char *argv[])
     while ((opt = getopt_long(argc, argv, optstring, lopts, &option_index)) != -1) {
         const char *arg;
         switch (opt) {
+            case 'R': break;
 			case 'D': opts->dumpFilter = 1; ncmd++;       break;
 			case 'c': opts->calculate = 1; ncmd++;        break;
             case 't': opts->tileviz = strdup(optarg);     break;
