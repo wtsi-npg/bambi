@@ -45,9 +45,9 @@ inline int getHdrReadLength(int read) { return _hdr->readLength[read]; }
 inline int getHdrnregions(void) { return _hdr->nregions; }
 
 inline int getHdrngood_tiles(void) { return _hdr->ngood_tiles; }
-inline int getHdrStatsnreads(void) { return _hdr->stats_nreads; }
+inline uint64_t getHdrStatsnreads(void) { return _hdr->stats_nreads; }
 inline void incHdrStatsnreads(void) { _hdr->stats_nreads++; }
-inline int getHdrStatsnfiltered(void) { return _hdr->stats_nfiltered; }
+inline uint64_t getHdrStatsnfiltered(void) { return _hdr->stats_nfiltered; }
 inline void incHdrStatsnfiltered(void) { _hdr->stats_nfiltered++; }
 inline char *getHdrrgid(void) { return _hdr->rgid; }
 

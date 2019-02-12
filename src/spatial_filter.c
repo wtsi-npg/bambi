@@ -1505,8 +1505,8 @@ static void applyFilter(opts_t *s)
     for (int n=0; n < va->end; n++) {
         Header *hdr = (Header *)va->entries[n];
         fprintf(apply_stats_fd, "%s\t", (strcmp(hdr->rgid,"null") ? hdr->rgid : "Total"));
-        fprintf(apply_stats_fd, "Processed %d \t", hdr->stats_nreads);
-        fprintf(apply_stats_fd, "%s %d traces\n", (s->qcfail ? "Failed" : "Removed"), hdr->stats_nfiltered);
+        fprintf(apply_stats_fd, "Processed %" PRIu64 " \t", hdr->stats_nreads);
+        fprintf(apply_stats_fd, "%s %" PRIu64 " traces\n", (s->qcfail ? "Failed" : "Removed"), hdr->stats_nfiltered);
     }
     fprintf(apply_stats_fd, "\n");
 

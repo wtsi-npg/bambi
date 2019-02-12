@@ -61,8 +61,8 @@ typedef struct {
     char *comments[N_COMMENTS];
     char *filterData;
     char *rgid;             // used as a key in the hash table
-    int stats_nreads;       // number of records read
-    int stats_nfiltered;    // number of records filtered out
+    uint64_t stats_nreads;       // number of records read
+    uint64_t stats_nfiltered;    // number of records filtered out
 } Header;
 
 // An internal structure used to create the filter file
@@ -90,9 +90,9 @@ int xy2region(int x, int y);
 int getHdrngood_tiles(void);
 int getHdrReadLength(int read);
 int getHdrnregions(void);
-int getHdrStatsnreads(void);
+uint64_t getHdrStatsnreads(void);
 void incHdrStatsnreads(void);
-int getHdrStatsnfiltered(void);
+uint64_t getHdrStatsnfiltered(void);
 void incHdrStatsnfiltered(void);
 char *getHdrrgid(void);
 va_t *HdrHash2Array(void);
