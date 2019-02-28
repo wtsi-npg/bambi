@@ -56,6 +56,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define TEMPLATES_PER_JOB 5000
 
+#define SEEDLEN 12
+#define MAXSEEDDIFF 2
+
+uint8_t S[256];
+uint64_t SEEDMASK;
+
 // Metrics are stored in a global hash table keyed on RG tag
 typedef struct {
     int total_fwd;
@@ -121,7 +127,7 @@ static va_t *loadAdapterFile(char *fname)
 {
     char buf[1024];
     size_t n = 1024;
-    va_t *a = va_init(50,freeAdapter);
+    va_t *a = va_init(500,freeAdapter);
 
     hFILE *f = hopen(fname, "r");
     if (!f) die("Can't open adapter file '%s'", fname);
@@ -134,11 +140,121 @@ static va_t *loadAdapterFile(char *fname)
         trim(buf); adapter->fwd = strdup(buf);
         adapter->rev = strdup(buf);
         rev_comp_seq(adapter->rev);
+        adapter->offset = 0;
         va_push(a,adapter);
     }
 
     if (hclose(f)) die("Can't close adapter file '%s'", fname);
     return a;
+}
+
+/*
+ * Create Kmer fragments for each adapter
+ */
+static void fragmentAdapters(va_t *adapters, int minscore)
+{
+    int N = adapters->end;
+    for (int n=0; n < N; n++) {
+        adapter_t *a = adapters->entries[n];
+        for (int pos = 1; pos < strlen(a->fwd) - minscore; pos++) {
+            adapter_t *newAdapter = smalloc(sizeof(adapter_t));
+            newAdapter->name = strdup(a->name);
+            newAdapter->fwd = strdup(a->fwd+pos);
+            newAdapter->rev = strdup(a->rev+pos);
+            newAdapter->offset = pos;
+            va_push(adapters, newAdapter);
+        }
+    }
+}
+
+/*
+ * Initialise various seed values
+ */
+static void initSeedValues(void)
+{
+    memset(S, 4, sizeof(S));
+    S['a'] = S['A'] = 0;
+    S['c'] = S['C'] = 1;
+    S['g'] = S['G'] = 2;
+    S['t'] = S['T'] = 3;
+
+    SEEDMASK =
+        (1ull << 0) |
+        (1ull << 3) |
+        (1ull << 6) |
+        (1ull << 9) |
+        (1ull << 12) |
+        (1ull << 15) |
+        (1ull << 18) |
+        (1ull << 21) |
+        (1ull << 24) |
+        (1ull << 27) |
+        (1ull << 30) |
+        (1ull << 33) |
+        (1ull << 36) |
+        (1ull << 39) |
+        (1ull << 42) |
+        (1ull << 45) |
+        (1ull << 48) |
+        (1ull << 51) |
+        (1ull << 54) |
+        (1ull << 57) |
+        (1ull << 60) |
+        (1ull << 63);
+
+}
+
+static inline int seedDiff(uint64_t s1, uint64_t s2)
+{
+    uint64_t dif = (s1 ^ s2);
+    dif = (dif | (dif >> 1) | (dif >> 2)) & SEEDMASK;
+    return __builtin_popcountll(dif);
+}
+
+/*
+ * Calculate seed for a string
+ */
+static uint64_t calcSeed(char *seq)
+{
+    uint64_t seed = 0;
+    if (strlen(seq) < SEEDLEN) return seed;
+    for (int n=0; n < SEEDLEN; n++) {
+        seed = seed << 3;
+        seed |= S[(int)*(seq++)];
+    }
+    return seed;
+}
+
+
+/*
+ * Calculate seed for each adapter fragment
+ */
+static void calcAdapterSeed(va_t *adapters)
+{
+    for (int n=0; n < adapters->end; n++) {
+        adapter_t *a = adapters->entries[n];
+        a->fwd_seed = calcSeed(a->fwd);
+        a->rev_seed = calcSeed(a->rev);
+    }
+}
+
+
+/*
+ * compare two adapters a,b
+ * return -1 if a < b
+ *         0 if a == b
+ *        +1 if a > b
+ */
+static int compareAdapters(adapter_t *a, adapter_t *b)
+{
+    if (!b) return 1;
+    if (a->score == b->score) {
+        if (a->offset == b->offset) return 0;
+        if (a->offset < b->offset) return 1;
+        return -1;
+    }
+    if (a->score > b->score) return 1;
+    return -1;
 }
 
 static adapter_opts_t *adapter_init_opts(int argc, char **argv)
@@ -330,7 +446,7 @@ static adapter_opts_t* parse_args(int argc, char *argv[])
 
     // use built-in adapters if adapter file not specified
     if (!opts->adapterArray) {
-        opts->adapterArray = va_init(50,freeAdapter);
+        opts->adapterArray = va_init(500,freeAdapter);
         adapter_t *src = DefaultAdapterArray;
         while (src->name) {
             adapter_t *dest = smalloc(sizeof(adapter_t));
@@ -341,6 +457,10 @@ static adapter_opts_t* parse_args(int argc, char *argv[])
             src++;
         }
     }
+
+    fragmentAdapters(opts->adapterArray, opts->minscore);
+    initSeedValues();
+    calcAdapterSeed(opts->adapterArray);
 
     return opts;
 }
@@ -389,7 +509,7 @@ static void dumpAdapterResult(bam1_t *rec, adapter_t *a)
     char *aseq = (a->revmatch ? a->rev : a->fwd);
     int len = min(strlen(seq), a->len);
 
-    fprintf(stderr,"sco: %d  beg: %d  end: %d  len:%d  mat:%d  ", a->score, a->begin, a->end, a->end-a->begin, a->begin+a->seqstart);
+    fprintf(stderr,"sco: %d  off: %d  beg: %d  end: %d  len:%d  mat:%d  ", a->score, a->offset, a->begin, a->end, a->end-a->begin, a->begin+a->seqstart);
     fprintf(stderr,"af:%f  frac:%f\n", a->pfrac, a->frac);
     fprintf(stderr,"%s\n", bam_get_qname(rec));
     fprintf(stderr,"%s\n", a->name);
@@ -406,13 +526,22 @@ static void dumpAdapterResult(bam1_t *rec, adapter_t *a)
     free(seq);
 }
 
+#define SCORE_MATCH 1
+#define PEN_MISMATCH -2
+
 static void calcAdapterScore(char *seq, int seqstart, char *aseq, adapter_t *a, adapter_opts_t *opts, bool rev)
 {
-    int const SCORE_MATCH = 1;
-    int const PEN_MISMATCH = -2;
+    uint64_t w = 0;
+    for (int n = 0; n < SEEDLEN; n++) {
+        w = w << 3;
+        w |= S[(int)seq[seqstart+n]];
+    }
 
-    int score = 0, maxscore = 0;
+    // if seeds do not match, get out quick
+    if (seedDiff(w, (rev ? a->rev_seed : a->fwd_seed)) > MAXSEEDDIFF) return;
+
     int comlen = min(strlen(seq+seqstart), a->len);
+    int score = 0, maxscore = 0;
     int currstart = 0, maxstart = 0, maxend = 0;
 
     for (int i = 0; i < comlen; i++) {
@@ -437,8 +566,8 @@ static void calcAdapterScore(char *seq, int seqstart, char *aseq, adapter_t *a, 
         a->end = maxend;
         a->revmatch = rev;
         a->seqstart = seqstart;
-        a->frac = (double) (a->end - a->begin) / (double) a->len;
-        a->pfrac = (double) (a->end - a->begin) / (double) comlen;
+        a->frac = (double) (a->end - a->begin) / (double) (a->len + a->offset);
+        a->pfrac = (double) (a->end - a->begin) / (double) (comlen + a->offset);
         // doesn't matter how good the score is, if it fails the other criteria
         if (a->frac < opts->minfrac || a->pfrac < opts->minpfrac) a->score = 0;
     }
@@ -447,7 +576,7 @@ static void calcAdapterScore(char *seq, int seqstart, char *aseq, adapter_t *a, 
 static void matchAdapter(char *seq, adapter_t *adapter, adapter_opts_t *opts, bool isReverse)
 {
     initAdapterScore(adapter);
-    int seqStart = 0, seqEnd = strlen(seq) - adapter->len;
+    int seqStart = 0, seqEnd = strlen(seq) - 1 - opts->minscore;
 
     if (seqEnd < 0) seqEnd = 0;
 
@@ -463,17 +592,14 @@ static void matchAdapter(char *seq, adapter_t *adapter, adapter_opts_t *opts, bo
 static adapter_t *findBestMatch(bam1_t *rec, va_t *adapterArray, adapter_opts_t *opts)
 {
     adapter_t *best_match = NULL;
-    int hiscore = 0;
     uint8_t *seq = get_read(rec);
-
 
     for (int n=0; n < adapterArray->end; n++) {
         adapter_t *adapter = adapterArray->entries[n];
         matchAdapter((char *)seq, adapter, opts, bam_is_rev(rec));
 //dumpAdapterResult(rec,adapter);
-        if (!best_match || adapter->score > hiscore) {
+        if (compareAdapters(adapter, best_match) > 0) {
             best_match = adapter;
-            hiscore = best_match->score;
         }
     }
 
@@ -483,7 +609,7 @@ static adapter_t *findBestMatch(bam1_t *rec, va_t *adapterArray, adapter_opts_t 
 
 static void updateRecord(bam1_t *rec, adapter_t *adapter)
 {
-    uint32_t clip = rec->core.l_qseq - adapter->seqstart;
+    uint32_t clip = rec->core.l_qseq - adapter->seqstart + adapter->offset;
     float randconf = kmerPoisson(rec, adapter);
     bam_aux_append(rec, "aa", 'Z', strlen(adapter->name)+1, (uint8_t *) adapter->name);
     bam_aux_update_float(rec, "af", adapter->pfrac);
@@ -739,6 +865,9 @@ static va_t *copy_adapter_array(va_t *adapter_array)
         d->name = strdup(src->name);
         d->fwd = strdup(src->fwd);
         d->rev = strdup(src->rev);
+        d->offset = src->offset;
+        d->fwd_seed = src->fwd_seed;
+        d->rev_seed = src->rev_seed;
         va_push(dest,d);
     }
     return dest;
