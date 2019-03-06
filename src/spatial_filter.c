@@ -52,7 +52,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define COORD_SHIFT   1000
 #define COORD_FACTOR  10
 
-#define REGION_MAGIC                "RGF2"
+#define REGION_MAGIC                "RGF3"
 #define REGION_MAGIC_LEN            5
 #define SF_CMDLINE_LEN              1024
 
@@ -113,13 +113,13 @@ typedef struct {
     int region_size;
     int nregions_x;
     int nregions_y;
-    int nreads;
+    uint64_t nreads;
     int readLength[N_READS];
     int totalReadLength;
     uint32_t filterDataSize;
     char *filterData;
-    int stats_nreads;       // number of records read
-    int stats_nfiltered;    // number of records filtered out
+    uint64_t stats_nreads;       // number of records read
+    uint64_t stats_nfiltered;    // number of records filtered out
     int ngood_tiles;
     RegionTable_t rts;
 } Header;
@@ -268,7 +268,7 @@ static char *getFilterData(Header *hdr, int itile, int read, int cycle, int regi
 static void readFheader(hFILE *fp)
 {
     if (hread(fp, &Fheader, sizeof(Fheader)) < 0) die("readFheader() failed\n");
-    if (strcmp(Fheader.region_magic,REGION_MAGIC)) die("Not a valid filter file\n");
+    if (strncmp(Fheader.region_magic,REGION_MAGIC, strlen(REGION_MAGIC)-1)) die("Not a valid filter file\n");
 }
 
 /*
@@ -307,7 +307,14 @@ static Header *readHeader(hFILE *fp)
     if (hread(fp, &hdr->region_size, sizeof(hdr->region_size)) < 0) goto fail;
     if (hread(fp, &hdr->nregions_x, sizeof(hdr->nregions_x)) < 0) goto fail;
     if (hread(fp, &hdr->nregions_y, sizeof(hdr->nregions_y)) < 0) goto fail;
-    if (hread(fp, &hdr->nreads, sizeof(hdr->nreads)) < 0) goto fail;
+    if (Fheader.region_magic[3] == '2') {
+        // old filter file
+        int n=0;
+        if (hread(fp, &n, sizeof(int)) < 0) goto fail;
+        hdr->nreads = n;
+    } else {
+        if (hread(fp, &hdr->nreads, sizeof(hdr->nreads)) < 0) goto fail;
+    }
     if (hread(fp, &hdr->readLength, N_READS * sizeof(*hdr->readLength)) < 0) goto fail;
 
     if (hread(fp, &hdr->filterDataSize, sizeof(hdr->filterDataSize)) < 0) goto fail;
@@ -1078,7 +1085,7 @@ static void setRegionState(opts_t *opts, Header *hdr, RegionTable_t rts)
 static void removeBadTiles(Header *hdr)
 {
     int ngood_tiles = 0;
-    size_t nreads = 0, tile_threshold = 0, threshold = 0;
+    uint64_t nreads = 0, tile_threshold = 0, threshold = 0;
     int itile, read;
 
 	if (0 >= hdr->ntiles) {
@@ -1097,7 +1104,7 @@ static void removeBadTiles(Header *hdr)
     threshold = hdr->ntiles * tile_threshold;
     
 	if (0 < nreads && nreads < threshold) {
-        display("Discarding filter nreads %lu < %lu\n", nreads, threshold);
+        display("Discarding filter nreads %" PRIu64 " < %" PRIu64 "\n", nreads, threshold);
 		return;
     }
 
@@ -1345,7 +1352,7 @@ static RegionTable_t *makeRegionTable(opts_t *opts, BAMit_t *fp_bam)
             rtsArray[bam_lane] = rts;
             for (int read=0;read<N_READS;read++)
                 rts[itile*N_READS+read] = NULL;
-            if (opts->verbose) fprintf(stderr, "Processing lane %d tile %i (%d)\n", bam_lane, bam_tile, hdr->nreads);
+            if (opts->verbose) fprintf(stderr, "Processing lane %d tile %i (%" PRIu64 ")\n", bam_lane, bam_tile, hdr->nreads);
         }
         hdr->tileReadCountArray[itile]++;
 
@@ -1523,9 +1530,9 @@ static void calculateFilter(opts_t *opts)
 	BAMit_free(fp_input_bam);
 
 	if (opts->verbose) {
-        uint32_t traces = 0;
+        uint64_t traces = 0;
         for (int n=1; n < SF_MAX_LANES; n++) if (LaneArray[n]) traces += LaneArray[n]->nreads;
-		display("Processed %" PRIu32 " traces\n", traces);
+		display("Processed %" PRIu64 " traces\n", traces);
 		if (opts->snp_hash) {
 			size_t nsnps = 0;
 			int ibucket;
@@ -1637,9 +1644,9 @@ static void applyFilter(opts_t *s)
         char buffer[64];
         sprintf(buffer, "Lane %d\t", hdr->lane);
         hputs(buffer, apply_stats_fd);
-        sprintf(buffer, "Processed %d \t", hdr->stats_nreads);
+        sprintf(buffer, "Processed %" PRIu64 " \t", hdr->stats_nreads);
         hputs(buffer, apply_stats_fd);
-        sprintf(buffer, "%s %d traces\n", (s->qcfail ? "Failed" : "Removed"), hdr->stats_nfiltered);
+        sprintf(buffer, "%s %" PRIu64 " traces\n", (s->qcfail ? "Failed" : "Removed"), hdr->stats_nfiltered);
         hputs(buffer, apply_stats_fd);
     }
     hputs("\n", apply_stats_fd);
@@ -1754,6 +1761,7 @@ opts_t* spatial_filter_parse_args(int argc, char *argv[])
     while ((opt = getopt_long(argc, argv, optstring, lopts, &option_index)) != -1) {
         const char *arg;
         switch (opt) {
+            case 'R': break;
 			case 'D': opts->dumpFilter = 1; ncmd++;       break;
 			case 'c': opts->calculate = 1; ncmd++;        break;
             case 't': opts->tileviz = strdup(optarg);     break;
