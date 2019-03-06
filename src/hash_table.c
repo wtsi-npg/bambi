@@ -323,8 +323,9 @@ static void HashItemDestroy(HashTable *h, HashItem *hi, int deallocate_data) {
 	if (hi->key)
 	    free(hi->key);
 
-    if (deallocate_data && hi->data.p)
-	free(hi->data.p);
+    if (deallocate_data && hi->data.p) {
+        free(hi->data.p);
+    }
 
 	free(hi);
 

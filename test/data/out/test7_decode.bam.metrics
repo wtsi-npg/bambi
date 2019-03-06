@@ -1,0 +1,18 @@
+##
+# BARCODE_TAG_NAME=b2 MAX_MISMATCHES=1 MIN_MISMATCH_DELTA=1 MAX_NO_CALLS=2 
+##
+# ID:bambi VN:0.11.1-8-g237eff2 (htslib 1.8-7-g518b5f7-dirty) CL:./src/bambi decode --barcode-file test/data/160919_hiseq2500_4966_FC/barcodes_i2 --barcode-tag-name b2 --metrics-file /tmp/test7_decode.bam.metrics -o /tmp/test7_decode.bam test/data/out/test7.bam
+
+##
+BARCODE	BARCODE_NAME	LIBRARY_NAME	SAMPLE_NAME	DESCRIPTION	READS	PF_READS	PERFECT_MATCHES	PF_PERFECT_MATCHES	ONE_MISMATCH_MATCHES	PF_ONE_MISMATCH_MATCHES	PCT_MATCHES	RATIO_THIS_BARCODE_TO_BEST_BARCODE_PCT	PF_PCT_MATCHES	PF_RATIO_THIS_BARCODE_TO_BEST_BARCODE_PCT	PF_NORMALIZED_MATCHES
+AACCG	1	TestLibrary1	TestSample1	Study TestStudy	9	9	2	2	7	7	0.038	0.818	0.038	0.818	1.098
+CCTCA	2	TestLibrary2	TestSample2	Study TestStudy	7	7	1	1	6	6	0.030	0.636	0.030	0.636	0.854
+GGACA	3	TestLibrary3	TestSample3	Study TestStudy	9	9	2	2	7	7	0.038	0.818	0.038	0.818	1.098
+TAATT	4	TestLibrary4	TestSample4	Study TestStudy	9	9	1	1	8	8	0.038	0.818	0.038	0.818	1.098
+TGGAC	5	TestLibrary5	TestSample5	Study TestStudy	8	8	1	1	7	7	0.034	0.727	0.034	0.727	0.976
+GTTAC	6	TestLibrary6	TestSample6	Study TestStudy	11	11	1	1	10	10	0.047	1.000	0.047	1.000	1.341
+CTACG	7	TestLibrary7	TestSample7	Study TestStudy	8	8	2	2	6	6	0.034	0.727	0.034	0.727	0.976
+TCTCC	8	TestLibrary8	TestSample8	Study TestStudy	6	6	2	2	4	4	0.026	0.545	0.026	0.545	0.732
+CGCCT	9	TestLibrary9	TestSample9	Study TestStudy	8	8	1	1	7	7	0.034	0.727	0.034	0.727	0.976
+AGGTG	10	TestLibrary10	TestSample10	Study TestStudy	7	7	1	1	6	6	0.030	0.636	0.030	0.636	0.854
+NNNNN					152	152	0	0	0	0	0.650	13.818	0.650	13.818	0.000

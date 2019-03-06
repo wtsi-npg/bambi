@@ -1,0 +1,550 @@
+@HD	VN:1.5	SO:unsorted
+@RG	ID:1#0	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#0	LB:TestLibrary	PG:SCS	SM:TestSample	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#1	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#1	LB:TestLibrary1	PG:SCS	SM:TestSample1	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#2	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#2	LB:TestLibrary2	PG:SCS	SM:TestSample2	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#3	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#3	LB:TestLibrary3	PG:SCS	SM:TestSample3	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#4	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#4	LB:TestLibrary4	PG:SCS	SM:TestSample4	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#5	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#5	LB:TestLibrary5	PG:SCS	SM:TestSample5	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#6	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#6	LB:TestLibrary6	PG:SCS	SM:TestSample6	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#7	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#7	LB:TestLibrary7	PG:SCS	SM:TestSample7	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#8	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#8	LB:TestLibrary8	PG:SCS	SM:TestSample8	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#9	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#9	LB:TestLibrary9	PG:SCS	SM:TestSample9	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#10	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#10	LB:TestLibrary10	PG:SCS	SM:TestSample10	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#11	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#11	LB:TestLibrary11	PG:SCS	SM:TestSample11	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#12	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#12	LB:TestLibrary12	PG:SCS	SM:TestSample12	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#13	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#13	LB:TestLibrary13	PG:SCS	SM:TestSample13	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#14	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#14	LB:TestLibrary14	PG:SCS	SM:TestSample14	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#15	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#15	LB:TestLibrary15	PG:SCS	SM:TestSample15	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#16	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#16	LB:TestLibrary16	PG:SCS	SM:TestSample16	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#17	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#17	LB:TestLibrary17	PG:SCS	SM:TestSample17	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#18	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#18	LB:TestLibrary18	PG:SCS	SM:TestSample18	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#19	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#19	LB:TestLibrary19	PG:SCS	SM:TestSample19	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#20	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#20	LB:TestLibrary20	PG:SCS	SM:TestSample20	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#21	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#21	LB:TestLibrary21	PG:SCS	SM:TestSample21	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#22	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#22	LB:TestLibrary22	PG:SCS	SM:TestSample22	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#23	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#23	LB:TestLibrary23	PG:SCS	SM:TestSample23	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#24	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#24	LB:TestLibrary24	PG:SCS	SM:TestSample24	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#25	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#25	LB:TestLibrary25	PG:SCS	SM:TestSample25	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#26	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#26	LB:TestLibrary26	PG:SCS	SM:TestSample26	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#27	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#27	LB:TestLibrary27	PG:SCS	SM:TestSample27	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#28	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#28	LB:TestLibrary28	PG:SCS	SM:TestSample28	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#29	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#29	LB:TestLibrary29	PG:SCS	SM:TestSample29	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#30	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#30	LB:TestLibrary30	PG:SCS	SM:TestSample30	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#31	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#31	LB:TestLibrary31	PG:SCS	SM:TestSample31	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#32	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#32	LB:TestLibrary32	PG:SCS	SM:TestSample32	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#33	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#33	LB:TestLibrary33	PG:SCS	SM:TestSample33	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#34	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#34	LB:TestLibrary34	PG:SCS	SM:TestSample34	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#35	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#35	LB:TestLibrary35	PG:SCS	SM:TestSample35	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#36	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#36	LB:TestLibrary36	PG:SCS	SM:TestSample36	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#37	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#37	LB:TestLibrary37	PG:SCS	SM:TestSample37	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#38	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#38	LB:TestLibrary38	PG:SCS	SM:TestSample38	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#39	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#39	LB:TestLibrary39	PG:SCS	SM:TestSample39	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#40	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#40	LB:TestLibrary40	PG:SCS	SM:TestSample40	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#41	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#41	LB:TestLibrary41	PG:SCS	SM:TestSample41	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#42	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#42	LB:TestLibrary42	PG:SCS	SM:TestSample42	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#43	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#43	LB:TestLibrary43	PG:SCS	SM:TestSample43	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#44	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#44	LB:TestLibrary44	PG:SCS	SM:TestSample44	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#45	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#45	LB:TestLibrary45	PG:SCS	SM:TestSample45	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#46	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#46	LB:TestLibrary46	PG:SCS	SM:TestSample46	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#47	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#47	LB:TestLibrary47	PG:SCS	SM:TestSample47	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#48	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#48	LB:TestLibrary48	PG:SCS	SM:TestSample48	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#49	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#49	LB:TestLibrary49	PG:SCS	SM:TestSample49	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#50	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#50	LB:TestLibrary50	PG:SCS	SM:TestSample50	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#51	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#51	LB:TestLibrary51	PG:SCS	SM:TestSample51	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#52	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#52	LB:TestLibrary52	PG:SCS	SM:TestSample52	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#53	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#53	LB:TestLibrary53	PG:SCS	SM:TestSample53	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#54	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#54	LB:TestLibrary54	PG:SCS	SM:TestSample54	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#55	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#55	LB:TestLibrary55	PG:SCS	SM:TestSample55	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#56	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#56	LB:TestLibrary56	PG:SCS	SM:TestSample56	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#57	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#57	LB:TestLibrary57	PG:SCS	SM:TestSample57	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#58	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#58	LB:TestLibrary58	PG:SCS	SM:TestSample58	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#59	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#59	LB:TestLibrary59	PG:SCS	SM:TestSample59	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#60	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#60	LB:TestLibrary60	PG:SCS	SM:TestSample60	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#61	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#61	LB:TestLibrary61	PG:SCS	SM:TestSample61	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#62	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#62	LB:TestLibrary62	PG:SCS	SM:TestSample62	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#63	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#63	LB:TestLibrary63	PG:SCS	SM:TestSample63	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#64	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#64	LB:TestLibrary64	PG:SCS	SM:TestSample64	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#65	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#65	LB:TestLibrary65	PG:SCS	SM:TestSample65	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#66	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#66	LB:TestLibrary66	PG:SCS	SM:TestSample66	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#67	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#67	LB:TestLibrary67	PG:SCS	SM:TestSample67	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#68	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#68	LB:TestLibrary68	PG:SCS	SM:TestSample68	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#69	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#69	LB:TestLibrary69	PG:SCS	SM:TestSample69	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#70	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#70	LB:TestLibrary70	PG:SCS	SM:TestSample70	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#71	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#71	LB:TestLibrary71	PG:SCS	SM:TestSample71	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#72	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#72	LB:TestLibrary72	PG:SCS	SM:TestSample72	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#73	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#73	LB:TestLibrary73	PG:SCS	SM:TestSample73	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#74	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#74	LB:TestLibrary74	PG:SCS	SM:TestSample74	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#75	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#75	LB:TestLibrary75	PG:SCS	SM:TestSample75	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#76	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#76	LB:TestLibrary76	PG:SCS	SM:TestSample76	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@PG	ID:SCS	VN:2.0.12.0	PN:HiSeq Control Software	DS:Controlling software on instrument
+@PG	ID:basecalling	PP:SCS	VN:Unknown	PN:Unknown	DS:Basecalling Package
+@PG	ID:bambi	PP:basecalling	VN:12.34	CL:bambi i2b -i ./test/data/160919_hiseq2500_4966_FC/Data/Intensities -o /tmp/bambi.3bdOh3/test10_decode.bam --lane 1 --first-tile 1101 --tile-limit 1 --library-name TestLibrary --sample-alias TestSample --study-name Study TestStudy --run-start-date 2011-03-23T00:00:00+0000 --verbose --first-cycle 1,30 --final-cycle 2,32 --first-index-cycle 3,5 --final-index-cycle 4,7 --barcode-file test/data/160919_hiseq2500_4966_FC/barcodes_ci --barcode-tag-name BC --metrics-file /tmp/bambi.3bdOh3/test10_decode.bam.metrics	PN:bambi	DS:Convert Illumina BCL to BAM or SAM file
+@PG	ID:bambi.1	PN:bambi	PP:bambi	VN:0.11.1-8-g237eff2	CL:./src/bambi decode --barcode-file test/data/160919_hiseq2500_4966_FC/barcodes_ci --barcode-tag-name BC --metrics-file /tmp/i2b_10_decode.sam.metrics -o /tmp/i2b_10_decode.bam test/data/out/test10.bam
+TC1_TestDataExperiment:1:1101:1013:1066	77	*	0	0	*	*	0	0	AC	3.	RG:Z:1#0	BC:Z:AT-ACA	QT:Z:JR DA7
+TC1_TestDataExperiment:1:1101:1013:1066	141	*	0	0	*	*	0	0	ATT	%,V	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:1212:1046	77	*	0	0	*	*	0	0	GA	=)	RG:Z:1#0	BC:Z:CG-GNT	QT:Z:KD L!$
+TC1_TestDataExperiment:1:1101:1212:1046	141	*	0	0	*	*	0	0	CCC	@R-	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:1329:1075	77	*	0	0	*	*	0	0	CT	#Z	RG:Z:1#0	BC:Z:TA-ACA	QT:Z:R8 /+A
+TC1_TestDataExperiment:1:1101:1329:1075	141	*	0	0	*	*	0	0	CTC	C]9	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:1445:1196	77	*	0	0	*	*	0	0	TA	1R	RG:Z:1#9	BC:Z:GA-TGG	QT:Z:<` 2WQ
+TC1_TestDataExperiment:1:1101:1445:1196	141	*	0	0	*	*	0	0	GGG	&9Q	RG:Z:1#9
+TC1_TestDataExperiment:1:1101:1695:1063	77	*	0	0	*	*	0	0	TT	A-	RG:Z:1#68	BC:Z:AA-TCC	QT:Z:L3 C,8
+TC1_TestDataExperiment:1:1101:1695:1063	141	*	0	0	*	*	0	0	TGT	YTJ	RG:Z:1#68
+TC1_TestDataExperiment:1:1101:2186:1204	77	*	0	0	*	*	0	0	GG	W*	RG:Z:1#11	BC:Z:NC-GAA	QT:Z:!B \^#
+TC1_TestDataExperiment:1:1101:2186:1204	141	*	0	0	*	*	0	0	TGT	R&F	RG:Z:1#11
+TC1_TestDataExperiment:1:1101:2269:1197	77	*	0	0	*	*	0	0	CA	@M	RG:Z:1#62	BC:Z:CA-ATA	QT:Z:0A NE8
+TC1_TestDataExperiment:1:1101:2269:1197	141	*	0	0	*	*	0	0	TGT	CBN	RG:Z:1#62
+TC1_TestDataExperiment:1:1101:2515:1010	77	*	0	0	*	*	0	0	GT	A(	RG:Z:1#54	BC:Z:GT-CGG	QT:Z:2L Q,\
+TC1_TestDataExperiment:1:1101:2515:1010	141	*	0	0	*	*	0	0	TAG	":X	RG:Z:1#54
+TC1_TestDataExperiment:1:1101:2672:1248	77	*	0	0	*	*	0	0	TG	8`	RG:Z:1#0	BC:Z:GT-TGT	QT:Z:@F .'8
+TC1_TestDataExperiment:1:1101:2672:1248	141	*	0	0	*	*	0	0	GGC	LJ)	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:2796:1072	77	*	0	0	*	*	0	0	AG	AM	RG:Z:1#48	BC:Z:CT-TGG	QT:Z:&7 NK[
+TC1_TestDataExperiment:1:1101:2796:1072	141	*	0	0	*	*	0	0	ATA	A*-	RG:Z:1#48
+TC1_TestDataExperiment:1:1101:3208:1028	77	*	0	0	*	*	0	0	CT	/+	RG:Z:1#0	BC:Z:GT-TGT	QT:Z:K* &1A
+TC1_TestDataExperiment:1:1101:3208:1028	141	*	0	0	*	*	0	0	ACN	,3!	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:3383:1134	77	*	0	0	*	*	0	0	GT	,V	RG:Z:1#75	BC:Z:AG-GAG	QT:Z:C< W-L
+TC1_TestDataExperiment:1:1101:3383:1134	141	*	0	0	*	*	0	0	ANC	4!W	RG:Z:1#75
+TC1_TestDataExperiment:1:1101:4136:1051	77	*	0	0	*	*	0	0	CA	5A	RG:Z:1#0	BC:Z:CT-CAG	QT:Z:R: .KZ
+TC1_TestDataExperiment:1:1101:4136:1051	141	*	0	0	*	*	0	0	ACG	"IX	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:4476:1080	77	*	0	0	*	*	0	0	GG	2)	RG:Z:1#53	BC:Z:GG-TCT	QT:Z:K/ :,$
+TC1_TestDataExperiment:1:1101:4476:1080	141	*	0	0	*	*	0	0	CCT	3*S	RG:Z:1#53
+TC1_TestDataExperiment:1:1101:4740:1121	77	*	0	0	*	*	0	0	GT	:,	RG:Z:1#0	BC:Z:AT-TTT	QT:Z:/? <P%
+TC1_TestDataExperiment:1:1101:4740:1121	141	*	0	0	*	*	0	0	TTT	B`4	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:4838:1199	77	*	0	0	*	*	0	0	CT	WN	RG:Z:1#0	BC:Z:CA-CGG	QT:Z:P? DS]
+TC1_TestDataExperiment:1:1101:4838:1199	141	*	0	0	*	*	0	0	CCC	4]2	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:5161:1005	77	*	0	0	*	*	0	0	AG	(D	RG:Z:1#0	BC:Z:GT-GCC	QT:Z:A. ^#1
+TC1_TestDataExperiment:1:1101:5161:1005	141	*	0	0	*	*	0	0	TCG	AU@	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:5701:1061	77	*	0	0	*	*	0	0	CC	\3	RG:Z:1#45	BC:Z:CG-AAG	QT:Z:;# .'[
+TC1_TestDataExperiment:1:1101:5701:1061	141	*	0	0	*	*	0	0	GCT	<3P	RG:Z:1#45
+TC1_TestDataExperiment:1:1101:5700:1111	77	*	0	0	*	*	0	0	GG	H`	RG:Z:1#30	BC:Z:CG-CGG	QT:Z:5= 2*(
+TC1_TestDataExperiment:1:1101:5700:1111	141	*	0	0	*	*	0	0	GCC	/)*	RG:Z:1#30
+TC1_TestDataExperiment:1:1101:5970:1022	77	*	0	0	*	*	0	0	TT	_%	RG:Z:1#50	BC:Z:CC-CGA	QT:Z:K4 :EH
+TC1_TestDataExperiment:1:1101:5970:1022	141	*	0	0	*	*	0	0	ATT	T6F	RG:Z:1#50
+TC1_TestDataExperiment:1:1101:6243:1133	77	*	0	0	*	*	0	0	NA	!<	RG:Z:1#42	BC:Z:TA-ATC	QT:Z:7W 1F^
+TC1_TestDataExperiment:1:1101:6243:1133	141	*	0	0	*	*	0	0	CTC	\&Q	RG:Z:1#42
+TC1_TestDataExperiment:1:1101:6240:1071	77	*	0	0	*	*	0	0	CT	&2	RG:Z:1#39	BC:Z:TC-TGG	QT:Z:7- <C&
+TC1_TestDataExperiment:1:1101:6240:1071	141	*	0	0	*	*	0	0	GCT	+5+	RG:Z:1#39
+TC1_TestDataExperiment:1:1101:6283:1072	77	*	0	0	*	*	0	0	CT	S]	RG:Z:1#0	BC:Z:GG-GCG	QT:Z:R7 9E8
+TC1_TestDataExperiment:1:1101:6283:1072	141	*	0	0	*	*	0	0	CGG	\4Q	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:6330:1053	77	*	0	0	*	*	0	0	GG	R/	RG:Z:1#0	BC:Z:GT-GGA	QT:Z:>. WZB
+TC1_TestDataExperiment:1:1101:6330:1053	141	*	0	0	*	*	0	0	GAA	E8F	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:6695:1025	77	*	0	0	*	*	0	0	TT	F1	RG:Z:1#0	BC:Z:CT-ATA	QT:Z:Y8 T(J
+TC1_TestDataExperiment:1:1101:6695:1025	141	*	0	0	*	*	0	0	GAG	=,4	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:6559:1069	77	*	0	0	*	*	0	0	GC	OQ	RG:Z:1#0	BC:Z:AG-ATA	QT:Z:() /F(
+TC1_TestDataExperiment:1:1101:6559:1069	141	*	0	0	*	*	0	0	GAG	M<G	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:6818:1141	77	*	0	0	*	*	0	0	AG	#-	RG:Z:1#42	BC:Z:TA-TTC	QT:Z:#6 2+(
+TC1_TestDataExperiment:1:1101:6818:1141	141	*	0	0	*	*	0	0	GTT	M/9	RG:Z:1#42
+TC1_TestDataExperiment:1:1101:7193:1015	77	*	0	0	*	*	0	0	AA	-5	RG:Z:1#71	BC:Z:CG-CAA	QT:Z:K8 =HV
+TC1_TestDataExperiment:1:1101:7193:1015	141	*	0	0	*	*	0	0	GCA	-W9	RG:Z:1#71
+TC1_TestDataExperiment:1:1101:7312:1101	77	*	0	0	*	*	0	0	AG	0>	RG:Z:1#41	BC:Z:CC-AAT	QT:Z:1) &/\
+TC1_TestDataExperiment:1:1101:7312:1101	141	*	0	0	*	*	0	0	GTG	('J	RG:Z:1#41
+TC1_TestDataExperiment:1:1101:7375:1149	77	*	0	0	*	*	0	0	CC	MO	RG:Z:1#0	BC:Z:GG-GCG	QT:Z:W^ 9?M
+TC1_TestDataExperiment:1:1101:7375:1149	141	*	0	0	*	*	0	0	GGC	9$'	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:7556:1155	77	*	0	0	*	*	0	0	GG	A`	RG:Z:1#0	BC:Z:AG-ATA	QT:Z:8C SON
+TC1_TestDataExperiment:1:1101:7556:1155	141	*	0	0	*	*	0	0	TCG	A`A	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:7811:1051	77	*	0	0	*	*	0	0	GG	X?	RG:Z:1#14	BC:Z:AA-CAG	QT:Z:M4 I*=
+TC1_TestDataExperiment:1:1101:7811:1051	141	*	0	0	*	*	0	0	TGC	M->	RG:Z:1#14
+TC1_TestDataExperiment:1:1101:8116:1073	77	*	0	0	*	*	0	0	AA	1<	RG:Z:1#0	BC:Z:AG-GGT	QT:Z:8, S#[
+TC1_TestDataExperiment:1:1101:8116:1073	141	*	0	0	*	*	0	0	TCC	8F$	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:8494:1096	77	*	0	0	*	*	0	0	TA	1"	RG:Z:1#1	BC:Z:GT-GCG	QT:Z:PD /=V
+TC1_TestDataExperiment:1:1101:8494:1096	141	*	0	0	*	*	0	0	TAT	[N7	RG:Z:1#1
+TC1_TestDataExperiment:1:1101:8591:1060	77	*	0	0	*	*	0	0	TT	4D	RG:Z:1#0	BC:Z:GC-GTC	QT:Z:S- -?6
+TC1_TestDataExperiment:1:1101:8591:1060	141	*	0	0	*	*	0	0	AAN	AU!	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:8977:1008	77	*	0	0	*	*	0	0	TT	1S	RG:Z:1#51	BC:Z:CG-GGA	QT:Z:>" #WE
+TC1_TestDataExperiment:1:1101:8977:1008	141	*	0	0	*	*	0	0	AAT	S.Z	RG:Z:1#51
+TC1_TestDataExperiment:1:1101:8818:1102	77	*	0	0	*	*	0	0	GC	/A	RG:Z:1#16	BC:Z:AG-GTA	QT:Z:OE 4R#
+TC1_TestDataExperiment:1:1101:8818:1102	141	*	0	0	*	*	0	0	GAG	\@-	RG:Z:1#16
+TC1_TestDataExperiment:1:1101:9355:1217	77	*	0	0	*	*	0	0	GA	5W	RG:Z:1#43	BC:Z:GT-CCC	QT:Z:8A YW&
+TC1_TestDataExperiment:1:1101:9355:1217	141	*	0	0	*	*	0	0	AAG	\Z(	RG:Z:1#43
+TC1_TestDataExperiment:1:1101:9513:1045	77	*	0	0	*	*	0	0	TG	CD	RG:Z:1#39	BC:Z:TC-TGC	QT:Z:G^ >I6
+TC1_TestDataExperiment:1:1101:9513:1045	141	*	0	0	*	*	0	0	CGA	A\\	RG:Z:1#39
+TC1_TestDataExperiment:1:1101:9975:1076	77	*	0	0	*	*	0	0	AT	L7	RG:Z:1#0	BC:Z:TG-TGG	QT:Z:X- ZJ[
+TC1_TestDataExperiment:1:1101:9975:1076	141	*	0	0	*	*	0	0	TTA	I)$	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:9860:1014	77	*	0	0	*	*	0	0	CG	"G	RG:Z:1#0	BC:Z:AC-AAA	QT:Z:B* )V<
+TC1_TestDataExperiment:1:1101:9860:1014	141	*	0	0	*	*	0	0	GAA	*#F	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:10122:1063	77	*	0	0	*	*	0	0	AG	Z[	RG:Z:1#0	BC:Z:GG-AGG	QT:Z:CQ `Q,
+TC1_TestDataExperiment:1:1101:10122:1063	141	*	0	0	*	*	0	0	TCG	]U=	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:10275:1168	77	*	0	0	*	*	0	0	AG	ZR	RG:Z:1#0	BC:Z:GA-CTA	QT:Z:(- 7BH
+TC1_TestDataExperiment:1:1101:10275:1168	141	*	0	0	*	*	0	0	CTT	[/.	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:10294:1194	77	*	0	0	*	*	0	0	TA	.C	RG:Z:1#0	BC:Z:AA-GTA	QT:Z:+7 ^;D
+TC1_TestDataExperiment:1:1101:10294:1194	141	*	0	0	*	*	0	0	TTC	U7W	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:11175:1088	77	*	0	0	*	*	0	0	TC	_-	RG:Z:1#0	BC:Z:TT-GTA	QT:Z:"& **.
+TC1_TestDataExperiment:1:1101:11175:1088	141	*	0	0	*	*	0	0	CAT	P?P	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:11430:1228	77	*	0	0	*	*	0	0	TA	6[	RG:Z:1#37	BC:Z:AG-GGC	QT:Z:[/ <NB
+TC1_TestDataExperiment:1:1101:11430:1228	141	*	0	0	*	*	0	0	GTT	\<M	RG:Z:1#37
+TC1_TestDataExperiment:1:1101:11474:1048	77	*	0	0	*	*	0	0	CT	7Z	RG:Z:1#23	BC:Z:CA-CGT	QT:Z:,M .VB
+TC1_TestDataExperiment:1:1101:11474:1048	141	*	0	0	*	*	0	0	CGC	X3+	RG:Z:1#23
+TC1_TestDataExperiment:1:1101:11608:1120	77	*	0	0	*	*	0	0	TC	U(	RG:Z:1#26	BC:Z:AT-GCA	QT:Z:[> J9]
+TC1_TestDataExperiment:1:1101:11608:1120	141	*	0	0	*	*	0	0	CAA	C'>	RG:Z:1#26
+TC1_TestDataExperiment:1:1101:11867:1025	77	*	0	0	*	*	0	0	TA	QS	RG:Z:1#23	BC:Z:TA-CGT	QT:Z:MP N`5
+TC1_TestDataExperiment:1:1101:11867:1025	141	*	0	0	*	*	0	0	CAC	)ZH	RG:Z:1#23
+TC1_TestDataExperiment:1:1101:12211:1205	77	*	0	0	*	*	0	0	AG	KB	RG:Z:1#9	BC:Z:GG-TGG	QT:Z:37 +Z?
+TC1_TestDataExperiment:1:1101:12211:1205	141	*	0	0	*	*	0	0	GAG	J1;	RG:Z:1#9
+TC1_TestDataExperiment:1:1101:12147:1221	77	*	0	0	*	*	0	0	AG	5#	RG:Z:1#0	BC:Z:CT-AGT	QT:Z:5V K2"
+TC1_TestDataExperiment:1:1101:12147:1221	141	*	0	0	*	*	0	0	CTA	,3P	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:12465:1125	77	*	0	0	*	*	0	0	TG	)&	RG:Z:1#0	BC:Z:GG-TAG	QT:Z:SK S'R
+TC1_TestDataExperiment:1:1101:12465:1125	141	*	0	0	*	*	0	0	GCT	-HP	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:12352:1236	77	*	0	0	*	*	0	0	AG	N_	RG:Z:1#36	BC:Z:CT-AGA	QT:Z:,5 MV"
+TC1_TestDataExperiment:1:1101:12352:1236	141	*	0	0	*	*	0	0	ATT	Q'F	RG:Z:1#36
+TC1_TestDataExperiment:1:1101:12644:1003	77	*	0	0	*	*	0	0	AC	]]	RG:Z:1#26	BC:Z:AT-GCC	QT:Z:]I D5#
+TC1_TestDataExperiment:1:1101:12644:1003	141	*	0	0	*	*	0	0	CGG	V2]	RG:Z:1#26
+TC1_TestDataExperiment:1:1101:12922:1103	77	*	0	0	*	*	0	0	CC	FD	RG:Z:1#0	BC:Z:TA-CAG	QT:Z:F, M]@
+TC1_TestDataExperiment:1:1101:12922:1103	141	*	0	0	*	*	0	0	AGG	:O2	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:13164:1231	77	*	0	0	*	*	0	0	CG	08	RG:Z:1#37	BC:Z:AG-TGC	QT:Z:BU ([(
+TC1_TestDataExperiment:1:1101:13164:1231	141	*	0	0	*	*	0	0	GTT	C;"	RG:Z:1#37
+TC1_TestDataExperiment:1:1101:13445:1032	77	*	0	0	*	*	0	0	AG	7^	RG:Z:1#57	BC:Z:TG-TCG	QT:Z:W; "O?
+TC1_TestDataExperiment:1:1101:13445:1032	141	*	0	0	*	*	0	0	TAG	#QA	RG:Z:1#57
+TC1_TestDataExperiment:1:1101:13445:1223	77	*	0	0	*	*	0	0	TT	D[	RG:Z:1#35	BC:Z:AT-TTC	QT:Z:(A L5D
+TC1_TestDataExperiment:1:1101:13445:1223	141	*	0	0	*	*	0	0	GGA	K*I	RG:Z:1#35
+TC1_TestDataExperiment:1:1101:14170:1120	77	*	0	0	*	*	0	0	GC	%`	RG:Z:1#0	BC:Z:AC-TGT	QT:Z:YX HZ7
+TC1_TestDataExperiment:1:1101:14170:1120	141	*	0	0	*	*	0	0	CTG	+1C	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:14060:1058	77	*	0	0	*	*	0	0	AG	VJ	RG:Z:1#40	BC:Z:CC-TCC	QT:Z:JA IJO
+TC1_TestDataExperiment:1:1101:14060:1058	141	*	0	0	*	*	0	0	GGC	EXW	RG:Z:1#40
+TC1_TestDataExperiment:1:1101:14605:1173	77	*	0	0	*	*	0	0	GT	TK	RG:Z:1#0	BC:Z:TG-GGA	QT:Z:S/ GY-
+TC1_TestDataExperiment:1:1101:14605:1173	141	*	0	0	*	*	0	0	TCA	<^\	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:14793:1072	77	*	0	0	*	*	0	0	TC	08	RG:Z:1#56	BC:Z:GC-CCT	QT:Z:2I LR9
+TC1_TestDataExperiment:1:1101:14793:1072	141	*	0	0	*	*	0	0	CGC	8XZ	RG:Z:1#56
+TC1_TestDataExperiment:1:1101:14969:1050	77	*	0	0	*	*	0	0	TC	ID	RG:Z:1#31	BC:Z:GT-TAA	QT:Z:.3 _(?
+TC1_TestDataExperiment:1:1101:14969:1050	141	*	0	0	*	*	0	0	TTA	*,I	RG:Z:1#31
+TC1_TestDataExperiment:1:1101:15103:1224	77	*	0	0	*	*	0	0	TA	00	RG:Z:1#11	BC:Z:GC-GTA	QT:Z::< -M[
+TC1_TestDataExperiment:1:1101:15103:1224	141	*	0	0	*	*	0	0	CTG	KQ-	RG:Z:1#11
+TC1_TestDataExperiment:1:1101:15273:1107	77	*	0	0	*	*	0	0	TC	F0	RG:Z:1#38	BC:Z:GG-ACC	QT:Z:>2 Q>Y
+TC1_TestDataExperiment:1:1101:15273:1107	141	*	0	0	*	*	0	0	GCT	II*	RG:Z:1#38
+TC1_TestDataExperiment:1:1101:16201:1018	77	*	0	0	*	*	0	0	TG	*L	RG:Z:1#31	BC:Z:GT-TAT	QT:Z:=? `>Q
+TC1_TestDataExperiment:1:1101:16201:1018	141	*	0	0	*	*	0	0	AGG	Z<A	RG:Z:1#31
+TC1_TestDataExperiment:1:1101:16189:1154	77	*	0	0	*	*	0	0	AT	+S	RG:Z:1#0	BC:Z:GA-TAG	QT:Z:*& 3^S
+TC1_TestDataExperiment:1:1101:16189:1154	141	*	0	0	*	*	0	0	CCC	.\X	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:16857:1128	77	*	0	0	*	*	0	0	TC	(L	RG:Z:1#5	BC:Z:AT-ACG	QT:Z:CX :0N
+TC1_TestDataExperiment:1:1101:16857:1128	141	*	0	0	*	*	0	0	GCG	&+K	RG:Z:1#5
+TC1_TestDataExperiment:1:1101:16958:1085	77	*	0	0	*	*	0	0	CG	+$	RG:Z:1#0	BC:Z:GT-GCT	QT:Z:\C F7?
+TC1_TestDataExperiment:1:1101:16958:1085	141	*	0	0	*	*	0	0	CCA	'VJ	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:17085:1233	77	*	0	0	*	*	0	0	GA	DN	RG:Z:1#40	BC:Z:CG-TCC	QT:Z:H] C\D
+TC1_TestDataExperiment:1:1101:17085:1233	141	*	0	0	*	*	0	0	TGG	A"Y	RG:Z:1#40
+TC1_TestDataExperiment:1:1101:17445:1203	77	*	0	0	*	*	0	0	CC	86	RG:Z:1#4	BC:Z:GT-GTT	QT:Z:$6 +1?
+TC1_TestDataExperiment:1:1101:17445:1203	141	*	0	0	*	*	0	0	GGA	JW#	RG:Z:1#4
+TC1_TestDataExperiment:1:1101:17484:1152	77	*	0	0	*	*	0	0	TT	H#	RG:Z:1#0	BC:Z:CT-GGG	QT:Z:+G VR/
+TC1_TestDataExperiment:1:1101:17484:1152	141	*	0	0	*	*	0	0	TAA	)M/	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:17672:1104	77	*	0	0	*	*	0	0	TG	*D	RG:Z:1#2	BC:Z:TA-GTG	QT:Z:KM ^E:
+TC1_TestDataExperiment:1:1101:17672:1104	141	*	0	0	*	*	0	0	ATG	#GW	RG:Z:1#2
+TC1_TestDataExperiment:1:1101:17773:1111	77	*	0	0	*	*	0	0	GT	V?	RG:Z:1#23	BC:Z:AA-CGT	QT:Z:D7 G5*
+TC1_TestDataExperiment:1:1101:17773:1111	141	*	0	0	*	*	0	0	TTA	X.(	RG:Z:1#23
+TC1_TestDataExperiment:1:1101:18232:1208	77	*	0	0	*	*	0	0	AG	75	RG:Z:1#19	BC:Z:CT-GAC	QT:Z:2? %F)
+TC1_TestDataExperiment:1:1101:18232:1208	141	*	0	0	*	*	0	0	ACT	LOS	RG:Z:1#19
+TC1_TestDataExperiment:1:1101:18327:1168	77	*	0	0	*	*	0	0	GT	=:	RG:Z:1#6	BC:Z:GC-TAG	QT:Z:=# Z/1
+TC1_TestDataExperiment:1:1101:18327:1168	141	*	0	0	*	*	0	0	CTT	($,	RG:Z:1#6
+TC1_TestDataExperiment:1:1101:19474:1027	77	*	0	0	*	*	0	0	TG	7<	RG:Z:1#28	BC:Z:TT-TCT	QT:Z:T/ H[M
+TC1_TestDataExperiment:1:1101:19474:1027	141	*	0	0	*	*	0	0	AGC	PIG	RG:Z:1#28
+TC1_TestDataExperiment:1:1101:19408:1105	77	*	0	0	*	*	0	0	TA	40	RG:Z:1#0	BC:Z:GA-AAT	QT:Z:AF \-T
+TC1_TestDataExperiment:1:1101:19408:1105	141	*	0	0	*	*	0	0	AGA	-[U	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:20905:1006	77	*	0	0	*	*	0	0	AC	Q'	RG:Z:1#70	BC:Z:GA-GAC	QT:Z:VQ A]-
+TC1_TestDataExperiment:1:1101:20905:1006	141	*	0	0	*	*	0	0	CTT	(8M	RG:Z:1#70
+TC1_TestDataExperiment:1:1101:21011:1001	77	*	0	0	*	*	0	0	TG	`T	RG:Z:1#26	BC:Z:AC-GCA	QT:Z:L* ']T
+TC1_TestDataExperiment:1:1101:21011:1001	141	*	0	0	*	*	0	0	TCC	JT]	RG:Z:1#26
+TC1_TestDataExperiment:1:1101:21387:1203	77	*	0	0	*	*	0	0	CC	RU	RG:Z:1#76	BC:Z:TT-AAC	QT:Z:** OLD
+TC1_TestDataExperiment:1:1101:21387:1203	141	*	0	0	*	*	0	0	CCG	BF:	RG:Z:1#76
+TC1_TestDataExperiment:1:1101:1228:1465	77	*	0	0	*	*	0	0	AG	F\	RG:Z:1#0	BC:Z:TC-ATC	QT:Z::7 :;J
+TC1_TestDataExperiment:1:1101:1228:1465	141	*	0	0	*	*	0	0	TAA	[CF	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:1427:1263	77	*	0	0	*	*	0	0	CN	P!	RG:Z:1#33	BC:Z:AC-ATA	QT:Z:9. 2EN
+TC1_TestDataExperiment:1:1101:1427:1263	141	*	0	0	*	*	0	0	CGC	\CY	RG:Z:1#33
+TC1_TestDataExperiment:1:1101:1707:1390	77	*	0	0	*	*	0	0	TA	S9	RG:Z:1#53	BC:Z:GG-TCT	QT:Z:8* %DK
+TC1_TestDataExperiment:1:1101:1707:1390	141	*	0	0	*	*	0	0	AAT	AI.	RG:Z:1#53
+TC1_TestDataExperiment:1:1101:1979:1442	77	*	0	0	*	*	0	0	GT	)3	RG:Z:1#0	BC:Z:TT-ACG	QT:Z:P9 S_H
+TC1_TestDataExperiment:1:1101:1979:1442	141	*	0	0	*	*	0	0	GCC	%Z,	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:1780:1308	77	*	0	0	*	*	0	0	TG	G&	RG:Z:1#34	BC:Z:TT-TTG	QT:Z:IJ QG1
+TC1_TestDataExperiment:1:1101:1780:1308	141	*	0	0	*	*	0	0	CGA	=`%	RG:Z:1#34
+TC1_TestDataExperiment:1:1101:2037:1323	77	*	0	0	*	*	0	0	GA	)?	RG:Z:1#0	BC:Z:GG-GCG	QT:Z::W [/C
+TC1_TestDataExperiment:1:1101:2037:1323	141	*	0	0	*	*	0	0	GCT	.Z9	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:2453:1384	77	*	0	0	*	*	0	0	CN	#!	RG:Z:1#46	BC:Z:AC-AAC	QT:Z:I+ Y1.
+TC1_TestDataExperiment:1:1101:2453:1384	141	*	0	0	*	*	0	0	AGA	MA)	RG:Z:1#46
+TC1_TestDataExperiment:1:1101:2629:1403	77	*	0	0	*	*	0	0	CG	MQ	RG:Z:1#44	BC:Z:AC-ACT	QT:Z:A( _-=
+TC1_TestDataExperiment:1:1101:2629:1403	141	*	0	0	*	*	0	0	CCT	`@S	RG:Z:1#44
+TC1_TestDataExperiment:1:1101:2958:1284	77	*	0	0	*	*	0	0	GT	I:	RG:Z:1#25	BC:Z:TG-AAT	QT:Z:ZE A2_
+TC1_TestDataExperiment:1:1101:2958:1284	141	*	0	0	*	*	0	0	TCT	,HH	RG:Z:1#25
+TC1_TestDataExperiment:1:1101:2909:1475	77	*	0	0	*	*	0	0	GG	#=	RG:Z:1#0	BC:Z:GC-GAG	QT:Z:)9 ]V)
+TC1_TestDataExperiment:1:1101:2909:1475	141	*	0	0	*	*	0	0	TTA	9%%	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:3395:1274	77	*	0	0	*	*	0	0	CA	5#	RG:Z:1#0	BC:Z:CG-CGT	QT:Z:1I =;A
+TC1_TestDataExperiment:1:1101:3395:1274	141	*	0	0	*	*	0	0	TAT	Y+=	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:3735:1402	77	*	0	0	*	*	0	0	GT	_]	RG:Z:1#0	BC:Z:AC-GGC	QT:Z:5. ^_M
+TC1_TestDataExperiment:1:1101:3735:1402	141	*	0	0	*	*	0	0	AAG	X<3	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:4642:1382	77	*	0	0	*	*	0	0	CT	K`	RG:Z:1#0	BC:Z:AG-ACT	QT:Z:%Z J`(
+TC1_TestDataExperiment:1:1101:4642:1382	141	*	0	0	*	*	0	0	AAC	^_5	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:4828:1347	77	*	0	0	*	*	0	0	TA	PL	RG:Z:1#55	BC:Z:AG-CCT	QT:Z:?R ^;D
+TC1_TestDataExperiment:1:1101:4828:1347	141	*	0	0	*	*	0	0	AGT	AW1	RG:Z:1#55
+TC1_TestDataExperiment:1:1101:5962:1304	77	*	0	0	*	*	0	0	AC	W\	RG:Z:1#17	BC:Z:TN-ACC	QT:Z:+! JGC
+TC1_TestDataExperiment:1:1101:5962:1304	141	*	0	0	*	*	0	0	AAT	KY.	RG:Z:1#17
+TC1_TestDataExperiment:1:1101:5797:1304	77	*	0	0	*	*	0	0	AG	GC	RG:Z:1#11	BC:Z:GC-GCA	QT:Z:\Q W4E
+TC1_TestDataExperiment:1:1101:5797:1304	141	*	0	0	*	*	0	0	GCC	[IF	RG:Z:1#11
+TC1_TestDataExperiment:1:1101:6307:1286	77	*	0	0	*	*	0	0	CA	N=	RG:Z:1#0	BC:Z:AA-AAG	QT:Z:>^ Y+-
+TC1_TestDataExperiment:1:1101:6307:1286	141	*	0	0	*	*	0	0	GCG	5_E	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:6689:1284	77	*	0	0	*	*	0	0	NC	!U	RG:Z:1#28	BC:Z:TT-TGC	QT:Z:/E ?)(
+TC1_TestDataExperiment:1:1101:6689:1284	141	*	0	0	*	*	0	0	TCT	PEL	RG:Z:1#28
+TC1_TestDataExperiment:1:1101:6535:1441	77	*	0	0	*	*	0	0	CG	1,	RG:Z:1#11	BC:Z:GC-GAA	QT:Z:20 ,TH
+TC1_TestDataExperiment:1:1101:6535:1441	141	*	0	0	*	*	0	0	GAT	FB-	RG:Z:1#11
+TC1_TestDataExperiment:1:1101:6789:1451	77	*	0	0	*	*	0	0	AA	6V	RG:Z:1#6	BC:Z:AC-TAG	QT:Z:S? /``
+TC1_TestDataExperiment:1:1101:6789:1451	141	*	0	0	*	*	0	0	AGC	4T_	RG:Z:1#6
+TC1_TestDataExperiment:1:1101:7089:1465	77	*	0	0	*	*	0	0	GT	TV	RG:Z:1#0	BC:Z:CG-CGC	QT:Z:Q4 /6"
+TC1_TestDataExperiment:1:1101:7089:1465	141	*	0	0	*	*	0	0	ATA	GKX	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:7216:1444	77	*	0	0	*	*	0	0	GC	9-	RG:Z:1#40	BC:Z:CG-TCC	QT:Z:6( "."
+TC1_TestDataExperiment:1:1101:7216:1444	141	*	0	0	*	*	0	0	CTA	6*W	RG:Z:1#40
+TC1_TestDataExperiment:1:1101:7315:1277	77	*	0	0	*	*	0	0	GT	<&	RG:Z:1#0	BC:Z:TG-TGG	QT:Z:1^ ]'3
+TC1_TestDataExperiment:1:1101:7315:1277	141	*	0	0	*	*	0	0	CCT	7M?	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:7663:1384	77	*	0	0	*	*	0	0	GA	]9	RG:Z:1#0	BC:Z:AA-AAG	QT:Z:4P :$B
+TC1_TestDataExperiment:1:1101:7663:1384	141	*	0	0	*	*	0	0	AAA	)H7	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:7771:1253	77	*	0	0	*	*	0	0	AG	3%	RG:Z:1#15	BC:Z:TA-CAA	QT:Z:E/ P))
+TC1_TestDataExperiment:1:1101:7771:1253	141	*	0	0	*	*	0	0	GNC	E!+	RG:Z:1#15
+TC1_TestDataExperiment:1:1101:7998:1468	77	*	0	0	*	*	0	0	GG	Z[	RG:Z:1#4	BC:Z:GT-GGT	QT:Z:I6 N(R
+TC1_TestDataExperiment:1:1101:7998:1468	141	*	0	0	*	*	0	0	GGA	M1E	RG:Z:1#4
+TC1_TestDataExperiment:1:1101:8047:1350	77	*	0	0	*	*	0	0	AA	5,	RG:Z:1#0	BC:Z:TT-ACG	QT:Z:SP _:<
+TC1_TestDataExperiment:1:1101:8047:1350	141	*	0	0	*	*	0	0	AAC	*5(	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:8515:1421	77	*	0	0	*	*	0	0	CG	YS	RG:Z:1#17	BC:Z:TC-ACC	QT:Z:#; BS&
+TC1_TestDataExperiment:1:1101:8515:1421	141	*	0	0	*	*	0	0	GAA	LRS	RG:Z:1#17
+TC1_TestDataExperiment:1:1101:8769:1336	77	*	0	0	*	*	0	0	CT	)/	RG:Z:1#0	BC:Z:GG-TGT	QT:Z::N ]08
+TC1_TestDataExperiment:1:1101:8769:1336	141	*	0	0	*	*	0	0	CGG	==G	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:8792:1363	77	*	0	0	*	*	0	0	TC	^D	RG:Z:1#69	BC:Z:TG-GAC	QT:Z:UU Q`8
+TC1_TestDataExperiment:1:1101:8792:1363	141	*	0	0	*	*	0	0	GAG	\T1	RG:Z:1#69
+TC1_TestDataExperiment:1:1101:9076:1429	77	*	0	0	*	*	0	0	GC	JN	RG:Z:1#41	BC:Z:CC-TGT	QT:Z:L2 ?F)
+TC1_TestDataExperiment:1:1101:9076:1429	141	*	0	0	*	*	0	0	AGT	X&9	RG:Z:1#41
+TC1_TestDataExperiment:1:1101:9405:1483	77	*	0	0	*	*	0	0	AG	5[	RG:Z:1#0	BC:Z:AC-CTG	QT:Z::* A^^
+TC1_TestDataExperiment:1:1101:9405:1483	141	*	0	0	*	*	0	0	GGA	BQ'	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:9724:1402	77	*	0	0	*	*	0	0	TT	)`	RG:Z:1#26	BC:Z:AT-GAA	QT:Z:58 ^K=
+TC1_TestDataExperiment:1:1101:9724:1402	141	*	0	0	*	*	0	0	ACG	WTR	RG:Z:1#26
+TC1_TestDataExperiment:1:1101:9991:1352	77	*	0	0	*	*	0	0	CG	$T	RG:Z:1#70	BC:Z:GA-NAC	QT:Z:)O !`)
+TC1_TestDataExperiment:1:1101:9991:1352	141	*	0	0	*	*	0	0	GGC	5Y.	RG:Z:1#70
+TC1_TestDataExperiment:1:1101:10160:1450	77	*	0	0	*	*	0	0	GN	K!	RG:Z:1#49	BC:Z:CT-GCT	QT:Z:=] ;]^
+TC1_TestDataExperiment:1:1101:10160:1450	141	*	0	0	*	*	0	0	TTC	31F	RG:Z:1#49
+TC1_TestDataExperiment:1:1101:10514:1267	77	*	0	0	*	*	0	0	CA	B(	RG:Z:1#1	BC:Z:GA-GCG	QT:Z:6; TXM
+TC1_TestDataExperiment:1:1101:10514:1267	141	*	0	0	*	*	0	0	GCA	CN=	RG:Z:1#1
+TC1_TestDataExperiment:1:1101:10519:1487	77	*	0	0	*	*	0	0	GA	Y7	RG:Z:1#28	BC:Z:TT-TCC	QT:Z:B4 _O;
+TC1_TestDataExperiment:1:1101:10519:1487	141	*	0	0	*	*	0	0	GGC	NVI	RG:Z:1#28
+TC1_TestDataExperiment:1:1101:11125:1415	77	*	0	0	*	*	0	0	TA	#_	RG:Z:1#4	BC:Z:GT-GGT	QT:Z:CS (8]
+TC1_TestDataExperiment:1:1101:11125:1415	141	*	0	0	*	*	0	0	TTC	@H$	RG:Z:1#4
+TC1_TestDataExperiment:1:1101:11154:1280	77	*	0	0	*	*	0	0	CA	:B	RG:Z:1#61	BC:Z:GA-CGA	QT:Z:#" >H/
+TC1_TestDataExperiment:1:1101:11154:1280	141	*	0	0	*	*	0	0	GCG	^[F	RG:Z:1#61
+TC1_TestDataExperiment:1:1101:11276:1312	77	*	0	0	*	*	0	0	TG	K\	RG:Z:1#0	BC:Z:TC-CTG	QT:Z:KG $"`
+TC1_TestDataExperiment:1:1101:11276:1312	141	*	0	0	*	*	0	0	TTA	G/Q	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:12493:1347	77	*	0	0	*	*	0	0	TT	WW	RG:Z:1#0	BC:Z:AC-GTT	QT:Z:9E ^M,
+TC1_TestDataExperiment:1:1101:12493:1347	141	*	0	0	*	*	0	0	CCA	I-;	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:12541:1402	77	*	0	0	*	*	0	0	AA	4^	RG:Z:1#66	BC:Z:GG-CGC	QT:Z:;6 <6-
+TC1_TestDataExperiment:1:1101:12541:1402	141	*	0	0	*	*	0	0	TTA	8>.	RG:Z:1#66
+TC1_TestDataExperiment:1:1101:13116:1470	77	*	0	0	*	*	0	0	TG	]9	RG:Z:1#28	BC:Z:TT-TGC	QT:Z:RX WPW
+TC1_TestDataExperiment:1:1101:13116:1470	141	*	0	0	*	*	0	0	GTT	/\B	RG:Z:1#28
+TC1_TestDataExperiment:1:1101:13075:1264	77	*	0	0	*	*	0	0	CA	L/	RG:Z:1#34	BC:Z:TT-TTA	QT:Z:JX @6N
+TC1_TestDataExperiment:1:1101:13075:1264	141	*	0	0	*	*	0	0	TGT	H;/	RG:Z:1#34
+TC1_TestDataExperiment:1:1101:13269:1484	77	*	0	0	*	*	0	0	AG	\#	RG:Z:1#45	BC:Z:CG-AAG	QT:Z:TK L^S
+TC1_TestDataExperiment:1:1101:13269:1484	141	*	0	0	*	*	0	0	TCC	>6%	RG:Z:1#45
+TC1_TestDataExperiment:1:1101:13758:1495	77	*	0	0	*	*	0	0	CG	V>	RG:Z:1#0	BC:Z:AN-TTA	QT:Z:"! YM.
+TC1_TestDataExperiment:1:1101:13758:1495	141	*	0	0	*	*	0	0	CCC	)48	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:14032:1440	77	*	0	0	*	*	0	0	TT	V/	RG:Z:1#63	BC:Z:TG-CTA	QT:Z:QT 'UB
+TC1_TestDataExperiment:1:1101:14032:1440	141	*	0	0	*	*	0	0	AGG	T.9	RG:Z:1#63
+TC1_TestDataExperiment:1:1101:14299:1316	77	*	0	0	*	*	0	0	CG	0A	RG:Z:1#16	BC:Z:AG-GTT	QT:Z:'% ??4
+TC1_TestDataExperiment:1:1101:14299:1316	141	*	0	0	*	*	0	0	TAA	[P/	RG:Z:1#16
+TC1_TestDataExperiment:1:1101:14616:1311	77	*	0	0	*	*	0	0	CA	A&	RG:Z:1#5	BC:Z:AT-ACG	QT:Z:GN ;N3
+TC1_TestDataExperiment:1:1101:14616:1311	141	*	0	0	*	*	0	0	ATC	:"?	RG:Z:1#5
+TC1_TestDataExperiment:1:1101:14602:1349	77	*	0	0	*	*	0	0	CC	N6	RG:Z:1#32	BC:Z:TC-GTG	QT:Z:M; ["D
+TC1_TestDataExperiment:1:1101:14602:1349	141	*	0	0	*	*	0	0	AAG	?(/	RG:Z:1#32
+TC1_TestDataExperiment:1:1101:15026:1350	77	*	0	0	*	*	0	0	AA	C\	RG:Z:1#1	BC:Z:TT-GCG	QT:Z:*Y OF[
+TC1_TestDataExperiment:1:1101:15026:1350	141	*	0	0	*	*	0	0	TGG	_L.	RG:Z:1#1
+TC1_TestDataExperiment:1:1101:15348:1443	77	*	0	0	*	*	0	0	GT	EL	RG:Z:1#7	BC:Z:TT-GGC	QT:Z:JM OH*
+TC1_TestDataExperiment:1:1101:15348:1443	141	*	0	0	*	*	0	0	GTG	-^6	RG:Z:1#7
+TC1_TestDataExperiment:1:1101:15584:1483	77	*	0	0	*	*	0	0	TC	UG	RG:Z:1#0	BC:Z:TT-GNT	QT:Z:+C Z!C
+TC1_TestDataExperiment:1:1101:15584:1483	141	*	0	0	*	*	0	0	TAG	U%'	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:15634:1301	77	*	0	0	*	*	0	0	NN	!!	RG:Z:1#65	BC:Z:CC-ATC	QT:Z:>\ 1UD
+TC1_TestDataExperiment:1:1101:15634:1301	141	*	0	0	*	*	0	0	GGA	M3C	RG:Z:1#65
+TC1_TestDataExperiment:1:1101:16000:1293	77	*	0	0	*	*	0	0	CC	-2	RG:Z:1#0	BC:Z:GC-TTG	QT:Z:L, +.M
+TC1_TestDataExperiment:1:1101:16000:1293	141	*	0	0	*	*	0	0	AAG	3-(	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:16397:1268	77	*	0	0	*	*	0	0	GA	^W	RG:Z:1#55	BC:Z:AT-CCT	QT:Z:5U :5U
+TC1_TestDataExperiment:1:1101:16397:1268	141	*	0	0	*	*	0	0	NCG	!^<	RG:Z:1#55
+TC1_TestDataExperiment:1:1101:16306:1323	77	*	0	0	*	*	0	0	TG	L#	RG:Z:1#0	BC:Z:AC-CTC	QT:Z:BV 17B
+TC1_TestDataExperiment:1:1101:16306:1323	141	*	0	0	*	*	0	0	TAA	`T[	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:16854:1332	77	*	0	0	*	*	0	0	TT	OA	RG:Z:1#67	BC:Z:TC-NAT	QT:Z:]5 !6J
+TC1_TestDataExperiment:1:1101:16854:1332	141	*	0	0	*	*	0	0	ATA	5A<	RG:Z:1#67
+TC1_TestDataExperiment:1:1101:16976:1442	77	*	0	0	*	*	0	0	AC	OE	RG:Z:1#59	BC:Z:CA-GTC	QT:Z:)+ 6K,
+TC1_TestDataExperiment:1:1101:16976:1442	141	*	0	0	*	*	0	0	CGG	4".	RG:Z:1#59
+TC1_TestDataExperiment:1:1101:17407:1286	77	*	0	0	*	*	0	0	AA	#F	RG:Z:1#0	BC:Z:AN-GGA	QT:Z:,! H$D
+TC1_TestDataExperiment:1:1101:17407:1286	141	*	0	0	*	*	0	0	GAA	[J'	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:17621:1290	77	*	0	0	*	*	0	0	CA	N%	RG:Z:1#40	BC:Z:CC-TCC	QT:Z:(G J^X
+TC1_TestDataExperiment:1:1101:17621:1290	141	*	0	0	*	*	0	0	CCG	2%`	RG:Z:1#40
+TC1_TestDataExperiment:1:1101:17751:1376	77	*	0	0	*	*	0	0	TT	NJ	RG:Z:1#73	BC:Z:AA-GCT	QT:Z:2V 0YI
+TC1_TestDataExperiment:1:1101:17751:1376	141	*	0	0	*	*	0	0	NTT	!VK	RG:Z:1#73
+TC1_TestDataExperiment:1:1101:18189:1442	77	*	0	0	*	*	0	0	GC	U@	RG:Z:1#0	BC:Z:TT-GGT	QT:Z:3Z <38
+TC1_TestDataExperiment:1:1101:18189:1442	141	*	0	0	*	*	0	0	CTT	9ZE	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:18254:1448	77	*	0	0	*	*	0	0	TA	[2	RG:Z:1#47	BC:Z:GG-AGT	QT:Z:KC -4^
+TC1_TestDataExperiment:1:1101:18254:1448	141	*	0	0	*	*	0	0	TCA	[0R	RG:Z:1#47
+TC1_TestDataExperiment:1:1101:19165:1488	77	*	0	0	*	*	0	0	AT	\Q	RG:Z:1#0	BC:Z:AC-ACC	QT:Z:G^ @(,
+TC1_TestDataExperiment:1:1101:19165:1488	141	*	0	0	*	*	0	0	GTC	(SV	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:19442:1254	77	*	0	0	*	*	0	0	CT	`'	RG:Z:1#0	BC:Z:TT-CCC	QT:Z:#? SP?
+TC1_TestDataExperiment:1:1101:19442:1254	141	*	0	0	*	*	0	0	CGN	[3!	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:19689:1312	77	*	0	0	*	*	0	0	NC	!H	RG:Z:1#7	BC:Z:TT-GGA	QT:Z:6V 0J"
+TC1_TestDataExperiment:1:1101:19689:1312	141	*	0	0	*	*	0	0	ATC	+]R	RG:Z:1#7
+TC1_TestDataExperiment:1:1101:19555:1284	77	*	0	0	*	*	0	0	CG	FD	RG:Z:1#17	BC:Z:TC-CCC	QT:Z:`U ;[8
+TC1_TestDataExperiment:1:1101:19555:1284	141	*	0	0	*	*	0	0	GAT	)1D	RG:Z:1#17
+TC1_TestDataExperiment:1:1101:19917:1394	77	*	0	0	*	*	0	0	TG	`Z	RG:Z:1#11	BC:Z:AC-GAA	QT:Z:1^ 6[.
+TC1_TestDataExperiment:1:1101:19917:1394	141	*	0	0	*	*	0	0	ATT	RHQ	RG:Z:1#11
+TC1_TestDataExperiment:1:1101:20122:1301	77	*	0	0	*	*	0	0	TG	<6	RG:Z:1#49	BC:Z:CT-GCT	QT:Z:/[ 03-
+TC1_TestDataExperiment:1:1101:20122:1301	141	*	0	0	*	*	0	0	ACT	81(	RG:Z:1#49
+TC1_TestDataExperiment:1:1101:20701:1272	77	*	0	0	*	*	0	0	TT	?8	RG:Z:1#58	BC:Z:CC-CAG	QT:Z:4$ *L4
+TC1_TestDataExperiment:1:1101:20701:1272	141	*	0	0	*	*	0	0	TAA	B*U	RG:Z:1#58
+TC1_TestDataExperiment:1:1101:20604:1315	77	*	0	0	*	*	0	0	AA	;W	RG:Z:1#34	BC:Z:TC-TTA	QT:Z:ON EFF
+TC1_TestDataExperiment:1:1101:20604:1315	141	*	0	0	*	*	0	0	CAA	OQ]	RG:Z:1#34
+TC1_TestDataExperiment:1:1101:20978:1312	77	*	0	0	*	*	0	0	CA	17	RG:Z:1#16	BC:Z:GG-GTA	QT:Z:FR E\V
+TC1_TestDataExperiment:1:1101:20978:1312	141	*	0	0	*	*	0	0	AAA	S4#	RG:Z:1#16
+TC1_TestDataExperiment:1:1101:20953:1322	77	*	0	0	*	*	0	0	AT	LL	RG:Z:1#52	BC:Z:CC-GTT	QT:Z:C& 6X$
+TC1_TestDataExperiment:1:1101:20953:1322	141	*	0	0	*	*	0	0	GAG	'"A	RG:Z:1#52
+TC1_TestDataExperiment:1:1101:21227:1373	77	*	0	0	*	*	0	0	CC	CM	RG:Z:1#0	BC:Z:GT-CTG	QT:Z:4A [?*
+TC1_TestDataExperiment:1:1101:21227:1373	141	*	0	0	*	*	0	0	CAT	&,[	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:1106:1678	77	*	0	0	*	*	0	0	GG	_P	RG:Z:1#72	BC:Z:CT-CTC	QT:Z:2A 2^V
+TC1_TestDataExperiment:1:1101:1106:1678	141	*	0	0	*	*	0	0	AAA	Y#`	RG:Z:1#72
+TC1_TestDataExperiment:1:1101:1138:1649	77	*	0	0	*	*	0	0	CG	LC	RG:Z:1#11	BC:Z:TC-GAA	QT:Z:9] "/N
+TC1_TestDataExperiment:1:1101:1138:1649	141	*	0	0	*	*	0	0	TTT	SW'	RG:Z:1#11
+TC1_TestDataExperiment:1:1101:1365:1511	77	*	0	0	*	*	0	0	TG	.J	RG:Z:1#0	BC:Z:GC-CTA	QT:Z:]U R[X
+TC1_TestDataExperiment:1:1101:1365:1511	141	*	0	0	*	*	0	0	AAA	4JX	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:1524:1561	77	*	0	0	*	*	0	0	GA	<#	RG:Z:1#0	BC:Z:GC-CTA	QT:Z:9* @"4
+TC1_TestDataExperiment:1:1101:1524:1561	141	*	0	0	*	*	0	0	CTA	W2V	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:2025:1526	77	*	0	0	*	*	0	0	AC	9:	RG:Z:1#0	BC:Z:AT-CTA	QT:Z::@ B/\
+TC1_TestDataExperiment:1:1101:2025:1526	141	*	0	0	*	*	0	0	CAT	NDT	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:2322:1501	77	*	0	0	*	*	0	0	GC	Z[	RG:Z:1#8	BC:Z:AC-GCC	QT:Z:B> 2[=
+TC1_TestDataExperiment:1:1101:2322:1501	141	*	0	0	*	*	0	0	ACA	.BI	RG:Z:1#8
+TC1_TestDataExperiment:1:1101:2396:1667	77	*	0	0	*	*	0	0	TA	="	RG:Z:1#0	BC:Z:TA-GAA	QT:Z:2# >5;
+TC1_TestDataExperiment:1:1101:2396:1667	141	*	0	0	*	*	0	0	CCG	,Y'	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:2719:1555	77	*	0	0	*	*	0	0	TA	RR	RG:Z:1#13	BC:Z:AT-TGT	QT:Z:]X IL<
+TC1_TestDataExperiment:1:1101:2719:1555	141	*	0	0	*	*	0	0	NTC	!+C	RG:Z:1#13
+TC1_TestDataExperiment:1:1101:2883:1686	77	*	0	0	*	*	0	0	AG	>V	RG:Z:1#22	BC:Z:TT-ACA	QT:Z:)5 '>^
+TC1_TestDataExperiment:1:1101:2883:1686	141	*	0	0	*	*	0	0	ACC	-A?	RG:Z:1#22
+TC1_TestDataExperiment:1:1101:3183:1546	77	*	0	0	*	*	0	0	TA	`Q	RG:Z:1#1	BC:Z:GT-TCG	QT:Z:X[ *`U
+TC1_TestDataExperiment:1:1101:3183:1546	141	*	0	0	*	*	0	0	CAC	&H'	RG:Z:1#1
+TC1_TestDataExperiment:1:1101:3072:1744	77	*	0	0	*	*	0	0	TT	:(	RG:Z:1#0	BC:Z:AA-CAA	QT:Z:-P KJ;
+TC1_TestDataExperiment:1:1101:3072:1744	141	*	0	0	*	*	0	0	AGG	:BL	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:3288:1517	77	*	0	0	*	*	0	0	TT	;D	RG:Z:1#0	BC:Z:TA-GTC	QT:Z:Q` T;F
+TC1_TestDataExperiment:1:1101:3288:1517	141	*	0	0	*	*	0	0	CCT	QF[	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:3954:1663	77	*	0	0	*	*	0	0	TG	3'	RG:Z:1#0	BC:Z:AA-GTA	QT:Z:V. :@B
+TC1_TestDataExperiment:1:1101:3954:1663	141	*	0	0	*	*	0	0	CCA	\I)	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:4032:1661	77	*	0	0	*	*	0	0	TC	W%	RG:Z:1#0	BC:Z:AC-CGT	QT:Z:,, H%S
+TC1_TestDataExperiment:1:1101:4032:1661	141	*	0	0	*	*	0	0	AGC	Y\A	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:4076:1686	77	*	0	0	*	*	0	0	AT	^#	RG:Z:1#0	BC:Z:GT-CCG	QT:Z:., 0G`
+TC1_TestDataExperiment:1:1101:4076:1686	141	*	0	0	*	*	0	0	GGG	KT/	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:4659:1684	77	*	0	0	*	*	0	0	GA	J:	RG:Z:1#0	BC:Z:AT-TTT	QT:Z:UI UF)
+TC1_TestDataExperiment:1:1101:4659:1684	141	*	0	0	*	*	0	0	TAC	](S	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:5115:1689	77	*	0	0	*	*	0	0	NT	!^	RG:Z:1#0	BC:Z:TA-CAT	QT:Z:FL "@R
+TC1_TestDataExperiment:1:1101:5115:1689	141	*	0	0	*	*	0	0	CTT	YZA	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:5617:1515	77	*	0	0	*	*	0	0	CT	V)	RG:Z:1#13	BC:Z:AA-TGT	QT:Z:]( )_#
+TC1_TestDataExperiment:1:1101:5617:1515	141	*	0	0	*	*	0	0	TCT	'UP	RG:Z:1#13
+TC1_TestDataExperiment:1:1101:5827:1697	77	*	0	0	*	*	0	0	GG	J\	RG:Z:1#0	BC:Z:AN-CNA	QT:Z:U! 1!.
+TC1_TestDataExperiment:1:1101:5827:1697	141	*	0	0	*	*	0	0	CCC	ZD$	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:6236:1575	77	*	0	0	*	*	0	0	AT	6=	RG:Z:1#2	BC:Z:TA-GTT	QT:Z:** *DZ
+TC1_TestDataExperiment:1:1101:6236:1575	141	*	0	0	*	*	0	0	ACT	7%*	RG:Z:1#2
+TC1_TestDataExperiment:1:1101:6484:1632	77	*	0	0	*	*	0	0	GA	_I	RG:Z:1#0	BC:Z:NC-CTT	QT:Z:![ __)
+TC1_TestDataExperiment:1:1101:6484:1632	141	*	0	0	*	*	0	0	CTG	OKO	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:6761:1671	77	*	0	0	*	*	0	0	TT	4N	RG:Z:1#0	BC:Z:CT-GGG	QT:Z:A[ +=A
+TC1_TestDataExperiment:1:1101:6761:1671	141	*	0	0	*	*	0	0	TAG	)T&	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:7129:1503	77	*	0	0	*	*	0	0	TG	GF	RG:Z:1#41	BC:Z:CC-AGN	QT:Z:E] "@!
+TC1_TestDataExperiment:1:1101:7129:1503	141	*	0	0	*	*	0	0	NCA	!@=	RG:Z:1#41
+TC1_TestDataExperiment:1:1101:7453:1720	77	*	0	0	*	*	0	0	AT	T@	RG:Z:1#24	BC:Z:GA-ACA	QT:Z:>' ?BR
+TC1_TestDataExperiment:1:1101:7453:1720	141	*	0	0	*	*	0	0	ACG	(UD	RG:Z:1#24
+TC1_TestDataExperiment:1:1101:7278:1633	77	*	0	0	*	*	0	0	TT	T$	RG:Z:1#24	BC:Z:AA-ACA	QT:Z:0P /D"
+TC1_TestDataExperiment:1:1101:7278:1633	141	*	0	0	*	*	0	0	AAG	"P2	RG:Z:1#24
+TC1_TestDataExperiment:1:1101:7927:1505	77	*	0	0	*	*	0	0	CC	SO	RG:Z:1#0	BC:Z:TG-ACC	QT:Z:Q^ RQS
+TC1_TestDataExperiment:1:1101:7927:1505	141	*	0	0	*	*	0	0	TGG	*:;	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:8675:1723	77	*	0	0	*	*	0	0	AT	'#	RG:Z:1#25	BC:Z:TG-CAT	QT:Z:Z. +=?
+TC1_TestDataExperiment:1:1101:8675:1723	141	*	0	0	*	*	0	0	TTG	1HV	RG:Z:1#25
+TC1_TestDataExperiment:1:1101:8744:1715	77	*	0	0	*	*	0	0	TG	)N	RG:Z:1#64	BC:Z:TA-TGA	QT:Z:K> JP<
+TC1_TestDataExperiment:1:1101:8744:1715	141	*	0	0	*	*	0	0	TGA	YT1	RG:Z:1#64
+TC1_TestDataExperiment:1:1101:9109:1508	77	*	0	0	*	*	0	0	CC	,X	RG:Z:1#0	BC:Z:NC-GCC	QT:Z:!_ D*$
+TC1_TestDataExperiment:1:1101:9109:1508	141	*	0	0	*	*	0	0	AGG	P1O	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:9106:1624	77	*	0	0	*	*	0	0	AT	8=	RG:Z:1#31	BC:Z:GT-TAC	QT:Z:I% 5)O
+TC1_TestDataExperiment:1:1101:9106:1624	141	*	0	0	*	*	0	0	CTA	RQH	RG:Z:1#31
+TC1_TestDataExperiment:1:1101:9401:1705	77	*	0	0	*	*	0	0	CT	]&	RG:Z:1#0	BC:Z:NC-CAT	QT:Z:!1 ?V^
+TC1_TestDataExperiment:1:1101:9401:1705	141	*	0	0	*	*	0	0	TTA	)RH	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:9603:1728	77	*	0	0	*	*	0	0	TT	T<	RG:Z:1#0	BC:Z:GA-ACG	QT:Z:M* 1=Q
+TC1_TestDataExperiment:1:1101:9603:1728	141	*	0	0	*	*	0	0	AGG	S$2	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:9733:1539	77	*	0	0	*	*	0	0	AC	^D	RG:Z:1#0	BC:Z:AC-GTT	QT:Z:ZX $WV
+TC1_TestDataExperiment:1:1101:9733:1539	141	*	0	0	*	*	0	0	CTC	%E,	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:9866:1679	77	*	0	0	*	*	0	0	TT	99	RG:Z:1#0	BC:Z:AG-CTG	QT:Z:V< IC;
+TC1_TestDataExperiment:1:1101:9866:1679	141	*	0	0	*	*	0	0	GTC	9ZA	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:9853:1651	77	*	0	0	*	*	0	0	AA	A6	RG:Z:1#21	BC:Z:GT-CTA	QT:Z:1? MR0
+TC1_TestDataExperiment:1:1101:9853:1651	141	*	0	0	*	*	0	0	GCA	[(=	RG:Z:1#21
+TC1_TestDataExperiment:1:1101:10206:1656	77	*	0	0	*	*	0	0	GG	=-	RG:Z:1#5	BC:Z:CT-ACG	QT:Z:*> V@@
+TC1_TestDataExperiment:1:1101:10206:1656	141	*	0	0	*	*	0	0	TTG	7\(	RG:Z:1#5
+TC1_TestDataExperiment:1:1101:10177:1551	77	*	0	0	*	*	0	0	AG	\/	RG:Z:1#4	BC:Z:GT-GTT	QT:Z:>W `D#
+TC1_TestDataExperiment:1:1101:10177:1551	141	*	0	0	*	*	0	0	GCT	;_/	RG:Z:1#4
+TC1_TestDataExperiment:1:1101:10444:1559	77	*	0	0	*	*	0	0	TA	?'	RG:Z:1#0	BC:Z:GC-AAG	QT:Z:L4 T.]
+TC1_TestDataExperiment:1:1101:10444:1559	141	*	0	0	*	*	0	0	TGG	?RW	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:10502:1621	77	*	0	0	*	*	0	0	TC	=E	RG:Z:1#11	BC:Z:GT-GAA	QT:Z:OI ALY
+TC1_TestDataExperiment:1:1101:10502:1621	141	*	0	0	*	*	0	0	CTA	C\M	RG:Z:1#11
+TC1_TestDataExperiment:1:1101:10928:1675	77	*	0	0	*	*	0	0	AC	#8	RG:Z:1#32	BC:Z:TC-ATG	QT:Z:4< D*^
+TC1_TestDataExperiment:1:1101:10928:1675	141	*	0	0	*	*	0	0	TCC	_/=	RG:Z:1#32
+TC1_TestDataExperiment:1:1101:10845:1532	77	*	0	0	*	*	0	0	CA	PC	RG:Z:1#24	BC:Z:GC-ACA	QT:Z:G2 Y7<
+TC1_TestDataExperiment:1:1101:10845:1532	141	*	0	0	*	*	0	0	AAA	"V.	RG:Z:1#24
+TC1_TestDataExperiment:1:1101:11215:1721	77	*	0	0	*	*	0	0	GA	I9	RG:Z:1#20	BC:Z:GG-CCG	QT:Z:N* S=I
+TC1_TestDataExperiment:1:1101:11215:1721	141	*	0	0	*	*	0	0	GAT	.X,	RG:Z:1#20
+TC1_TestDataExperiment:1:1101:11229:1642	77	*	0	0	*	*	0	0	AC	/8	RG:Z:1#2	BC:Z:TA-GTA	QT:Z:$A +#*
+TC1_TestDataExperiment:1:1101:11229:1642	141	*	0	0	*	*	0	0	GCC	DDM	RG:Z:1#2
+TC1_TestDataExperiment:1:1101:11517:1733	77	*	0	0	*	*	0	0	GC	DK	RG:Z:1#15	BC:Z:TA-AAA	QT:Z:1W MU*
+TC1_TestDataExperiment:1:1101:11517:1733	141	*	0	0	*	*	0	0	ATT	P_R	RG:Z:1#15
+TC1_TestDataExperiment:1:1101:11835:1624	77	*	0	0	*	*	0	0	GC	;C	RG:Z:1#64	BC:Z:TN-TGA	QT:Z:S! RBW
+TC1_TestDataExperiment:1:1101:11835:1624	141	*	0	0	*	*	0	0	TTC	X\X	RG:Z:1#64
+TC1_TestDataExperiment:1:1101:12105:1654	77	*	0	0	*	*	0	0	AA	`C	RG:Z:1#0	BC:Z:GC-TAC	QT:Z:-M W%/
+TC1_TestDataExperiment:1:1101:12105:1654	141	*	0	0	*	*	0	0	TCG	Q`O	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:12431:1597	77	*	0	0	*	*	0	0	GT	0`	RG:Z:1#10	BC:Z:GC-CTG	QT:Z:DO ^\3
+TC1_TestDataExperiment:1:1101:12431:1597	141	*	0	0	*	*	0	0	AGN	HR!	RG:Z:1#10
+TC1_TestDataExperiment:1:1101:12499:1537	77	*	0	0	*	*	0	0	AG	0U	RG:Z:1#19	BC:Z:CT-GAG	QT:Z:\P $ES
+TC1_TestDataExperiment:1:1101:12499:1537	141	*	0	0	*	*	0	0	GCC	C7N	RG:Z:1#19
+TC1_TestDataExperiment:1:1101:13237:1601	77	*	0	0	*	*	0	0	AC	D8	RG:Z:1#0	BC:Z:TG-CTT	QT:Z:3` HK*
+TC1_TestDataExperiment:1:1101:13237:1601	141	*	0	0	*	*	0	0	AGG	'5_	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:13500:1651	77	*	0	0	*	*	0	0	TT	`P	RG:Z:1#0	BC:Z:AC-TTC	QT:Z:_= `\A
+TC1_TestDataExperiment:1:1101:13500:1651	141	*	0	0	*	*	0	0	ACT	R16	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:13874:1552	77	*	0	0	*	*	0	0	GT	8-	RG:Z:1#60	BC:Z:GA-ATT	QT:Z:?? HJG
+TC1_TestDataExperiment:1:1101:13874:1552	141	*	0	0	*	*	0	0	CGA	$9T	RG:Z:1#60
+TC1_TestDataExperiment:1:1101:14129:1703	77	*	0	0	*	*	0	0	TA	T+	RG:Z:1#3	BC:Z:TA-AAG	QT:Z:X9 8S\
+TC1_TestDataExperiment:1:1101:14129:1703	141	*	0	0	*	*	0	0	TTG	V-4	RG:Z:1#3
+TC1_TestDataExperiment:1:1101:14479:1674	77	*	0	0	*	*	0	0	AG	6:	RG:Z:1#5	BC:Z:AT-ACC	QT:Z:WK ])N
+TC1_TestDataExperiment:1:1101:14479:1674	141	*	0	0	*	*	0	0	ATA	"50	RG:Z:1#5
+TC1_TestDataExperiment:1:1101:14366:1569	77	*	0	0	*	*	0	0	CC	.E	RG:Z:1#41	BC:Z:CC-AGT	QT:Z:&` ]_A
+TC1_TestDataExperiment:1:1101:14366:1569	141	*	0	0	*	*	0	0	CTC	+=J	RG:Z:1#41
+TC1_TestDataExperiment:1:1101:14581:1701	77	*	0	0	*	*	0	0	CG	P-	RG:Z:1#25	BC:Z:TG-CGT	QT:Z:C= IK+
+TC1_TestDataExperiment:1:1101:14581:1701	141	*	0	0	*	*	0	0	GAG	2@B	RG:Z:1#25
+TC1_TestDataExperiment:1:1101:15119:1678	77	*	0	0	*	*	0	0	TT	0_	RG:Z:1#56	BC:Z:GC-CGT	QT:Z:@F "V`
+TC1_TestDataExperiment:1:1101:15119:1678	141	*	0	0	*	*	0	0	TCT	]WJ	RG:Z:1#56
+TC1_TestDataExperiment:1:1101:15143:1624	77	*	0	0	*	*	0	0	CG	N_	RG:Z:1#38	BC:Z:GG-ACC	QT:Z:$; ZU)
+TC1_TestDataExperiment:1:1101:15143:1624	141	*	0	0	*	*	0	0	TAC	[@7	RG:Z:1#38
+TC1_TestDataExperiment:1:1101:16118:1705	77	*	0	0	*	*	0	0	AC	"8	RG:Z:1#27	BC:Z:GC-TTC	QT:Z:2" ,18
+TC1_TestDataExperiment:1:1101:16118:1705	141	*	0	0	*	*	0	0	TCG	`B"	RG:Z:1#27
+TC1_TestDataExperiment:1:1101:16027:1698	77	*	0	0	*	*	0	0	TA	LQ	RG:Z:1#38	BC:Z:GG-ATC	QT:Z:R3 )H_
+TC1_TestDataExperiment:1:1101:16027:1698	141	*	0	0	*	*	0	0	GAC	>(P	RG:Z:1#38
+TC1_TestDataExperiment:1:1101:16316:1742	77	*	0	0	*	*	0	0	AT	6X	RG:Z:1#18	BC:Z:AT-CTG	QT:Z:V% W5%
+TC1_TestDataExperiment:1:1101:16316:1742	141	*	0	0	*	*	0	0	GAA	BPR	RG:Z:1#18
+TC1_TestDataExperiment:1:1101:16432:1595	77	*	0	0	*	*	0	0	AG	T:	RG:Z:1#0	BC:Z:CG-CCG	QT:Z:YL D$4
+TC1_TestDataExperiment:1:1101:16432:1595	141	*	0	0	*	*	0	0	AAG	?YK	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:16555:1607	77	*	0	0	*	*	0	0	GC	LO	RG:Z:1#5	BC:Z:AA-ACG	QT:Z:>1 G&0
+TC1_TestDataExperiment:1:1101:16555:1607	141	*	0	0	*	*	0	0	CAG	40P	RG:Z:1#5
+TC1_TestDataExperiment:1:1101:16944:1692	77	*	0	0	*	*	0	0	GA	\:	RG:Z:1#67	BC:Z:TC-TAT	QT:Z:<Y 5Z$
+TC1_TestDataExperiment:1:1101:16944:1692	141	*	0	0	*	*	0	0	GAA	*\>	RG:Z:1#67
+TC1_TestDataExperiment:1:1101:17474:1659	77	*	0	0	*	*	0	0	AT	H9	RG:Z:1#17	BC:Z:TC-GCC	QT:Z:C: H<_
+TC1_TestDataExperiment:1:1101:17474:1659	141	*	0	0	*	*	0	0	TGC	8CR	RG:Z:1#17
+TC1_TestDataExperiment:1:1101:17718:1702	77	*	0	0	*	*	0	0	CG	2#	RG:Z:1#3	BC:Z:GA-AAG	QT:Z:JB [K-
+TC1_TestDataExperiment:1:1101:17718:1702	141	*	0	0	*	*	0	0	CCA	8W.	RG:Z:1#3
+TC1_TestDataExperiment:1:1101:17573:1514	77	*	0	0	*	*	0	0	AA	B?	RG:Z:1#8	BC:Z:AC-GTC	QT:Z:O* `C.
+TC1_TestDataExperiment:1:1101:17573:1514	141	*	0	0	*	*	0	0	TGC	FP=	RG:Z:1#8
+TC1_TestDataExperiment:1:1101:18852:1701	77	*	0	0	*	*	0	0	AG	C1	RG:Z:1#19	BC:Z:CT-GAC	QT:Z:RT 6CI
+TC1_TestDataExperiment:1:1101:18852:1701	141	*	0	0	*	*	0	0	ACN	F[!	RG:Z:1#19
+TC1_TestDataExperiment:1:1101:18954:1670	77	*	0	0	*	*	0	0	GT	^J	RG:Z:1#0	BC:Z:TA-CAG	QT:Z:C) J:1
+TC1_TestDataExperiment:1:1101:18954:1670	141	*	0	0	*	*	0	0	AGA	,"/	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:19258:1597	77	*	0	0	*	*	0	0	CG	,;	RG:Z:1#74	BC:Z:CG-TTG	QT:Z:KB _FR
+TC1_TestDataExperiment:1:1101:19258:1597	141	*	0	0	*	*	0	0	CAT	(;Q	RG:Z:1#74
+TC1_TestDataExperiment:1:1101:19685:1714	77	*	0	0	*	*	0	0	AA	BZ	RG:Z:1#0	BC:Z:AA-AAG	QT:Z:%\ 9UW
+TC1_TestDataExperiment:1:1101:19685:1714	141	*	0	0	*	*	0	0	TTA	Z*F	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:19697:1517	77	*	0	0	*	*	0	0	GG	H+	RG:Z:1#0	BC:Z:CT-GGA	QT:Z:^D 4N[
+TC1_TestDataExperiment:1:1101:19697:1517	141	*	0	0	*	*	0	0	GTA	EEH	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:20129:1731	77	*	0	0	*	*	0	0	CT	Z`	RG:Z:1#29	BC:Z:AG-CTC	QT:Z:Q# '],
+TC1_TestDataExperiment:1:1101:20129:1731	141	*	0	0	*	*	0	0	GGN	<'!	RG:Z:1#29
+TC1_TestDataExperiment:1:1101:20803:1693	77	*	0	0	*	*	0	0	TT	?I	RG:Z:1#0	BC:Z:AG-CTG	QT:Z:#T ;X`
+TC1_TestDataExperiment:1:1101:20803:1693	141	*	0	0	*	*	0	0	AAA	%Z5	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:21080:1650	77	*	0	0	*	*	0	0	AA	E)	RG:Z:1#29	BC:Z:AG-CAC	QT:Z:9Y #ES
+TC1_TestDataExperiment:1:1101:21080:1650	141	*	0	0	*	*	0	0	GTA	E*0	RG:Z:1#29
+TC1_TestDataExperiment:1:1101:1171:1869	77	*	0	0	*	*	0	0	AA	%S	RG:Z:1#50	BC:Z:CC-CGC	QT:Z:?) :UP
+TC1_TestDataExperiment:1:1101:1171:1869	141	*	0	0	*	*	0	0	GTG	,>_	RG:Z:1#50
+TC1_TestDataExperiment:1:1101:1288:1771	77	*	0	0	*	*	0	0	TC	OY	RG:Z:1#45	BC:Z:CG-AAC	QT:Z::: ZFO
+TC1_TestDataExperiment:1:1101:1288:1771	141	*	0	0	*	*	0	0	CTG	EI#	RG:Z:1#45
+TC1_TestDataExperiment:1:1101:1450:1754	77	*	0	0	*	*	0	0	CA	&D	RG:Z:1#0	BC:Z:TA-GGA	QT:Z:V3 M&1
+TC1_TestDataExperiment:1:1101:1450:1754	141	*	0	0	*	*	0	0	AAT	^<Z	RG:Z:1#0
+TC1_TestDataExperiment:1:1101:1807:1762	77	*	0	0	*	*	0	0	CA	MR	RG:Z:1#12	BC:Z:AC-GGT	QT:Z:(/ 8F0
+TC1_TestDataExperiment:1:1101:1807:1762	141	*	0	0	*	*	0	0	CCT	#76	RG:Z:1#12

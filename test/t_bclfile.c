@@ -28,24 +28,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define xMKNAME(d,f) #d f
 #define MKNAME(d,f) xMKNAME(d,f)
 
-void display(const char *fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  vfprintf(stderr, fmt, ap);
-  va_end(ap);
-}
-
-void die(const char *fmt, ...)
-{
-    va_list ap;
-    va_start(ap,fmt);
-    fflush(stdout);
-    vfprintf(stderr, fmt, ap);
-    va_end(ap);
-    fflush(stderr);
-    exit(EXIT_FAILURE);
-}
-
 int verbose = 0;
 
 int success = 0;

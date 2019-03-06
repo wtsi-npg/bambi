@@ -1,6 +1,6 @@
 /*  bambi.c -- main bambi command front-end.
 
-    Copyright (C) 2016 Genome Research Ltd.
+    Copyright (C) 2016-2019 Genome Research Ltd.
 
     Author: Jennifer Liddle <js10@sanger.ac.uk>
 
@@ -28,6 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "htslib/hts.h"
 #include "bambi.h"
+#include "bambi_utils.h"
 
 int main_decode(int argc, char *argv[]);
 int main_i2b(int argc, char *argv[]);
@@ -35,42 +36,12 @@ int main_select(int argc, char *argv[]);
 int main_chrsplit(int argc, char *argv[]);
 int main_read2tags(int argc, char *argv[]);
 int main_spatial_filter(int argc, char *argv[]);
+int main_seqchksum(int argc, char *argv[]);
+int main_adapters(int argc, char *argv[]);
 
 const char *bambi_version()
 {
     return VERSION;
-}
-
-void display(const char *fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-  vfprintf(stderr, fmt, ap);
-  va_end(ap);
-}
-
-void die(const char *fmt, ...)
-{
-    va_list ap;
-    va_start(ap,fmt);
-    fflush(stdout);
-    vfprintf(stderr, fmt, ap);
-    va_end(ap);
-    fflush(stderr);
-    exit(EXIT_FAILURE);
-}
-
-void * _s_malloc(size_t size, const char *file, unsigned int line, const char *func)
-{
-    void *m = malloc(size);
-    if (!m) die("Couldn't allocate %zd bytes in %s at %s line %u: %s\n", size, func, file, line, strerror(errno));
-    return m;
-}
-
-void * _s_realloc(void *ptr, size_t size, const char *file, unsigned int line, const char *func)
-{
-    void *m = realloc(ptr, size);
-    if (!m) die("Couldn't reallocate %zd bytes in %s at %s line %u: %s\n", size, func, file, line, strerror(errno));
-    return m;
 }
 
 static void usage(FILE *fp)
@@ -89,6 +60,8 @@ static void usage(FILE *fp)
 "     chrsplit       split reads by chromosome\n"
 "     read2tags      convert reads into tags\n"
 "     spatial_filter spatial filtering\n"
+"     seqchksum      calculate checksums for a bam file\n"
+"     adapters       find and remove adapters\n"
 "\n"
 "bambi <command> for help on a particular command\n"
 "\n");
@@ -115,6 +88,8 @@ int main(int argc, char *argv[])
     else if (strcmp(argv[1], "chrsplit") == 0)  ret = main_chrsplit(argc-1, argv+1);
     else if (strcmp(argv[1], "read2tags") == 0) ret = main_read2tags(argc-1, argv+1);
     else if (strcmp(argv[1], "spatial_filter") == 0) ret = main_spatial_filter(argc-1, argv+1);
+    else if (strcmp(argv[1], "seqchksum") == 0) ret = main_seqchksum(argc-1, argv+1);
+    else if (strcmp(argv[1], "adapters") == 0) ret = main_adapters(argc-1, argv+1);
     else if (strcmp(argv[1], "--version") == 0) {
         printf( "bambi %s\n"
                 "Using htslib %s\n"

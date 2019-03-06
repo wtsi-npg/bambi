@@ -20,6 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <assert.h>
 #include <ctype.h>
 #include <htslib/sam.h>
+#include <htslib/hfile.h>
 #include <string.h>
 #include <getopt.h>
 #include <stdio.h>
@@ -36,14 +37,22 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "array.h"
 #include "bamit.h"
+#include "parse.h"
 
 char *strptime(const char *s, const char *format, struct tm *tm);
 
-static void closeSamFile(void *f) { hts_close((samFile *)f); }
-static void freeBamHdr(void *h) { if (h) bam_hdr_destroy((bam_hdr_t *)h); h=NULL; }
+// static void closeSamFile(void *f) { hts_close((samFile *)f); }
+// static void freeBamHdr(void *h) { if (h) bam_hdr_destroy((bam_hdr_t *)h); h=NULL; }
 static void freeRecord(void *r) { bam_destroy1((bam1_t *)r); }
 static void freeRecordSet(void *s) { va_free((va_t *)s); }
 static void freeChimera(void *s) { ia_free((ia_t *)s); }
+
+static inline void hputi(int n, hFILE *f)
+{
+    char b[64];
+    sprintf(b,"%d",n);
+    hputs(b,f);
+}
 
 /*
  * structure to hold options
@@ -424,20 +433,20 @@ static void writeRecordSet(BAMit_t *bit, va_t *recordSet)
 /*
  * write references to metrics file
  */
-static void writeReferences(FILE *f, va_t *in_bit)
+static void writeReferences(hFILE *f, va_t *in_bit)
 {
     int n, nSQ;
 
-    fprintf(f,"\"refList\":[");
+    hputs("\"refList\":[", f);
     for (n=0; n < in_bit->end; n++) {
         BAMit_t *bit = in_bit->entries[n];
         SAM_hdr *sh = sam_hdr_parse_(bit->h->text,bit->h->l_text);
-        if (n) fprintf(f,",");
-        fprintf(f,"[");
+        if (n) hputc(',', f);
+        hputc(',', f);
         for (nSQ=0; nSQ<sh->nref; nSQ++) {
             SAM_SQ sq = sh->ref[nSQ];
-            if (nSQ) fprintf(f,",");
-            fprintf(f,"{");
+            if (nSQ) hputc(',', f);
+            hputc('{', f);
             SAM_hdr_tag *tag = sq.tag;
             char *ur=NULL, *ln=NULL, *sp=NULL, *as=NULL, *sn=NULL;
             while (tag) {
@@ -450,18 +459,18 @@ static void writeReferences(FILE *f, va_t *in_bit)
                 }
                 tag = tag->next;
             }
-            if (ur) fprintf(f,"\"ur\":\"%s\",", ur);   else fprintf(f,"\"ur\":null,");
-            if (ln) fprintf(f,"\"ln\":%d,", atoi(ln)); else fprintf(f,"\"ln\":null,");
-            if (sp) fprintf(f,"\"sp\":\"%s\",", sp);   else fprintf(f,"\"sp\":null,");
-            if (as) fprintf(f,"\"as\":\"%s\",", as);   else fprintf(f,"\"as\":null,");
-            if (sn) fprintf(f,"\"sn\":\"%s\"", sn);    else fprintf(f,"\"sn\":null");
-            fprintf(f,"}");
+            hputs("\"ur\":", f); if (ur) { hputc('"',f); hputs(ur,f); hputs("\",", f); } else hputs("null,",f);
+            hputs("\"ln\":", f); hputs(ln ? ln: "null", f); hputs(",", f);
+            hputs("\"sp\":", f); if (sp) { hputc('"',f); hputs(sp,f); hputs("\",", f); } else hputs("null,",f);
+            hputs("\"as\":", f); if (as) { hputc('"',f); hputs(as,f); hputs("\",", f); } else hputs("null,",f);
+            hputs("\"sn\":", f); if (sn) { hputc('"',f); hputs(sn,f); hputs("\",", f); } else hputs("null,",f);
+            hputc('}', f);
             free(ur); free(ln); free(sp); free(as); free(sn);
         }
-        fprintf(f,"]");
+        hputc(']', f);
         sam_hdr_free(sh);
     }
-    fprintf(f,"],");
+    hputs("],", f);
 }
 
 /*
@@ -471,43 +480,43 @@ static void writeMetrics(va_t *in_bit, metrics_t *metrics, opts_t *opts)
 {
     char *s;
     // Open the metrics file
-    FILE *f = fopen(opts->metrics_filename, "w");
+    hFILE *f = hopen(opts->metrics_filename, "w");
     if (!f) {
         fprintf(stderr,"Can't create metrics file %s\n", opts->metrics_filename);
         exit(1);
     }
 
-    fprintf(f,"{");
+    hputc('{', f);
 
     // references
     writeReferences(f,in_bit);
 
     // Chimeric read counts
     int n;
-    fprintf(f,"\"chimericReadsCount\":[");
+    hputs("\"chimericReadsCount\":[", f);
     for (n=0; n < metrics->nChimericReads->end; n++) {
         ia_t *ia = metrics->nChimericReads->entries[n];
         s = ia_join(ia,",");
-        if (n) fprintf(f,",");
-        fprintf(f,"[%s]",s);
+        if (n) hputc(',', f);
+        hputc('[', f); hputs(s, f); hputc(']', f);
         free(s);
     }
-    fprintf(f,"],");
+    hputs("],", f);
 
     s = ia_join(metrics->nAlignedReverse,",");
-    fprintf(f,"\"readsCountByAlignedNumReverse\":[%s],",s); free(s);
+    hputs("\"readsCountByAlignedNumReverse\":[",f); hputs(s, f); hputs("],", f); free(s);
     s = ia_join(metrics->nAlignedForward,",");
-    fprintf(f,"\"readsCountByAlignedNumForward\":[%s],",s); free(s);
+    hputs("\"readsCountByAlignedNumForward\":[",f); hputs(s, f); hputs("],", f); free(s);
     s = ia_join(metrics->nReadsPerRef,",");
-    fprintf(f,"\"readsCountPerRef\":[%s],", s); free(s);
-    fprintf(f,"\"readsCountUnaligned\":%d,", metrics->nUnaligned);
-    fprintf(f,"\"totalReads\":%d,", metrics->nReads);
-    fprintf(f,"\"numberAlignments\":%d,", metrics->nAlignments);
-    fprintf(f,"\"programVersion\":\"%s\",", bambi_version());
-    fprintf(f,"\"programCommand\":\"%s\",", opts->argv_list);
-    fprintf(f,"\"programName\":\"bambi\"");
-    fprintf(f,"}");
-    fclose(f);
+    hputs("\"readsCountPerRef\":[",f); hputs(s, f); hputs("],", f); free(s);
+    hputs("\"readsCountUnaligned\":", f); hputi(metrics->nUnaligned, f); hputc(',', f);
+    hputs("\"totalReads\":", f); hputi(metrics->nReads, f); hputc(',', f);
+    hputs("\"numberAlignments\":", f); hputi(metrics->nAlignments, f); hputc(',', f);
+    hputs("\"programVersion\":\"", f); hputs(bambi_version(), f); hputs("\",", f);
+    hputs("\"programCommand\":\"", f); hputs(opts->argv_list, f); hputs("\",", f);
+    hputs("\"programName\":\"bambi\"", f);
+    hputc('}', f);
+    if (hclose(f)) die("Can't close metrics file");
 }
 
 static ia_t *checkAlignmentsByRef(va_t *recordSetList, bool result)
@@ -574,7 +583,6 @@ static void checkNextReadsForChimera(va_t *recordSetList, metrics_t *metrics)
 static int processFiles(va_t *in_bit, va_t *out_bit, BAMit_t *unaligned_bam, opts_t *opts)
 {
     BAMit_t *outBam;
-    BAMit_t *bit;
     metrics_t *metrics = metrics_init(in_bit->end);
     int n;
 

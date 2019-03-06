@@ -1,0 +1,84 @@
+##
+# BARCODE_TAG_NAME=BC MAX_MISMATCHES=1 MIN_MISMATCH_DELTA=1 MAX_NO_CALLS=2 
+##
+# ID:bambi VN:0.11.1-8-g237eff2 (htslib 1.8-7-g518b5f7-dirty) CL:./src/bambi decode --barcode-file test/data/160919_hiseq2500_4966_FC/barcodes_ci --barcode-tag-name BC --metrics-file /tmp/bambi.3bdOh3/test10_decode.metrics -o /tmp/bambi.3bdOh3/test10_decode.bam test/data/out/test10.bam
+
+##
+BARCODE	BARCODE_NAME	LIBRARY_NAME	SAMPLE_NAME	DESCRIPTION	READS	PF_READS	PERFECT_MATCHES	PF_PERFECT_MATCHES	ONE_MISMATCH_MATCHES	PF_ONE_MISMATCH_MATCHES	PCT_MATCHES	RATIO_THIS_BARCODE_TO_BEST_BARCODE_PCT	PF_PCT_MATCHES	PF_RATIO_THIS_BARCODE_TO_BEST_BARCODE_PCT	PF_NORMALIZED_MATCHES
+GT-GCG	1	TestLibrary1	TestSample1	Study TestStudy	4	4	1	1	3	3	0.017	0.571	0.017	0.571	2.068
+TA-GTA	2	TestLibrary2	TestSample2	Study TestStudy	3	3	1	1	2	2	0.013	0.429	0.013	0.429	1.551
+GA-AAG	3	TestLibrary3	TestSample3	Study TestStudy	2	2	1	1	1	1	0.009	0.286	0.009	0.286	1.034
+GT-GGT	4	TestLibrary4	TestSample4	Study TestStudy	4	4	2	2	2	2	0.017	0.571	0.017	0.571	2.068
+AT-ACG	5	TestLibrary5	TestSample5	Study TestStudy	5	5	2	2	3	3	0.021	0.714	0.021	0.714	2.585
+GC-TAG	6	TestLibrary6	TestSample6	Study TestStudy	2	2	1	1	1	1	0.009	0.286	0.009	0.286	1.034
+TT-GGA	7	TestLibrary7	TestSample7	Study TestStudy	2	2	1	1	1	1	0.009	0.286	0.009	0.286	1.034
+AC-GTC	8	TestLibrary8	TestSample8	Study TestStudy	2	2	1	1	1	1	0.009	0.286	0.009	0.286	1.034
+GG-TGG	9	TestLibrary9	TestSample9	Study TestStudy	2	2	1	1	1	1	0.009	0.286	0.009	0.286	1.034
+GC-CTG	10	TestLibrary10	TestSample10	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+GC-GAA	11	TestLibrary11	TestSample11	Study TestStudy	7	7	2	2	5	5	0.030	1.000	0.030	1.000	3.619
+AC-GGT	12	TestLibrary12	TestSample12	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+AT-TGT	13	TestLibrary13	TestSample13	Study TestStudy	2	2	1	1	1	1	0.009	0.286	0.009	0.286	1.034
+AA-CAG	14	TestLibrary14	TestSample14	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+TA-CAA	15	TestLibrary15	TestSample15	Study TestStudy	2	2	1	1	1	1	0.009	0.286	0.009	0.286	1.034
+AG-GTA	16	TestLibrary16	TestSample16	Study TestStudy	3	3	1	1	2	2	0.013	0.429	0.013	0.429	1.551
+TC-ACC	17	TestLibrary17	TestSample17	Study TestStudy	4	4	2	2	2	2	0.017	0.571	0.017	0.571	2.068
+AT-CTG	18	TestLibrary18	TestSample18	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+CT-GAG	19	TestLibrary19	TestSample19	Study TestStudy	3	3	1	1	2	2	0.013	0.429	0.013	0.429	1.551
+GG-CCG	20	TestLibrary20	TestSample20	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+GT-CTA	21	TestLibrary21	TestSample21	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+TT-ACA	22	TestLibrary22	TestSample22	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+CA-CGT	23	TestLibrary23	TestSample23	Study TestStudy	3	3	1	1	2	2	0.013	0.429	0.013	0.429	1.551
+GA-ACA	24	TestLibrary24	TestSample24	Study TestStudy	3	3	1	1	2	2	0.013	0.429	0.013	0.429	1.551
+TG-CAT	25	TestLibrary25	TestSample25	Study TestStudy	3	3	1	1	2	2	0.013	0.429	0.013	0.429	1.551
+AT-GCA	26	TestLibrary26	TestSample26	Study TestStudy	4	4	1	1	3	3	0.017	0.571	0.017	0.571	2.068
+GC-TTC	27	TestLibrary27	TestSample27	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+TT-TCC	28	TestLibrary28	TestSample28	Study TestStudy	4	4	1	1	3	3	0.017	0.571	0.017	0.571	2.068
+AG-CTC	29	TestLibrary29	TestSample29	Study TestStudy	2	2	1	1	1	1	0.009	0.286	0.009	0.286	1.034
+CG-CGG	30	TestLibrary30	TestSample30	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+GT-TAT	31	TestLibrary31	TestSample31	Study TestStudy	3	3	1	1	2	2	0.013	0.429	0.013	0.429	1.551
+TC-ATG	32	TestLibrary32	TestSample32	Study TestStudy	2	2	1	1	1	1	0.009	0.286	0.009	0.286	1.034
+AC-ATA	33	TestLibrary33	TestSample33	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+TT-TTA	34	TestLibrary34	TestSample34	Study TestStudy	3	3	1	1	2	2	0.013	0.429	0.013	0.429	1.551
+AT-TTC	35	TestLibrary35	TestSample35	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+CT-AGA	36	TestLibrary36	TestSample36	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+AG-GGC	37	TestLibrary37	TestSample37	Study TestStudy	2	2	1	1	1	1	0.009	0.286	0.009	0.286	1.034
+GG-ACC	38	TestLibrary38	TestSample38	Study TestStudy	3	3	2	2	1	1	0.013	0.429	0.013	0.429	1.551
+TC-TGG	39	TestLibrary39	TestSample39	Study TestStudy	2	2	1	1	1	1	0.009	0.286	0.009	0.286	1.034
+CC-TCC	40	TestLibrary40	TestSample40	Study TestStudy	4	4	2	2	2	2	0.017	0.571	0.017	0.571	2.068
+CC-AGT	41	TestLibrary41	TestSample41	Study TestStudy	4	4	2	2	2	2	0.017	0.571	0.017	0.571	2.068
+TA-ATC	42	TestLibrary42	TestSample42	Study TestStudy	2	2	1	1	1	1	0.009	0.286	0.009	0.286	1.034
+GT-CCC	43	TestLibrary43	TestSample43	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+AC-ACT	44	TestLibrary44	TestSample44	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+CG-AAG	45	TestLibrary45	TestSample45	Study TestStudy	3	3	2	2	1	1	0.013	0.429	0.013	0.429	1.551
+AC-AAC	46	TestLibrary46	TestSample46	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+GG-AGT	47	TestLibrary47	TestSample47	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+CT-TGG	48	TestLibrary48	TestSample48	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+CT-GCT	49	TestLibrary49	TestSample49	Study TestStudy	2	2	2	2	0	0	0.009	0.286	0.009	0.286	1.034
+CC-CGC	50	TestLibrary50	TestSample50	Study TestStudy	2	2	1	1	1	1	0.009	0.286	0.009	0.286	1.034
+CG-GGA	51	TestLibrary51	TestSample51	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+CC-GTT	52	TestLibrary52	TestSample52	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+GG-TCT	53	TestLibrary53	TestSample53	Study TestStudy	2	2	2	2	0	0	0.009	0.286	0.009	0.286	1.034
+GT-CGG	54	TestLibrary54	TestSample54	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+AG-CCT	55	TestLibrary55	TestSample55	Study TestStudy	2	2	1	1	1	1	0.009	0.286	0.009	0.286	1.034
+GC-CGT	56	TestLibrary56	TestSample56	Study TestStudy	2	2	1	1	1	1	0.009	0.286	0.009	0.286	1.034
+TG-TCG	57	TestLibrary57	TestSample57	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+CC-CAG	58	TestLibrary58	TestSample58	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+CA-GTC	59	TestLibrary59	TestSample59	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+GA-ATT	60	TestLibrary60	TestSample60	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+GA-CGA	61	TestLibrary61	TestSample61	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+CA-ATA	62	TestLibrary62	TestSample62	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+TG-CTA	63	TestLibrary63	TestSample63	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+TA-TGA	64	TestLibrary64	TestSample64	Study TestStudy	2	2	2	2	0	0	0.009	0.286	0.009	0.286	1.034
+CC-ATC	65	TestLibrary65	TestSample65	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+GG-CGC	66	TestLibrary66	TestSample66	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+TC-TAT	67	TestLibrary67	TestSample67	Study TestStudy	2	2	2	2	0	0	0.009	0.286	0.009	0.286	1.034
+AA-TCC	68	TestLibrary68	TestSample68	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+TG-GAC	69	TestLibrary69	TestSample69	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+GA-GAC	70	TestLibrary70	TestSample70	Study TestStudy	2	2	2	2	0	0	0.009	0.286	0.009	0.286	1.034
+CG-CAA	71	TestLibrary71	TestSample71	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+CT-CTC	72	TestLibrary72	TestSample72	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+AA-GCT	73	TestLibrary73	TestSample73	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+CG-TTG	74	TestLibrary74	TestSample74	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+AG-GAG	75	TestLibrary75	TestSample75	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+TT-AAC	76	TestLibrary76	TestSample76	Study TestStudy	1	1	1	1	0	0	0.004	0.143	0.004	0.143	0.517
+NN-NNN					87	87	0	0	0	0	0.372	12.429	0.372	12.429	0.000

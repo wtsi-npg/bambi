@@ -34,7 +34,7 @@ before_script:
 - (cd $HTSLIB && autoreconf && mkdir b && ./configure --prefix=$HTSDIR && make && make install)
 - (cd $SAMTOOLSDIR && autoconf && make)
 
-script: autoreconf -i && ./configure -V && ./configure --with-htslib=$HTSDIR && make distcheck
+script: autoreconf -i && ./configure -V && ./configure --with-htslib=$HTSDIR && make && make test/t_adapters && test/t_adapters && make check ; cat ./test-suite.log ; make distcheck
 
 after_success:
   - make dist

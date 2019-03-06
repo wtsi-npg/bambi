@@ -37,6 +37,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "array.h"
 #include "bamit.h"
+#include "parse.h"
 
 #define DEFAULT_KEEP_TAGS "BC,QT,RG"
 #define DEFAULT_DISCARD_TAGS "as,af,aa,a3,ah"
@@ -358,7 +359,7 @@ static char *get_read(bam1_t *rec)
 {
     int len = rec->core.l_qseq + 1;
     char *read = calloc(1, kroundup32(len));
-    char *seq = bam_get_seq(rec);
+    uint8_t *seq = bam_get_seq(rec);
     int n;
 
     for (n=0; n < rec->core.l_qseq; n++) {
@@ -373,7 +374,7 @@ static char *get_read(bam1_t *rec)
 static char *get_quality(bam1_t *rec)
 {
     char *quality = calloc(1, rec->core.l_qseq + 1);
-    char *q = bam_get_qual(rec);
+    uint8_t *q = bam_get_qual(rec);
     int n;
 
     for (n=0; n < rec->core.l_qseq; n++) {
@@ -420,7 +421,7 @@ static bam1_t *make_new_rec(bam1_t *rec, char *seq, char *qual)
     int new_len = (newrec->core.l_qseq+1)/2 + newrec->core.l_qseq;
     newrec->l_data = newrec->l_data - old_len + new_len;
 ;
-    char *cp = bam_get_seq(newrec);
+    uint8_t *cp = bam_get_seq(newrec);
     int i;
     for (i = 0; i+1 < newrec->core.l_qseq; i+=2) {
         *cp++ = (L[(uc)seq[i]]<<4) + L[(uc)seq[i+1]];
@@ -488,11 +489,11 @@ static void add_or_update(va_t *va, char *tag, char *data)
  */
 static void add_tag(bam1_t *rec, char *tag, char *data, opts_t *opts)
 {
-    char *s = bam_aux_get(rec,tag);
+    uint8_t *s = bam_aux_get(rec,tag);
     if (s) { // tag already exists
         if (opts->replace) {
             bam_aux_del(rec,s);
-            bam_aux_append(rec, tag, 'Z', strlen(data)+1, data);
+            bam_aux_append(rec, tag, 'Z', strlen(data)+1, (uint8_t *) data);
         }
         if (opts->merge) {
             if (*s != 'Z' && *s != 'H') { 
@@ -500,10 +501,15 @@ static void add_tag(bam1_t *rec, char *tag, char *data, opts_t *opts)
                 exit(1);
             }
             char *old_data = bam_aux2Z(s);
-            char *new_data = calloc(1,strlen(old_data)+strlen(data)+1);
-            strcpy(new_data,old_data); strcat(new_data,data);
+            size_t old_len = strlen(old_data);
+            size_t data_len = strlen(data);
+            uint8_t *new_data = malloc(old_len+data_len+1);
+            if (!new_data) die("Out of memory");
+            memcpy(new_data, old_data, old_len);
+            memcpy(new_data + old_len, data, data_len + 1);
             bam_aux_del(rec,s);
-            bam_aux_append(rec, tag, 'Z', strlen(new_data)+1, new_data);
+            bam_aux_append(rec, tag, 'Z', old_len+data_len+1, new_data);
+            free(new_data);
         }
         if (!opts->replace && !opts->merge) {
             fprintf(stderr,"Found duplicate tag [%s] and no --replace or --merge option\n", tag);
@@ -511,7 +517,7 @@ static void add_tag(bam1_t *rec, char *tag, char *data, opts_t *opts)
         }
     } else {
         // add new tag
-        bam_aux_append(rec, tag, 'Z', strlen(data)+1, data);
+        bam_aux_append(rec, tag, 'Z', strlen(data)+1, (uint8_t *) data);
     }
 }
 
@@ -619,7 +625,7 @@ static int invalid_record(bam1_t *rec, int nrec)
 /*
  * return the length of some aux data
  */
-static int aux_type2size(char *s)
+static int aux_type2size(uint8_t *s)
 {
     switch (*s) {
     case 'A': case 'c': case 'C':
@@ -631,7 +637,7 @@ static int aux_type2size(char *s)
     case 'd':
         return 8;
     case 'Z': case 'H': case 'B':
-        return strlen(s+1) + 1;
+        return strlen((char *) s+1) + 1;
     default:
         return 0;
     }
@@ -675,21 +681,26 @@ static bam1_t *merge_records(bam1_t *r1, bam1_t *r2, opts_t *opts)
                 if (opts->merge) {
                     // merge with existing tag
                     if (type == 'Z' || type == 'H') {
-                        char *t = bam_aux_get(dst,tag);
-                        char *data = calloc(1, strlen(s) + strlen(t+1) + 1);
-                        strcat(data,t+1); strcat(data,s);
+                        uint8_t *t = bam_aux_get(dst,tag);
+                        size_t t_len = strlen((char *) t + 1);
+                        size_t s_len = strlen((char *) s);
+                        uint8_t *data = malloc(t_len + s_len + 1);
+                        if (!data) die("Out of memory");
+                        memcpy(data, t + 1, t_len);
+                        memcpy(data + t_len, s, s_len + 1);
                         bam_aux_del(dst,t);
-                        bam_aux_append(dst,tag,type,strlen(data)+1,data);
+                        bam_aux_append(dst,tag,type,t_len + s_len + 1,data);
+                        free(data);
                     }
                 }
                 if (opts->replace) {
                     // replace existing tag
-                    char *t = bam_aux_get(dst,tag);
+                    uint8_t *t = bam_aux_get(dst,tag);
                     bam_aux_del(dst,t);
                     bam_aux_append(dst,tag,type,len,s);
                 }
                 if (!opts->merge && !opts->replace) {
-                    char *t = bam_aux_get(dst,tag);
+                    uint8_t *t = bam_aux_get(dst,tag);
                     if (bam_aux_cmp(s-1,t)) {
                         fprintf(stderr,"Tag [%s] already exists and is not the same value\n", tag);
                         exit(1);
@@ -736,8 +747,8 @@ int process(opts_t* opts)
     int nrec = 0;
     int r;
 
-    BAMit_t *bam_in = BAMit_open(opts->in_file, 'r', opts->input_fmt, 0);
-    BAMit_t *bam_out = BAMit_open(opts->out_file, 'w', opts->output_fmt, opts->compression_level);
+    BAMit_t *bam_in = BAMit_open(opts->in_file, 'r', opts->input_fmt, 0, NULL);
+    BAMit_t *bam_out = BAMit_open(opts->out_file, 'w', opts->output_fmt, opts->compression_level, NULL);
 
     // copy input to output header
     bam_hdr_destroy(bam_out->h); bam_out->h = bam_hdr_dup(bam_in->h);

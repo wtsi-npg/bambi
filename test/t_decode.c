@@ -28,6 +28,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define xMKNAME(d,f) #d f
 #define MKNAME(d,f) xMKNAME(d,f)
 
+#define NTHREADS 4
+
 const char * bambi_version(void)
 {
     return "12.34";
@@ -47,9 +49,19 @@ void die(const char *fmt, ...)
 int success = 0;
 int failure = 0;
 
-void setup_test_1(int* argc, char*** argv, char *outputfile, char *metricsfile)
+static char *itoa(int i)
 {
-    *argc = 16;
+    const size_t sz = 32;
+    char *a = malloc(sz);
+    if (!a) die("Out of memory");
+    snprintf(a, sz, "%d", i);
+    return a;
+}
+
+void setup_test_1(int* argc, char*** argv, char *outputfile, char *metricsfile,
+                  int threads)
+{
+    *argc = 16 + (threads ? 2 : 0);
     *argv = (char**)calloc(sizeof(char*), *argc);
     (*argv)[0] = strdup("bambi");
     (*argv)[1] = strdup("decode");
@@ -67,11 +79,16 @@ void setup_test_1(int* argc, char*** argv, char *outputfile, char *metricsfile)
     (*argv)[13] = strdup(metricsfile);
     (*argv)[14] = strdup("--barcode-tag-name");
     (*argv)[15] = strdup("RT");
+    if (threads) {
+        (*argv)[16] = strdup("-t");
+        (*argv)[17] = itoa(threads);
+    }
 }
 
-void setup_test_2(int* argc, char*** argv, char *outputfile, char *metricsfile)
+void setup_test_2(int* argc, char*** argv, char *outputfile, char *metricsfile, char *chksumfile,
+                  int threads)
 {
-    *argc = 18;
+    *argc = 20 + (threads ? 2 : 0);
     *argv = (char**)calloc(sizeof(char*), *argc);
     (*argv)[0] = strdup("bambi");
     (*argv)[1] = strdup("decode");
@@ -91,11 +108,18 @@ void setup_test_2(int* argc, char*** argv, char *outputfile, char *metricsfile)
     (*argv)[15] = strdup(metricsfile);
     (*argv)[16] = strdup("--barcode-tag-name");
     (*argv)[17] = strdup("RT");
+    (*argv)[18] = strdup("--chksum-file");
+    (*argv)[19] = strdup(chksumfile);
+    if (threads) {
+        (*argv)[20] = strdup("-t");
+        (*argv)[21] = itoa(threads);
+    }
 }
 
-void setup_test_3(int* argc, char*** argv, char *outputfile, char *metricsfile)
+void setup_test_3(int* argc, char*** argv, char *outputfile, char *metricsfile, char *chksumfile,
+                  int threads)
 {
-    *argc = 15;
+    *argc = 19 + (threads ? 2 : 0);
     *argv = (char**)calloc(sizeof(char*), *argc);
     (*argv)[0] = strdup("bambi");
     (*argv)[1] = strdup("decode");
@@ -112,11 +136,20 @@ void setup_test_3(int* argc, char*** argv, char *outputfile, char *metricsfile)
     (*argv)[12] = strdup("--convert-low-quality");
     (*argv)[13] = strdup("--max-no-calls");
     (*argv)[14] = strdup("6");
+    (*argv)[15] = strdup("--hash");
+    (*argv)[16] = strdup("crc32");
+    (*argv)[17] = strdup("--chksum-file");
+    (*argv)[18] = strdup(chksumfile);
+    if (threads) {
+        (*argv)[19] = strdup("--threads");
+        (*argv)[20] = itoa(threads);
+    }
 }
 
-void setup_test_4(int* argc, char*** argv, char *outputfile, char* metricsfile)
+void setup_test_4(int* argc, char*** argv, char *outputfile, char* metricsfile,
+                  int threads)
 {
-    *argc = 15;
+    *argc = 15 + (threads ? 2 : 0);
     *argv = (char**)calloc(sizeof(char*), *argc);
     (*argv)[0] = strdup("bambi");
     (*argv)[1] = strdup("decode");
@@ -133,6 +166,10 @@ void setup_test_4(int* argc, char*** argv, char *outputfile, char* metricsfile)
     (*argv)[12] = strdup("--metrics-file");
     (*argv)[13] = strdup(metricsfile);
     (*argv)[14] = strdup("--ignore-pf");
+    if (threads) {
+        (*argv)[15] = strdup("--threads");
+        (*argv)[16] = itoa(threads);
+    }
 }
 
 void free_argv(int argc, char *argv[])
@@ -217,110 +254,144 @@ int main(int argc, char**argv)
     unsigned int max_path_length = strlen(TMPDIR) + 100;
     char *outputfile = calloc(1,max_path_length);
     char *metricsfile = calloc(1,max_path_length);
+    char *chksumfile = calloc(1,max_path_length);
+    char cmd[1024];
     
     // minimal options
-    int argc_1;
-    char** argv_1;
-    sprintf(outputfile,"%s/decode_1.sam", TMPDIR);
-    snprintf(metricsfile, max_path_length, "%s/decode_1.metrics", TMPDIR);
-    setup_test_1(&argc_1, &argv_1, outputfile, metricsfile);
-    main_decode(argc_1-1, argv_1+1);
-    free_argv(argc_1,argv_1);
 
-    char *cmd = calloc(1,1024);
-    sprintf(cmd,"diff -I ID:bambi %s %s", outputfile, MKNAME(DATA_DIR,"/out/6383_9_nosplit_nochange.sam"));
-    int result = system(cmd);
-    if (result) {
-        fprintf(stderr, "test 1 failed\n");
-        failure++;
-    } else {
-        success++;
-    }
+    for (int threads = 0; threads <= NTHREADS; threads+=NTHREADS) {
+        int argc_1;
+        char** argv_1;
+        int result;
 
-    sprintf(cmd,"diff -I ID:bambi %s %s", metricsfile, MKNAME(DATA_DIR,"/out/decode_1.metrics"));
-    result = system(cmd);
-    if (result) {
-        fprintf(stderr, "test 1 failed at metrics file diff\n");
-        failure++;
-    } else {
-        success++;
+        snprintf(outputfile, max_path_length, "%s/decode_1%s.sam", TMPDIR, threads ? "threads" : "");
+        snprintf(metricsfile, max_path_length, "%s/decode_1%s.metrics", TMPDIR, threads ? "threads" : "");
+        setup_test_1(&argc_1, &argv_1, outputfile, metricsfile, threads);
+        main_decode(argc_1-1, argv_1+1);
+        free_argv(argc_1,argv_1);
+
+        snprintf(cmd, sizeof(cmd), "diff -I ID:bambi %s %s", outputfile, MKNAME(DATA_DIR,"/out/6383_9_nosplit_nochange.sam"));
+        result = system(cmd);
+        if (result) {
+            fprintf(stderr, "test 1 failed\n");
+            failure++;
+        } else {
+            success++;
+        }
+
+        snprintf(cmd, sizeof(cmd), "diff -I ID:bambi %s %s", metricsfile, MKNAME(DATA_DIR,"/out/decode_1.metrics"));
+        result = system(cmd);
+        if (result) {
+            fprintf(stderr, "test 1 failed at metrics file diff\n");
+            failure++;
+        } else {
+            success++;
+        }
     }
 
     // --convert_low_quality option
-    int argc_2;
-    char** argv_2;
-    sprintf(outputfile,"%s/decode_2.sam",TMPDIR);
-    snprintf(metricsfile, max_path_length, "%s/decode_2.metrics", TMPDIR);
-    setup_test_2(&argc_2, &argv_2, outputfile, metricsfile);
-    main_decode(argc_2-1, argv_2+1);
-    free_argv(argc_2,argv_2);
+    for (int threads = 0; threads <= NTHREADS; threads += NTHREADS) {
+        int argc_2;
+        char** argv_2;
+        int result;
+        snprintf(outputfile, max_path_length, "%s/decode_2%s.sam", TMPDIR, threads ? "threads" : "");
+        snprintf(metricsfile, max_path_length, "%s/decode_2%s.metrics", TMPDIR, threads ? "threads" : "");
+        snprintf(chksumfile, max_path_length, "%s/decode_2%s.chksum", TMPDIR, threads ? "threads" : "");
+        setup_test_2(&argc_2, &argv_2, outputfile, metricsfile, chksumfile, threads);
+        main_decode(argc_2-1, argv_2+1);
+        free_argv(argc_2,argv_2);
 
-    sprintf(cmd,"diff -I ID:bambi %s %s", outputfile, MKNAME(DATA_DIR,"/out/6383_8_nosplitN.sam"));
-    result = system(cmd);
-    if (result) {
-        fprintf(stderr, "test 2 failed\n");
-        failure++;
-    } else {
-        success++;
+        snprintf(cmd, sizeof(cmd), "diff -I ID:bambi %s %s", outputfile, MKNAME(DATA_DIR,"/out/6383_8_nosplitN.sam"));
+        result = system(cmd);
+        if (result) {
+            fprintf(stderr, "test 2 failed\n");
+            failure++;
+        } else {
+            success++;
+        }
+
+        snprintf(cmd, sizeof(cmd), "diff %s %s", chksumfile, MKNAME(DATA_DIR,"/out/decode_2.chksum"));
+        result = system(cmd);
+        if (result) {
+            fprintf(stderr, "test 2 (chksum) failed\n");
+            failure++;
+        } else {
+            success++;
+        }
     }
 
     // check for handling low quality paired reads
-    int argc_3;
-    char** argv_3;
-    sprintf(outputfile,"%s/decode_3.sam",TMPDIR);
-    snprintf(metricsfile, max_path_length, "%s/decode_3.metrics", TMPDIR);
-    setup_test_3(&argc_3, &argv_3, outputfile, metricsfile);
-    main_decode(argc_3-1, argv_3+1);
-    free_argv(argc_3,argv_3);
+    for (int threads = 0; threads <= NTHREADS; threads += NTHREADS) {
+        int argc_3;
+        char** argv_3;
+        int result;
+        snprintf(outputfile, max_path_length, "%s/decode_3%s.sam", TMPDIR, threads ? "threads" : "");
+        snprintf(metricsfile, max_path_length, "%s/decode_3%s.metrics", TMPDIR, threads ? "threads" : "");
+        snprintf(chksumfile, max_path_length, "%s/decode_3%s.chksum", TMPDIR, threads ? "threads" : "");
+        setup_test_3(&argc_3, &argv_3, outputfile, metricsfile, chksumfile, threads);
+        main_decode(argc_3-1, argv_3+1);
+        free_argv(argc_3,argv_3);
 
-    sprintf(cmd,"diff -I ID:bambi %s %s", outputfile, MKNAME(DATA_DIR,"/out/decode_3.sam"));
-    result = system(cmd);
-    if (result) {
-        fprintf(stderr, "test 3 failed\n");
-        failure++;
-    } else {
-        success++;
+        snprintf(cmd, sizeof(cmd), "diff -I ID:bambi %s %s", outputfile, MKNAME(DATA_DIR,"/out/decode_3.sam"));
+        result = system(cmd);
+        if (result) {
+            fprintf(stderr, "test 3 failed\n");
+            failure++;
+        } else {
+            success++;
+        }
+
+        snprintf(cmd, sizeof(cmd), "diff %s %s", chksumfile, MKNAME(DATA_DIR,"/out/decode_3.chksum"));
+        result = system(cmd);
+        if (result) {
+            fprintf(stderr, "test 3 (chksum) failed\n");
+            failure++;
+        } else {
+            success++;
+        }
     }
 
     // --dual-tag option
-    int argc_4;
-    char** argv_4;
-    sprintf(outputfile,"%s/decode_4.sam",TMPDIR);
-    snprintf(metricsfile, max_path_length, "%s/decode_4.metrics", TMPDIR);
-    setup_test_4(&argc_4, &argv_4, outputfile, metricsfile);
-    main_decode(argc_4-1, argv_4+1);
-    free_argv(argc_4,argv_4);
+    for (int threads = 0; threads <= NTHREADS; threads += NTHREADS) {
+        int argc_4;
+        char** argv_4;
+        int result;
+        snprintf(outputfile, max_path_length,"%s/decode_4%s.sam",TMPDIR, threads ? "threads" : "");
+        snprintf(metricsfile, max_path_length, "%s/decode_4%s.metrics", TMPDIR, threads ? "threads" : "");
+        setup_test_4(&argc_4, &argv_4, outputfile, metricsfile, threads);
+        main_decode(argc_4-1, argv_4+1);
+        free_argv(argc_4,argv_4);
 
-    sprintf(cmd,"diff -I ID:bambi %s %s", outputfile, MKNAME(DATA_DIR,"/out/decode_4.sam"));
-    result = system(cmd);
-    if (result) {
-        fprintf(stderr, "test 4 failed at SAM file diff\n");
-        failure++;
-    } else {
-        success++;
-    }
+        snprintf(cmd, sizeof(cmd), "diff -I ID:bambi %s %s", outputfile, MKNAME(DATA_DIR,"/out/decode_4.sam"));
+        result = system(cmd);
+        if (result) {
+            fprintf(stderr, "test 4 failed at SAM file diff\n");
+            failure++;
+        } else {
+            success++;
+        }
 
-    sprintf(cmd,"diff -I ID:bambi %s %s", metricsfile, MKNAME(DATA_DIR,"/out/decode_4.metrics"));
-    result = system(cmd);
-    if (result) {
-        fprintf(stderr, "test 4 failed at metrics file diff\n");
-        failure++;
-    } else {
-        success++;
-    }
+        snprintf(cmd, sizeof(cmd), "diff -I ID:bambi %s %s", metricsfile, MKNAME(DATA_DIR,"/out/decode_4.metrics"));
+        result = system(cmd);
+        if (result) {
+            fprintf(stderr, "test 4 failed at metrics file diff\n");
+            failure++;
+        } else {
+            success++;
+        }
 
-    sprintf(cmd,"diff -I ID:bambi %s %s", strcat(metricsfile, ".hops"), MKNAME(DATA_DIR,"/out/decode_4.metrics.hops"));
-    result = system(cmd);
-    if (result) {
-        fprintf(stderr, "test 4 failed at tag hops file diff\n");
-        failure++;
-    } else {
-        success++;
+        snprintf(cmd, sizeof(cmd), "diff -I ID:bambi %s %s", strcat(metricsfile, ".hops"), MKNAME(DATA_DIR,"/out/decode_4.metrics.hops"));
+        result = system(cmd);
+        if (result) {
+            fprintf(stderr, "test 4 failed at tag hops file diff\n");
+            failure++;
+        } else {
+            success++;
+        }
     }
 
     free(metricsfile);
     free(outputfile);
-    free(cmd);
 
     printf("decode tests: %s\n", failure ? "FAILED" : "Passed");
     return failure ? EXIT_FAILURE : EXIT_SUCCESS;

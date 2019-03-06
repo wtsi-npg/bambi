@@ -22,6 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdbool.h>
 #include <stdlib.h>
 #include "htslib/sam.h"
+#include "htslib/hts.h"
 
 /*
  * iterator structure
@@ -36,12 +37,14 @@ typedef struct {
 
 /*
  * Open a BAM file
- * arguments are: char *fname               filename to open
- *                char mode                 'r' or 'w'
- *                char *fmt                 format [bam,sam,cram] or NULL
- *                char compression level    [0..9] or NULL
+ * arguments are: char *fname                filename to open
+ *                char mode                  'r' or 'w'
+ *                char *fmt                  format [bam,sam,cram] or NULL
+ *                char compression level     [0..9] or NULL
+ *                htsThreadPool *thread_pool thread pool to use, or NULL
  */
-BAMit_t *BAMit_open(char *fname, char mode, char *fmt, char compression_level);
+BAMit_t *BAMit_open(char *fname, char mode, char *fmt, char compression_level,
+                    htsThreadPool *thread_pool);
 
 /*
  * initialise with open file pointer and header

@@ -24,6 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "config.h"
 #include "hts_addendum.h"
 #include "array.h"
+#include "bambi_utils.h"
 
 #define INDEX_SEPARATOR "-"
 #define QUAL_SEPARATOR " "
@@ -37,14 +38,6 @@ typedef enum { MT_UNKNOWN,
              } MACHINE_TYPE;
 
 const char *bambi_version(void);
-void parse_tags(va_t *tags, char *arg);
-void display(const char *fmt, ...);
-void die(const char *fmt, ...);
-
-#define smalloc(s) _s_malloc((s), __FILE__, __LINE__, __func__)
-#define srealloc(p, s) _s_realloc((p), (s), __FILE__, __LINE__, __func__)
-void * _s_malloc(size_t size, const char *file, unsigned int line, const char *func);
-void * _s_realloc(void *ptr, size_t size, const char *file, unsigned int line, const char *func);
 
 #endif
 
