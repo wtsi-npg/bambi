@@ -1,3 +1,18 @@
+	[0.12.0]
+	multi-threading and optimisations added to decode function
+	allow decode option to run in parallel with i2b
+	add multiple-lane i2b (merged output)
+	spatial_filter handles multi-lanes (multi-lane spatial filter file can be produced)
+	new seqchksum function
+	use htslib hopen() to enable bambi use with S3, AWS, et al
+	check_bcl utility added
+	adapter check function added (detect and mark with auxtags, clipping coming soon)
+	--rg flag use deprecated but not illegal (functionality removed)
+
+
+	[0.11.2]
+	integer overflow bug in spatial_filter fixed
+
 	[0.11.1]
 	posix_fadvise() on NovaSeq cbcl files to pre-cache the next tile to speed up reads
 	bug fix: removeBadTiles() was not being honored in spatial_filter application
