@@ -1,6 +1,6 @@
 /*  parse_bam.h - BAM parsing functions used by spatial_filter
 
-    Copyright (C) 2017 Genome Research Ltd.
+    Copyright (C) 2017-2019 Genome Research Ltd.
 
     Author: Steven Leonard <srl@sanger.ac.uk>
             Jennifer Liddle <js10@sanger.ac.uk>
@@ -58,6 +58,7 @@ void bam_header_add_pg(       char *id,
                               char *cl,
                       bam_hdr_t *bam_header);
 
+char complement_base(char c);
 void rev_comp_seq(char *seq);
 char *reverse_seq(char *str);
 int aux_type2size(uint8_t *s);

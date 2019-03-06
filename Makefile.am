@@ -18,6 +18,8 @@ src_bambi_SOURCES = src/bambi.c \
                     src/spatial_filter.c \
                     src/seqchksum.c \
                     src/seqchksum.h \
+                    src/adapters.c \
+                    src/adapters.h \
                     src/bclfile.c \
                     src/bclfile.h \
                     src/filterfile.c \
@@ -57,7 +59,8 @@ TESTS = test/t_array \
         test/t_i2b \
         test/t_read2tags \
         test/t_sf \
-        test/t_seqchksum
+        test/t_seqchksum \
+        test/t_adapters
 
 dist_doc_DATA = README.md LICENSE
 
@@ -72,7 +75,8 @@ check_PROGRAMS = test/t_read2tags \
                  test/t_posfile \
                  test/t_i2b \
                  test/t_sf \
-                 test/t_seqchksum
+                 test/t_seqchksum \
+                 test/t_adapters
 
 TEST_CFLAGS = -I$(top_srcdir)/src $(XML_CFLAGS) -DDATA_DIR=$(top_srcdir)/test/data
 TEST_LDADD = $(HTSLIB_LIBS) -lm
@@ -122,6 +126,10 @@ test_t_sf_CFLAGS = $(TEST_CFLAGS)
 test_t_seqchksum_SOURCES = test/t_seqchksum.c
 test_t_seqchksum_CFLAGS = $(TEST_CFLAGS)
 #test_t_seqchksum_LDADD = $(TEST_LDADD)
+
+test_t_adapters_SOURCES = test/t_adapters.c src/bamit.c
+test_t_adapters_CFLAGS = $(TEST_CFLAGS)
+test_t_adapters_LDADD = $(TEST_LDADD)
 
 EXTRA_DIST = test/data
 
