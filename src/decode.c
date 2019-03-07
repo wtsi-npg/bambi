@@ -709,8 +709,8 @@ va_t *loadBarcodeFile(decode_opts_t *opts)
         return NULL;
     }
     
-    char buf[256];
-    size_t n = 256;
+    char buf[8192];
+    size_t n = 8192;
     lineno++;
     if (0 >= hgets(buf,n,fh)) {    // burn first line which is a header
         fprintf(stderr,"ERROR: problem reading barcode file\n");
