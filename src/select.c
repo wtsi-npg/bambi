@@ -442,7 +442,7 @@ static void writeReferences(hFILE *f, va_t *in_bit)
         BAMit_t *bit = in_bit->entries[n];
         SAM_hdr *sh = sam_hdr_parse_(bit->h->text,bit->h->l_text);
         if (n) hputc(',', f);
-        hputc(',', f);
+        hputc('[', f);
         for (nSQ=0; nSQ<sh->nref; nSQ++) {
             SAM_SQ sq = sh->ref[nSQ];
             if (nSQ) hputc(',', f);
@@ -463,7 +463,7 @@ static void writeReferences(hFILE *f, va_t *in_bit)
             hputs("\"ln\":", f); hputs(ln ? ln: "null", f); hputs(",", f);
             hputs("\"sp\":", f); if (sp) { hputc('"',f); hputs(sp,f); hputs("\",", f); } else hputs("null,",f);
             hputs("\"as\":", f); if (as) { hputc('"',f); hputs(as,f); hputs("\",", f); } else hputs("null,",f);
-            hputs("\"sn\":", f); if (sn) { hputc('"',f); hputs(sn,f); hputs("\",", f); } else hputs("null,",f);
+            hputs("\"sn\":", f); if (sn) { hputc('"',f); hputs(sn,f); hputs("\"", f); } else hputs("null",f);
             hputc('}', f);
             free(ur); free(ln); free(sp); free(as); free(sn);
         }
