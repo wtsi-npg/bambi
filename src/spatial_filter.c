@@ -1610,9 +1610,7 @@ static void applyFilter(opts_t *s)
     // copy input to output header
     bam_hdr_destroy(fp_output_bam->h); fp_output_bam->h = bam_hdr_dup(fp_input_bam->h);
 
-	char concat_cmd[2048];
-	strcat(concat_cmd, s->argv_list);
-	bam_header_add_pg("spf", "spatial_filter", "A program to apply a spatial filter", concat_cmd, fp_output_bam->h);
+	bam_header_add_pg("spf", "spatial_filter", "A program to apply a spatial filter", s->argv_list, fp_output_bam->h);
     if (sam_hdr_write(fp_output_bam->f, fp_output_bam->h) < 0) die("Can't write %s header\n", out_bam_file);
 	free(out_bam_file);
 
