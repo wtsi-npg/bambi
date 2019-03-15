@@ -1304,6 +1304,17 @@ static RegionTable_t *makeRegionTable(opts_t *opts, BAMit_t *fp_bam)
 			break;	/* break on end of BAM file */
 		}
 
+        if (bam_lane > SF_MAX_LANES) die("Lane %d found: max should be %d", bam_lane, SF_MAX_LANES);
+
+        rts = rtsArray[bam_lane];
+        hdr = LaneArray[bam_lane];
+        if (!hdr) {
+            hdr = sf_initHdr();
+            hdr->region_size = opts->region_size;
+            hdr->lane = bam_lane;
+            LaneArray[bam_lane] = hdr;
+        }
+
 		if (BAM_FUNMAP & bam->core.flag) continue;
 		if (BAM_FQCFAIL & bam->core.flag) continue;
 		if (BAM_FSECONDARY & bam->core.flag) continue;
@@ -1314,14 +1325,6 @@ static RegionTable_t *makeRegionTable(opts_t *opts, BAMit_t *fp_bam)
 			}
 		}
         
-        rts = rtsArray[bam_lane];
-        hdr = LaneArray[bam_lane];
-        if (!hdr) {
-            hdr = sf_initHdr();
-            hdr->region_size = opts->region_size;
-            hdr->lane = bam_lane;
-            LaneArray[bam_lane] = hdr;
-        }
         read_length = bam->core.l_qseq;
         if (0 == hdr->readLength[bam_read]) {
             hdr->readLength[bam_read] = read_length;
