@@ -1535,8 +1535,10 @@ static void *bcl_thread(void *arg)
             break;
     }
 
+    if (!bcl) return NULL;
+
     // Check BCL file and Filter have the same number of clusters
-    if (bcl->total_clusters != o->filter->total_clusters) {
+    if (!bcl->pfFlag && bcl->total_clusters != o->filter->total_clusters) {
         die("Cluster mismatch: BCL file (%s): %d  Filter file: %d\n", bcl->filename, bcl->total_clusters, o->filter->total_clusters);
     }
 
@@ -1549,7 +1551,7 @@ static void *bcl_thread(void *arg)
     return NULL;
 }
 
-static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, int next_tile, va_t *tileIndex, filter_t *filter, hts_tpool *p, lockable_bcl_cache *bcl_cache, int lane)
+static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, int next_tile, va_t *tileIndex, filter_t *filter, hts_tpool *p, lockable_bcl_cache *bcl_cache, int lane, int surface)
 {
     pthread_mutex_t bcl_array_lock = PTHREAD_MUTEX_INITIALIZER;
     va_t *bclReadArray = va_init(cycleRange->end * 2, freeBCLReadArray);
@@ -1557,34 +1559,32 @@ static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, int next_til
     if (!q) die("hts_tpool_process_init failed\n");
 
     for (int n=0; n < cycleRange->end; n++) {
-        for (int surface = 1; surface <= 2; surface++) {
-            cycleRangeEntry_t *cr = cycleRange->entries[n];
-            bclReadArrayEntry_t *ra = calloc(1, sizeof(bclReadArrayEntry_t));
-            if (!ra) die("Out of memory\n");
-            ra->readname = strdup(cr->readname);
-            if (!ra->readname) die("Out of memory\n");
-            ra->surface = surface;
-            int nCycles = cr->last - cr->first + 1;
-            ra->bclFileArray = va_init(nCycles, freeBCLFileArray);
+        cycleRangeEntry_t *cr = cycleRange->entries[n];
+        bclReadArrayEntry_t *ra = calloc(1, sizeof(bclReadArrayEntry_t));
+        if (!ra) die("Out of memory\n");
+        ra->readname = strdup(cr->readname);
+        if (!ra->readname) die("Out of memory\n");
+        ra->surface = surface;
+        int nCycles = cr->last - cr->first + 1;
+        ra->bclFileArray = va_init(nCycles, freeBCLFileArray);
 
-            va_push(bclReadArray,ra);
+        va_push(bclReadArray,ra);
 
-            struct bcl_opt o = { p, q, cr, opts, tile, 0, surface, next_tile, tileIndex, filter, ra->bclFileArray, bcl_cache, &bcl_array_lock, lane };
+        struct bcl_opt o = { p, q, cr, opts, tile, 0, surface, next_tile, tileIndex, filter, ra->bclFileArray, bcl_cache, &bcl_array_lock, lane };
 
-            for (int cycle = cr->first; cycle <= cr->last; cycle++) {
-                va_push(ra->bclFileArray, NULL);
-            }
-            for (int cycle = cr->first; cycle <= cr->last; cycle++) {
-                struct bcl_opt *o2 = malloc(sizeof(*o2));
-                if (!o2) die("Out of memory");
-                memcpy(o2, &o, sizeof(o));
-                o2->cycle = cycle;
-                if (hts_tpool_dispatch(p, q, bcl_thread, o2) < 0) {
-                    die("Thread pool dispatch failed");
-                }
-            }
-            hts_tpool_process_flush(q);
+        for (int cycle = cr->first; cycle <= cr->last; cycle++) {
+            va_push(ra->bclFileArray, NULL);
         }
+        for (int cycle = cr->first; cycle <= cr->last; cycle++) {
+            struct bcl_opt *o2 = malloc(sizeof(*o2));
+            if (!o2) die("Out of memory");
+            memcpy(o2, &o, sizeof(o));
+            o2->cycle = cycle;
+            if (hts_tpool_dispatch(p, q, bcl_thread, o2) < 0) {
+                die("Thread pool dispatch failed");
+            }
+        }
+        hts_tpool_process_flush(q);
     }
 
     // Wait for all the jobs to finish
@@ -2254,7 +2254,7 @@ static void processTile(job_data_t *job_data)
     posfile_load(posfile, max_cluster, (machineType == MT_NOVASEQ) ? filter : NULL);
     max_cluster = posfile->size;
 
-    bclReadArray = openBclFiles(cycleRange, opts, tile, next_tile, tileIndex, filter, p, job_data->bcl_cache, job_data->lane);
+    bclReadArray = openBclFiles(cycleRange, opts, tile, next_tile, tileIndex, filter, p, job_data->bcl_cache, job_data->lane, surface);
     char *id = getId(opts);
 
     if (opts->verbose) fprintf(stderr,"Tile %d : opened all BCL files\n", tile);
