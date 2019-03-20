@@ -8,6 +8,7 @@
 	check_bcl utility added
 	adapter check function added (detect and mark with auxtags, clipping coming soon)
 	--rg flag use deprecated but not illegal (functionality removed)
+	i2b function updated to handle NovaSeq SP flowcell (single surface)
 
 
 	[0.11.2]
