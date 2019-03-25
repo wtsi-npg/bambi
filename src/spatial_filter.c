@@ -276,9 +276,7 @@ static void readFheader(hFILE *fp)
  */
 static Header *readHeader(hFILE *fp)
 {
-    Header *hdr;
-
-    hdr = smalloc(sizeof(Header));
+    Header *hdr = sf_initHdr();
     hdr->ngood_tiles = 0;
 
     ssize_t r = hread(fp, &hdr->lane, sizeof(hdr->lane));
@@ -319,8 +317,8 @@ static Header *readHeader(hFILE *fp)
 
     if (hread(fp, &hdr->filterDataSize, sizeof(hdr->filterDataSize)) < 0) goto fail;
     if (hdr->filterDataSize > 0) {
-        hdr->filterData = malloc(hdr->filterDataSize);
-        if (hread(fp, hdr->filterData, hdr->filterDataSize) < 0) die("readFilterData() failed\n");
+        hdr->filterData = smalloc(hdr->filterDataSize);
+        if (hread(fp, hdr->filterData, hdr->filterDataSize) != hdr->filterDataSize) die("readFilterData() failed\n");
     }
 
     return hdr;
