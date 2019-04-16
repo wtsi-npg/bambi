@@ -453,6 +453,7 @@ static adapter_opts_t* parse_args(int argc, char *argv[])
             dest->name = strdup(src->name);
             dest->fwd = strdup(src->fwd);
             dest->rev = strdup(src->rev);
+            dest->offset = 0;
             va_push(opts->adapterArray, dest);
             src++;
         }

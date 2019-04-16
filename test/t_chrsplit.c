@@ -38,6 +38,12 @@ const char * bambi_version(void)
 int success = 0;
 int failure = 0;
 
+void free_args(char **argv)
+{
+    for (int n=0; n<100; n++) free(argv[n]);
+    free(argv);
+}
+
 int va_cmp(const void *a, const void *b)
 {
     const char *s1 = *(char**)a;
@@ -89,6 +95,9 @@ static void checkReadNames(va_t *expected, char *fname)
         va_dump(stderr,got);
     }
     va_free(got);
+    hts_close(f);
+    bam_hdr_destroy(h);
+    bam_destroy1(rec);
 }
 
 static void testxahuman(char *TMPDIR)
@@ -97,8 +106,8 @@ static void testxahuman(char *TMPDIR)
     char** argv;
     char target[512];
     char exclude[512];
-    va_t *expected_target = va_init(10,free);
-    va_t *expected_exclude = va_init(10,free);
+    va_t *expected_target = va_init(10,NULL);
+    va_t *expected_exclude = va_init(10,NULL);
 
     va_push(expected_target,"MT_MT");
     va_push(expected_target,"y_and_y");
@@ -131,6 +140,10 @@ static void testxahuman(char *TMPDIR)
 
     checkReadNames(expected_target, target);
     checkReadNames(expected_exclude, exclude);
+
+    free_args(argv);
+    va_free(expected_target);
+    va_free(expected_exclude);
 }
 
 static void testxahuman_exclude_unaligned(char *TMPDIR)
@@ -139,8 +152,8 @@ static void testxahuman_exclude_unaligned(char *TMPDIR)
     char** argv;
     char target[512];
     char exclude[512];
-    va_t *expected_target = va_init(10,free);
-    va_t *expected_exclude = va_init(10,free);
+    va_t *expected_target = va_init(10,NULL);
+    va_t *expected_exclude = va_init(10,NULL);
 
     va_push(expected_target,"MT_MT");
     va_push(expected_target,"y_and_y");
@@ -174,6 +187,10 @@ static void testxahuman_exclude_unaligned(char *TMPDIR)
 
     checkReadNames(expected_target, target);
     checkReadNames(expected_exclude, exclude);
+
+    free_args(argv);
+    va_free(expected_target);
+    va_free(expected_exclude);
 }
 
 static void testyhuman(char *TMPDIR)
@@ -182,8 +199,8 @@ static void testyhuman(char *TMPDIR)
     char** argv;
     char target[512];
     char exclude[512];
-    va_t *expected_target = va_init(10,free);
-    va_t *expected_exclude = va_init(10,free);
+    va_t *expected_target = va_init(10,NULL);
+    va_t *expected_exclude = va_init(10,NULL);
 
     va_push(expected_target,"MT_MT");
     va_push(expected_target,"twenty_twenty");
@@ -219,6 +236,10 @@ static void testyhuman(char *TMPDIR)
 
     checkReadNames(expected_target, target);
     checkReadNames(expected_exclude, exclude);
+
+    free_args(argv);
+    va_free(expected_target);
+    va_free(expected_exclude);
 }
 
 int main(int argc, char**argv)
