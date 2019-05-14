@@ -314,6 +314,7 @@ static Header *readHeader(hFILE *fp)
         if (hread(fp, &hdr->nreads, sizeof(hdr->nreads)) < 0) goto fail;
     }
     if (hread(fp, &hdr->readLength, N_READS * sizeof(*hdr->readLength)) < 0) goto fail;
+    for (int n=0; n < N_READS; hdr->totalReadLength += hdr->readLength[n++]);
 
     if (hread(fp, &hdr->filterDataSize, sizeof(hdr->filterDataSize)) < 0) goto fail;
     if (hdr->filterDataSize > 0) {
