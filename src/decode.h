@@ -67,4 +67,8 @@ void accumulate_job_metrics(va_t *job_barcodes, HashTable *job_tag_hops, va_t *b
 
 // Write out metrics
 int writeMetrics(va_t *barcodeArray, HashTable *tagHopHash, decode_opts_t *opts);
+
+// free the tag hop hash table
+void free_tagHopHash(HashTable *tagHopHash);
+
 #endif

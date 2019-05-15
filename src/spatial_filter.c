@@ -232,6 +232,18 @@ static Header *sf_initHdr(void)
     return hdr;
 }
 
+static void sf_freeHdr(Header *hdr)
+{
+    if (hdr) {
+        free(hdr->filterData);
+        free(hdr->tileArray);
+        free(hdr->tileReadCountArray);
+        if (hdr->region_hash) HashTableDestroy(hdr->region_hash, 0);
+        free(hdr->regions);
+        free(hdr);
+    }
+}
+
 // which region is x in?
 static uint32_t x2region(Header *hdr, int x)
 {
@@ -280,7 +292,7 @@ static Header *readHeader(hFILE *fp)
     hdr->ngood_tiles = 0;
 
     ssize_t r = hread(fp, &hdr->lane, sizeof(hdr->lane));
-    if (r==0) { free(hdr); return NULL; }   // end of file, no more lanes left
+    if (r==0) { sf_freeHdr(hdr); return NULL; }   // end of file, no more lanes left
     if (r <0) goto fail;
 
     if (hread(fp, &hdr->coord_shift, sizeof(hdr->coord_shift)) < 0) goto fail;
@@ -314,6 +326,7 @@ static Header *readHeader(hFILE *fp)
         if (hread(fp, &hdr->nreads, sizeof(hdr->nreads)) < 0) goto fail;
     }
     if (hread(fp, &hdr->readLength, N_READS * sizeof(*hdr->readLength)) < 0) goto fail;
+    for (int n=0; n < N_READS; hdr->totalReadLength += hdr->readLength[n++]);
 
     if (hread(fp, &hdr->filterDataSize, sizeof(hdr->filterDataSize)) < 0) goto fail;
     if (hdr->filterDataSize > 0) {
@@ -1829,6 +1842,9 @@ static int spatial_filter(opts_t *opts)
 		die("ERROR: can't obtain working directory: %s\n", strerror(errno));
 	}
 
+    // Initialise Lane array
+    for (int n=0; n < SF_MAX_LANES; n++) LaneArray[n] = NULL;
+
 	/* Dump the filter file */
 	if (opts->dumpFilter) dumpFilterFile(opts);
 
@@ -1837,6 +1853,9 @@ static int spatial_filter(opts_t *opts)
 
 	/* apply the  filter */
 	if (opts->apply) applyFilter(opts);
+
+    // Free Lane array
+    for (int n=0; n < SF_MAX_LANES; n++) sf_freeHdr(LaneArray[n]);
 
 	return EXIT_SUCCESS;
 

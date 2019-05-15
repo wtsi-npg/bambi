@@ -2414,7 +2414,7 @@ static void processTile(job_data_t *job_data)
             delete_barcode_array_copy(job_freelist->barcodeArray);
         }
         if (job_freelist->tag_hops) {
-            HashTableDestroy(job_freelist->tag_hops, 0);
+            HashTableDestroy(job_freelist->tag_hops,0);
         }
         free(job_freelist);
         job_freelist = next;
@@ -2562,7 +2562,7 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, hts_tpool *
         clear_bcl_cache(&bcl_cache);
 
     HashTableDestroy(barcodeHash, 0);
-    HashTableDestroy(tag_hops,0);
+    free_tagHopHash(tag_hops);
     va_free(barcode_calls[0]);
     va_free(barcode_calls[1]);
     va_free(barcode_quals[0]);
