@@ -38,6 +38,12 @@ const char * bambi_version(void)
 int success = 0;
 int failure = 0;
 
+void free_args(char **argv)
+{
+    for (int n=0; n<100; n++) free(argv[n]);
+    free(argv);
+}
+
 void setup_test_1(int* argc, char*** argv, char *outputfile)
 {
     *argc = 0;
@@ -295,60 +301,70 @@ int main(int argc, char**argv)
     setup_test_1(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
     checkFiles(TMPDIR,"read2tags_1.bam",MKNAME(DATA_DIR,"/out/read2tags_1.bam"),verbose);
+    free_args(argv_1);
 
     // overlapping reads
     sprintf(outputfile,"%s/read2tags_2.bam", TMPDIR);
     setup_test_2(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
     checkFiles(TMPDIR,"read2tags_2.bam",MKNAME(DATA_DIR,"/out/read2tags_2.bam"),verbose);
+    free_args(argv_1);
 
     // remove first record
     sprintf(outputfile,"%s/read2tags_3.bam", TMPDIR);
     setup_test_3(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
     checkFiles(TMPDIR,"read2tags_3.bam",MKNAME(DATA_DIR,"/out/read2tags_3.bam"),verbose);
+    free_args(argv_1);
 
     // remove second record
     sprintf(outputfile,"%s/read2tags_4.bam", TMPDIR);
     setup_test_4(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
     checkFiles(TMPDIR,"read2tags_4.bam",MKNAME(DATA_DIR,"/out/read2tags_4.bam"),verbose);
+    free_args(argv_1);
 
     // handle single reads
     sprintf(outputfile,"%s/read2tags_5.bam", TMPDIR);
     setup_test_5(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
     checkFiles(TMPDIR,"read2tags_5.bam",MKNAME(DATA_DIR,"/out/read2tags_5.bam"),verbose);
+    free_args(argv_1);
 
     // specify duplicate tags
     sprintf(outputfile,"%s/read2tags_6.bam", TMPDIR);
     setup_test_6(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
     checkFiles(TMPDIR,"read2tags_6.bam",MKNAME(DATA_DIR,"/out/read2tags_6.bam"),verbose);
+    free_args(argv_1);
 
     // use --replace option
     sprintf(outputfile,"%s/read2tags_7.bam", TMPDIR);
     setup_test_7(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
     checkFiles(TMPDIR,"read2tags_7.bam",MKNAME(DATA_DIR,"/out/read2tags_7.bam"),verbose);
+    free_args(argv_1);
 
     // use --merge option
     sprintf(outputfile,"%s/read2tags_8.bam", TMPDIR);
     setup_test_8(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
     checkFiles(TMPDIR,"read2tags_8.bam",MKNAME(DATA_DIR,"/out/read2tags_8.bam"),verbose);
+    free_args(argv_1);
 
     // use --merge option with duplicate tags
     sprintf(outputfile,"%s/read2tags_9.bam", TMPDIR);
     setup_test_9(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
     checkFiles(TMPDIR,"read2tags_9.bam",MKNAME(DATA_DIR,"/out/read2tags_9.bam"),verbose);
+    free_args(argv_1);
 
     // use --replace option with duplicate tags
     sprintf(outputfile,"%s/read2tags_10.bam", TMPDIR);
     setup_test_10(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
     checkFiles(TMPDIR,"read2tags_10.bam",MKNAME(DATA_DIR,"/out/read2tags_10.bam"),verbose);
+    free_args(argv_1);
 
 
     printf("read2tags tests: %s\n", failure ? "FAILED" : "Passed");

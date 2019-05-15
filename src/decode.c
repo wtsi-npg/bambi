@@ -249,11 +249,25 @@ void free_bcd(void *entry)
     free(bcd);
 }
 
-void free_taghop_bcd(void *entry)
+static void free_taghop_bcd(void *entry)
 {
     bc_details_t *bcd = (bc_details_t *)entry;
     free(bcd->seq);
     free(bcd);
+}
+
+void free_tagHopHash(HashTable *tagHopHash)
+{
+    if (!tagHopHash) return;
+    HashIter *iter = HashTableIterCreate();
+    if (iter) {
+        HashItem *hi;
+        while ((hi = HashTableIterNext(tagHopHash, iter)) != NULL) {
+            free_taghop_bcd(hi->data.p);
+        }
+        HashTableIterDestroy(iter);
+    }
+    HashTableDestroy(tagHopHash, 0);
 }
 
 static int compareTagHops(const void *t1, const void *t2) {
@@ -1390,7 +1404,7 @@ static void job_free(decode_thread_data_t *job_data)
     va_free(job_data->record_set);
     ia_free(job_data->template_counts);
     delete_barcode_array_copy(job_data->barcode_array);
-    HashTableDestroy(job_data->tagHopHash, 0);
+    HashTableDestroy(job_data->tagHopHash,0);
     free(job_data);
 }
 
@@ -1652,17 +1666,9 @@ static int decode(decode_opts_t* opts)
     }
 
     // tidy up after us
-    HashIter *iter = HashTableIterCreate();
-    if (iter) {
-        HashItem *hi;
-        while ((hi = HashTableIterNext(tagHopHash, iter)) != NULL) {
-            free_taghop_bcd(hi->data.p);
-        }
-        HashTableIterDestroy(iter);
-    }
+    free_tagHopHash(tagHopHash);
     va_free(barcodeArray);
     HashTableDestroy(barcodeHash, 0);
-    HashTableDestroy(tagHopHash, 0);
     BAMit_free(bam_in);
     BAMit_free(bam_out);
     if (hts_threads.pool) hts_tpool_destroy(hts_threads.pool);

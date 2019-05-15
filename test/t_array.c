@@ -95,7 +95,7 @@ int main(int argc, char**argv)
 
     ia_free(ia);
     va_free(va);
-
+    free(s);
     printf("array tests: %s\n", failure ? "FAILED" : "Passed");
     return failure ? EXIT_FAILURE : EXIT_SUCCESS;
 }

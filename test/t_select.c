@@ -38,6 +38,12 @@ const char * bambi_version(void)
 int success = 0;
 int failure = 0;
 
+void free_args(char **argv)
+{
+    for (int n=0; n<100; n++) free(argv[n]);
+    free(argv);
+}
+
 void die(const char *fmt, ...)
 {
     va_list ap;
@@ -220,6 +226,7 @@ int main(int argc, char**argv)
     checkFiles(TMPDIR,"select_1_human.bam",MKNAME(DATA_DIR,"/out/select_1_human.bam"),verbose);
 
     checkJSONFiles(TMPDIR,metricsfile,MKNAME(DATA_DIR,"/out/select_1_metrics.json"));
+    free_args(argv_1);
 
     // unaligned file test
 
@@ -232,6 +239,7 @@ int main(int argc, char**argv)
     checkFiles(TMPDIR,"select_2.bam",MKNAME(DATA_DIR,"/out/select_2.bam"),verbose);
     checkFiles(TMPDIR,"select_2_human.bam",MKNAME(DATA_DIR,"/out/select_2_human.bam"),verbose);
     checkFiles(TMPDIR,"select_2_unaligned.bam",MKNAME(DATA_DIR,"/out/select_2_unaligned.bam"),verbose);
+    free_args(argv_1);
 
     // single read data test
 
@@ -244,6 +252,7 @@ int main(int argc, char**argv)
     checkFiles(TMPDIR,"select_3.bam",MKNAME(DATA_DIR,"/out/select_3.bam"),verbose);
     checkFiles(TMPDIR,"select_3_human.bam",MKNAME(DATA_DIR,"/out/select_3_human.bam"),verbose);
     checkFiles(TMPDIR,"select_3_unaligned.bam",MKNAME(DATA_DIR,"/out/select_3_unaligned.bam"),verbose);
+    free_args(argv_1);
 
 
     // supplemental read data test
@@ -257,6 +266,7 @@ int main(int argc, char**argv)
     checkFiles(TMPDIR,"select_4.bam",MKNAME(DATA_DIR,"/out/select_sup.bam"),verbose);
     checkFiles(TMPDIR,"select_4_human.bam",MKNAME(DATA_DIR,"/out/select_sup_human.bam"),verbose);
     checkFiles(TMPDIR,"select_4_unaligned.bam",MKNAME(DATA_DIR,"/out/select_sup_unaligned.bam"),verbose);
+    free_args(argv_1);
 
 
     // chimeric metrics test
@@ -269,6 +279,7 @@ int main(int argc, char**argv)
     main_select(argc_1-1, argv_1+1);
 
     checkJSONFiles(TMPDIR,metricsfile, MKNAME(DATA_DIR,"/out/chimeric.json"));
+    free_args(argv_1);
 
     printf("select tests: %s\n", failure ? "FAILED" : "Passed");
     return failure ? EXIT_FAILURE : EXIT_SUCCESS;

@@ -392,6 +392,7 @@ int main(int argc, char**argv)
 
     free(metricsfile);
     free(outputfile);
+    free(chksumfile);
 
     printf("decode tests: %s\n", failure ? "FAILED" : "Passed");
     return failure ? EXIT_FAILURE : EXIT_SUCCESS;
