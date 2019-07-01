@@ -257,6 +257,7 @@ static int tile2index(Header *hdr, int tile)
 static char *getFilterData(Header *hdr, int itile, int read, int cycle, int region)
 {
     int previousReadLength = 0, offset;
+    if (itile<0) return NULL;   // tile has been discarded
     for (int n=0; n < read; n++) previousReadLength += hdr->readLength[n];
     offset = itile * hdr->totalReadLength * hdr->nregions + (previousReadLength + cycle) * hdr->nregions + region;
     return hdr->filterData + offset;
