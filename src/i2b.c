@@ -39,7 +39,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include <cram/sam_header.h>
 #include <htslib/thread_pool.h>
 #include <htslib/khash.h>
 
@@ -867,23 +866,10 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
 }
 
 /*
- * convert SAM_hdr to bam_hdr
- */
-static void sam_hdr_unparse(SAM_hdr *sh, bam_hdr_t *h)
-{
-    free(h->text);
-    sam_hdr_rebuild(sh);
-    h->text = strdup(sam_hdr_str(sh));
-    h->l_text = sam_hdr_length(sh);
-    sam_hdr_free(sh);
-}
-
-/*
  * Add the header lines to the BAM file
  */
 static int addHeader(samFile *output_file, bam_hdr_t *output_header, opts_t *opts)
 {
-    SAM_hdr *sh = sam_hdr_parse_(output_header->text,output_header->l_text);
     char *version = NULL;
     char *pname = NULL;
 
@@ -899,7 +885,7 @@ static int addHeader(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
     if (!version) { fprintf(stderr,"Can't find program version anywhere\n"); return 1; }
 
     // Add header line
-    sam_hdr_add(sh, "HD", "VN", "1.5", "SO", "unsorted", NULL, NULL);
+    sam_hdr_add_line(output_header, "HD", "VN", "1.5", "SO", "unsorted", NULL);
 
     // Add RG line
     if (opts->barcodeArray) {
@@ -917,7 +903,7 @@ static int addHeader(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
             }
             sprintf(id, "%s#%s", opts->read_group_id, name);
             sprintf(pu, "%s#%s", opts->platform_unit, name);
-            sam_hdr_add(sh, "RG",
+            sam_hdr_add_line(output_header, "RG",
                         "ID", id,
                         "DT", opts->run_start_date,
                         "PU", pu,
@@ -927,12 +913,12 @@ static int addHeader(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
                         "CN", opts->sequencing_centre,
                         "PL", opts->platform,
                         (desc ? "DS" : NULL), (desc ? desc : NULL),
-                        NULL, NULL);
+                        NULL);
         }
         free(id);
         free(pu);
     } else {
-        sam_hdr_add(sh, "RG",
+        sam_hdr_add_line(output_header, "RG",
                         "ID", opts->read_group_id,
                         "DT", opts->run_start_date,
                         "PU", opts->platform_unit,
@@ -946,7 +932,7 @@ static int addHeader(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
     }
 
     // Add PG lines
-    sam_hdr_add(sh, "PG",
+    sam_hdr_add_line(output_header, "PG",
                     "ID", "SCS",
                     "VN", version,
                     "PN", pname,
@@ -956,7 +942,7 @@ static int addHeader(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
 
     version = getXMLAttr(opts->basecallsConfig, "/BaseCallAnalysis/Run/Software", "Version");
     pname = getXMLAttr(opts->basecallsConfig, "/BaseCallAnalysis/Run/Software", "Name");
-    sam_hdr_add(sh, "PG",
+    sam_hdr_add_line(output_header, "PG",
                     "ID", "basecalling",
                     "PP", "SCS",
                     "VN", version ? version : "Unknown",
@@ -965,7 +951,7 @@ static int addHeader(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
                     NULL, NULL);
     free(pname); free(version);
 
-    sam_hdr_add(sh, "PG",
+    sam_hdr_add_line(output_header, "PG",
                     "ID", "bambi",
                     "PP", "basecalling",
                     "VN", bambi_version(),
@@ -974,7 +960,6 @@ static int addHeader(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
                     "DS", "Convert Illumina BCL to BAM or SAM file",
                     NULL, NULL);
 
-    sam_hdr_unparse(sh,output_header);
     if (sam_hdr_write(output_file, output_header) != 0) {
         fprintf(stderr, "Could not write output file header\n");
         return 1;

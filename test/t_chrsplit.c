@@ -22,6 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <htslib/sam.h>
 
 #include "bambi.h"
 

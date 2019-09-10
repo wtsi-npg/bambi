@@ -20,9 +20,6 @@ saved_CPPFLAGS="$CPPFLAGS"
 saved_LDFLAGS="$LDFLAGS"
 CPPFLAGS="$HTSLIB_CPPFLAGS"
 LDFLAGS="$HTSLIB_LDFLAGS"
-AC_CHECK_HEADERS([cram/sam_header.h])
-AC_CHECK_LIB([hts], [bam_aux_update_str], [AC_DEFINE([HAVE_BAM_AUX_UPDATE_STR],[1],[Does htslib contain bam_aux_update_str()?])])
-AC_CHECK_LIB([hts], [sam_hdr_del], [AC_DEFINE([HAVE_SAM_HDR_DEL],[1],[Does htslib contain sam_hdr_del()?])])
 PKG_CHECK_MODULES(XML, libxml-2.0 >= 2.7)
 CPPFLAGS="$saved_CPPFLAGS"
 LDFLAGS="$saved_LDFLAGS"

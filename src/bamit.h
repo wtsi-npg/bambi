@@ -30,7 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 typedef struct {
     samFile *f;
-    bam_hdr_t *h;
+    sam_hdr_t *h;
     bam1_t *rec;
     bam1_t *nextRec;
 } BAMit_t;
@@ -49,7 +49,7 @@ BAMit_t *BAMit_open(char *fname, char mode, char *fmt, char compression_level,
 /*
  * initialise with open file pointer and header
  */
-BAMit_t *BAMit_init(samFile *f, bam_hdr_t *h);
+BAMit_t *BAMit_init(samFile *f, sam_hdr_t *h);
 
 /*
  * read next record and advance to next record
