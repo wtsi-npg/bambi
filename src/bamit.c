@@ -18,9 +18,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <stdio.h>
 
+#include "bambi_utils.h"
 #include "bamit.h"
 
-BAMit_t *BAMit_init(samFile *f, bam_hdr_t *h)
+BAMit_t *BAMit_init(samFile *f, sam_hdr_t *h)
 {
     int r;
     BAMit_t *bit = calloc(1,sizeof(BAMit_t));
@@ -46,7 +47,7 @@ BAMit_t *BAMit_open(char *fname, char mode, char *fmt, char compression_level,
                     htsThreadPool *thread_pool)
 {
     samFile *f = NULL;
-    bam_hdr_t *h = NULL;
+    sam_hdr_t *h = NULL;
     htsFormat *format = NULL;
     char m[] = "xbC";
 
@@ -91,7 +92,7 @@ void BAMit_free(void *ptr)
 bam1_t *BAMit_next(BAMit_t *bit)
 {
     if (!bit->nextRec) return NULL;
-    bam_copy1(bit->rec,bit->nextRec);
+    if (!bam_copy1(bit->rec,bit->nextRec)) die("bam_copy1() failed in BAMit_next()");
     int r = sam_read1(bit->f, bit->h, bit->nextRec);
     if (r<0) { bam_destroy1(bit->nextRec); bit->nextRec = NULL; }
     return bit->rec;

@@ -22,6 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <stdarg.h>
 
 #include "bambi.h"
 
@@ -152,9 +153,9 @@ void checkFiles(char *tmpdir, char *gotfile, char *expectfile, int verbose)
 
     if (verbose) fprintf(stderr,"\nComparing headers: %s with %s\n", gotfile, expectfile);
     // compare headers
-    sprintf(cmd,"samtools view -H %s/%s |grep -v ^@PG |sort | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' | sed s:/tmp/bambi[^/]*:/tmp/xyzzy:g > %s/got.txt", tmpdir, gotfile, tmpdir);
+    sprintf(cmd,"samtools view -H %s/%s |grep -v ^@PG |grep -v ^@SQ|sort | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' | sed s:/tmp/bambi[^/]*:/tmp/xyzzy:g > %s/got.txt", tmpdir, gotfile, tmpdir);
     if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
-    sprintf(cmd,"samtools view -H %s | grep -v ^@PG| sort | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' | sed s:/tmp/bambi[^/]*:/tmp/xyzzy:g > %s/expect.txt", expectfile, tmpdir);
+    sprintf(cmd,"samtools view -H %s | grep -v ^@PG| grep -v ^@SQ|sort | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' | sed s:/tmp/bambi[^/]*:/tmp/xyzzy:g > %s/expect.txt", expectfile, tmpdir);
     if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
     sprintf(cmd,"diff %s/got.txt %s/expect.txt", tmpdir, tmpdir);
     if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
