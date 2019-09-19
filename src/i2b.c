@@ -978,28 +978,46 @@ static char *getId(opts_t *opts)
     char *instrument = NULL;
     char *experiment = NULL;
     char *computer = NULL;
+    char *flowcell = NULL;
     char *id = NULL;
 
-    doc = opts->basecallsConfig ? opts->basecallsConfig : opts->intensityConfig;
-
-    runid = getXMLVal(doc, "//RunParameters/RunFolderId");
-    instrument = getXMLVal(doc, "//RunParameters/Instrument");
-
-    if (instrument && runid) {
-        id = calloc(1, strlen(instrument) + strlen(runid) + 2);
-        sprintf(id, "%s_%s", instrument, runid);
-    }
-
-    if (!id) {
-        experiment = getXMLVal(opts->parametersConfig, "//Setup/ExperimentName");
-        computer = getXMLVal(opts->parametersConfig, "//Setup/ComputerName");
-        if (experiment && computer) {
-            id = calloc(1, strlen(experiment) + strlen(computer) + 10);
-            sprintf(id, "%s_%s", computer, experiment);
+    if (machineType==MT_NOVASEQ) {
+        doc = opts->runinfoConfig;
+        if (!doc) die("getId(): Can't find the RunInfo.xml config file");
+        instrument = getXMLVal(doc, "//RunInfo/Run/Instrument");
+        runid = getXMLAttr(doc, "//RunInfo/Run", "Number");
+        flowcell = getXMLVal(doc, "//RunInfo/Run/Flowcell");
+        if (instrument && runid && flowcell) {
+            id = calloc(1, strlen(instrument) + strlen(runid) + strlen(flowcell) + 3);
+            sprintf(id, "%s:%s:%s", instrument, runid, flowcell);
+            free(instrument); free(runid); free(flowcell);
+        } else {
+            die("getId(): can't read data: %s:%s:%s", instrument?instrument:"NULL", runid?runid:"NULL", flowcell?flowcell:"NULL");
         }
-    }
+    } else {
+        // for everything NOT a novaseq...
 
-    free(instrument); free(runid); free(experiment); free(computer);
+        doc = opts->basecallsConfig ? opts->basecallsConfig : opts->intensityConfig;
+
+        runid = getXMLVal(doc, "//RunParameters/RunFolderId");
+        instrument = getXMLVal(doc, "//RunParameters/Instrument");
+
+        if (instrument && runid) {
+            id = calloc(1, strlen(instrument) + strlen(runid) + 2);
+            sprintf(id, "%s_%s", instrument, runid);
+        }
+
+        if (!id) {
+            experiment = getXMLVal(opts->parametersConfig, "//Setup/ExperimentName");
+            computer = getXMLVal(opts->parametersConfig, "//Setup/ComputerName");
+            if (experiment && computer) {
+                id = calloc(1, strlen(experiment) + strlen(computer) + 10);
+                sprintf(id, "%s_%s", computer, experiment);
+            }
+        }
+
+        free(instrument); free(runid); free(experiment); free(computer);
+    }
 
     return id;
 }
