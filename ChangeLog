@@ -1,3 +1,6 @@
+	[0.12.1]
+	bug fix: spatial filter application dumped core when skipping tiles
+
 	[0.12.0]
 	multi-threading and optimisations added to decode function
 	allow decode option to run in parallel with i2b
