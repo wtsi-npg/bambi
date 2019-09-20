@@ -31,7 +31,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <unistd.h>
 #include <regex.h>
 #include <htslib/khash.h>
-#include <cram/sam_header.h>
 #include <inttypes.h>
 
 #include "seqchksum.h"

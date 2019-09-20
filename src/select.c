@@ -21,6 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <ctype.h>
 #include <htslib/sam.h>
 #include <htslib/hfile.h>
+#include <htslib/kstring.h>
 #include <string.h>
 #include <getopt.h>
 #include <stdio.h>
@@ -32,8 +33,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <libgen.h>
 #include <time.h>
 #include <fcntl.h>
-
-#include <cram/sam_header.h>
 
 #include "array.h"
 #include "bamit.h"
@@ -271,18 +270,6 @@ opts_t* select_parse_args(int argc, char *argv[])
 }
 
 /*
- * convert SAM_hdr to bam_hdr
- */
-static void sam_hdr_unparse2(SAM_hdr *sh, bam_hdr_t *h)
-{
-    free(h->text);
-    sam_hdr_rebuild(sh);
-    h->text = strdup(sam_hdr_str(sh));
-    h->l_text = sam_hdr_length(sh);
-    sam_hdr_free(sh);
-}
-
-/*
  * open a single BAM file
  */
 static samFile *openSamFile(char *fname, char *fmt, char compression, char rw)
@@ -314,23 +301,23 @@ static samFile *openSamFile(char *fname, char *fmt, char compression, char rw)
  */
 static void addHeaderLines(BAMit_t *bit, opts_t *opts, bool u)
 {
-    SAM_hdr *sh = sam_hdr_parse_(bit->h->text,bit->h->l_text);
+    bam_hdr_t *hdr = bit->h;
 
     if (u) {
         // for the unaligned BAM file, we need to remove the *SQ lines
-        sh = sam_hdr_del(sh, "SQ", NULL, NULL);
+        sam_hdr_remove_except(hdr, "SQ", NULL, NULL);
     }
 
     // specify sort order
-    sh->sort_order = ORDER_UNSORTED;
+    //hdr->sort_order = ORDER_UNSORTED;
+    sam_hdr_update_hd(hdr, "SO", "unsorted");
 
     // add new PG line
-    sam_hdr_add_PG(sh, "bambi",
+    sam_hdr_add_pg(hdr, "bambi",
                    "VN", bambi_version(),
                    "CL", opts->argv_list,
                    "DS", "Split alignments into different files",
                    NULL, NULL);
-    sam_hdr_unparse2(sh,bit->h);
 }
 
 /*
@@ -373,7 +360,7 @@ static va_t *read_record_set(BAMit_t *bit, char *qname)
 
     while (BAMit_hasnext(bit) && strcmp(bam_get_qname(BAMit_peek(bit)),qname) == 0) {
         bam1_t *rec = bam_init1();
-        bam_copy1(rec,BAMit_next(bit));
+        if (!bam_copy1(rec,BAMit_next(bit))) die("bam_copy1() failed in read_record_set()");
         va_push(recordSet,rec);
     }
 
@@ -436,29 +423,25 @@ static void writeRecordSet(BAMit_t *bit, va_t *recordSet)
 static void writeReferences(hFILE *f, va_t *in_bit)
 {
     int n, nSQ;
+    kstring_t tag;
 
+    ks_initialize(&tag);
     hputs("\"refList\":[", f);
     for (n=0; n < in_bit->end; n++) {
         BAMit_t *bit = in_bit->entries[n];
-        SAM_hdr *sh = sam_hdr_parse_(bit->h->text,bit->h->l_text);
+        bam_hdr_t *hdr = bit->h;
         if (n) hputc(',', f);
         hputc('[', f);
-        for (nSQ=0; nSQ<sh->nref; nSQ++) {
-            SAM_SQ sq = sh->ref[nSQ];
+        for (nSQ=0; nSQ<sam_hdr_count_lines(hdr,"SQ"); nSQ++) {
             if (nSQ) hputc(',', f);
             hputc('{', f);
-            SAM_hdr_tag *tag = sq.tag;
             char *ur=NULL, *ln=NULL, *sp=NULL, *as=NULL, *sn=NULL;
-            while (tag) {
-                if (strlen(tag->str)>3) {
-                    if (strncasecmp(tag->str,"UR:",3) == 0) ur = strdup(tag->str+3);
-                    if (strncasecmp(tag->str,"LN:",3) == 0) ln = strdup(tag->str+3);
-                    if (strncasecmp(tag->str,"SP:",3) == 0) sp = strdup(tag->str+3);
-                    if (strncasecmp(tag->str,"AS:",3) == 0) as = strdup(tag->str+3);
-                    if (strncasecmp(tag->str,"SN:",3) == 0) sn = strdup(tag->str+3);
-                }
-                tag = tag->next;
-            }
+            if (sam_hdr_find_tag_pos(hdr, "SQ", nSQ, "UR", &tag) == 0) ur = strdup(ks_str(&tag));
+            if (sam_hdr_find_tag_pos(hdr, "SQ", nSQ, "LN", &tag) == 0) ln = strdup(ks_str(&tag));
+            if (sam_hdr_find_tag_pos(hdr, "SQ", nSQ, "SP", &tag) == 0) sp = strdup(ks_str(&tag));
+            if (sam_hdr_find_tag_pos(hdr, "SQ", nSQ, "AS", &tag) == 0) as = strdup(ks_str(&tag));
+            if (sam_hdr_find_tag_pos(hdr, "SQ", nSQ, "SN", &tag) == 0) sn = strdup(ks_str(&tag));
+
             hputs("\"ur\":", f); if (ur) { hputc('"',f); hputs(ur,f); hputs("\",", f); } else hputs("null,",f);
             hputs("\"ln\":", f); hputs(ln ? ln: "null", f); hputs(",", f);
             hputs("\"sp\":", f); if (sp) { hputc('"',f); hputs(sp,f); hputs("\",", f); } else hputs("null,",f);
@@ -466,9 +449,9 @@ static void writeReferences(hFILE *f, va_t *in_bit)
             hputs("\"sn\":", f); if (sn) { hputc('"',f); hputs(sn,f); hputs("\"", f); } else hputs("null",f);
             hputc('}', f);
             free(ur); free(ln); free(sp); free(as); free(sn);
+            ks_free(&tag);
         }
         hputc(']', f);
-        sam_hdr_free(sh);
     }
     hputs("],", f);
 }

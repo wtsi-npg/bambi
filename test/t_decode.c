@@ -18,7 +18,6 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 */
-#include "../src/hts_addendum.c"
 #include "../src/decode.c"
 
 #include <stdlib.h>
@@ -33,17 +32,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 const char * bambi_version(void)
 {
     return "12.34";
-}
-
-void die(const char *fmt, ...)
-{
-    va_list ap;
-    va_start(ap,fmt);
-    fflush(stdout);
-    vfprintf(stderr, fmt, ap);
-    va_end(ap);
-    fflush(stderr);
-    exit(EXIT_FAILURE);
 }
 
 int success = 0;

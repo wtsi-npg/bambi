@@ -22,7 +22,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define __BAMBI_H__
 
 #include "config.h"
-#include "hts_addendum.h"
 #include "array.h"
 #include "bambi_utils.h"
 

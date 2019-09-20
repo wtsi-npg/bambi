@@ -32,8 +32,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <time.h>
 #include <fcntl.h>
 
-#include <cram/sam_header.h>
-
 #include "array.h"
 #include "bamit.h"
 #include "parse.h"
@@ -221,18 +219,6 @@ static int find_in_subset(va_t *va, char *search)
 }
 
 /*
- * convert SAM_hdr to bam_hdr
- */
-static void sam_hdr_unparse(SAM_hdr *sh, bam_hdr_t *h)
-{
-    free(h->text);
-    sam_hdr_rebuild(sh);
-    h->text = strdup(sam_hdr_str(sh));
-    h->l_text = sam_hdr_length(sh);
-    sam_hdr_free(sh);
-}
-
-/*
  * open a single BAM file
  */
 static samFile *openSamFile(char *fname, char *fmt, char compression, char rw)
@@ -265,19 +251,18 @@ static samFile *openSamFile(char *fname, char *fmt, char compression, char rw)
  */
 static void addPGLine(BAMit_t *bit, opts_t *opts, char *ot)
 {
-    SAM_hdr *sh = sam_hdr_parse_(bit->h->text,bit->h->l_text);
+    bam_hdr_t *hdr = bit->h;
 
     // specify sort order
-    sh->sort_order = ORDER_UNSORTED;
+    sam_hdr_update_hd(hdr, "SO", "unsorted");
 
     // add new PG line
-    sam_hdr_add_PG(sh, "bambi",
+    sam_hdr_add_pg(hdr, "bambi",
                    "OT", ot,
                    "VN", bambi_version(),
                    "CL", opts->argv_list,
                    "DS", "Split BAM file by chromosomes",
                    NULL, NULL);
-    sam_hdr_unparse(sh,bit->h);
 }
 
 /*
@@ -289,7 +274,7 @@ static va_t *read_record_set(BAMit_t *bit, char *qname)
 
     while (BAMit_hasnext(bit) && strcmp(bam_get_qname(BAMit_peek(bit)),qname) == 0) {
         bam1_t *rec = bam_init1();
-        bam_copy1(rec,BAMit_next(bit));
+        if (!bam_copy1(rec,BAMit_next(bit))) die("bam_copy1() failed in read_record_set()");
         va_push(recordSet,rec);
     }
 

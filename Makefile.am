@@ -24,8 +24,6 @@ src_bambi_SOURCES = src/bambi.c \
                     src/bclfile.h \
                     src/filterfile.c \
                     src/filterfile.h \
-                    src/hts_addendum.c \
-                    src/hts_addendum.h \
                     src/posfile.c \
                     src/posfile.h \
                     src/array.c \
@@ -43,7 +41,7 @@ src_bambi_SOURCES = src/bambi.c \
 
 src_check_bcl_SOURCES = src/check_bcl.c src/bclfile.c src/bambi_utils.c src/array.c
 
-nobase_include_HEADERS = src/cram/cram_samtools.h src/cram/pooled_alloc.h src/cram/sam_header.h src/cram/string_alloc.h
+nobase_include_HEADERS = src/cram/cram_samtools.h src/cram/pooled_alloc.h src/cram/string_alloc.h
 
 src_bambi_LDADD = $(HTSLIB_LIBS) -lm
 src_check_bcl_LDADD = $(HTSLIB_LIBS) -lm
@@ -81,19 +79,19 @@ check_PROGRAMS = test/t_read2tags \
 TEST_CFLAGS = -I$(top_srcdir)/src $(XML_CFLAGS) -DDATA_DIR=$(top_srcdir)/test/data
 TEST_LDADD = $(HTSLIB_LIBS) -lm
 
-test_t_read2tags_SOURCES = test/t_read2tags.c src/read2tags.c src/array.c src/bamit.c src/parse.c src/hts_addendum.c src/bambi_utils.c
+test_t_read2tags_SOURCES = test/t_read2tags.c src/read2tags.c src/array.c src/bamit.c src/parse.c src/bambi_utils.c
 test_t_read2tags_CFLAGS = $(TEST_CFLAGS)
 test_t_read2tags_LDADD = $(TEST_LDADD)
 
-test_t_select_SOURCES = test/t_select.c src/select.c src/array.c src/bamit.c src/parse.c src/hts_addendum.c
+test_t_select_SOURCES = test/t_select.c src/select.c src/array.c src/bamit.c src/parse.c
 test_t_select_CFLAGS = $(TEST_CFLAGS)
 test_t_select_LDADD = $(TEST_LDADD)
 
-test_t_chrsplit_SOURCES = test/t_chrsplit.c src/chrsplit.c src/array.c src/bamit.c src/parse.c src/hts_addendum.c
+test_t_chrsplit_SOURCES = test/t_chrsplit.c src/chrsplit.c src/array.c src/bamit.c src/parse.c src/bambi_utils.c
 test_t_chrsplit_CFLAGS = $(TEST_CFLAGS)
 test_t_chrsplit_LDADD = $(TEST_LDADD)
 
-test_t_bamit_SOURCES = test/t_bamit.c src/bamit.c
+test_t_bamit_SOURCES = test/t_bamit.c src/bamit.c src/bambi_utils.c
 test_t_bamit_CFLAGS = $(TEST_CFLAGS)
 test_t_bamit_LDADD = $(TEST_LDADD)
 
@@ -105,7 +103,7 @@ test_t_bclfile_SOURCES = test/t_bclfile.c src/bclfile.c src/array.c src/bambi_ut
 test_t_bclfile_CFLAGS = $(TEST_CFLAGS)
 test_t_bclfile_LDADD = $(TEST_LDADD)
 
-test_t_decode_SOURCES = test/t_decode.c src/array.c src/bamit.c src/hash_table.c src/seqchksum.c src/crc.c src/parse_bam.c
+test_t_decode_SOURCES = test/t_decode.c src/array.c src/bamit.c src/hash_table.c src/seqchksum.c src/crc.c src/parse_bam.c src/bambi_utils.c
 test_t_decode_CFLAGS = $(TEST_CFLAGS)
 test_t_decode_LDADD = $(TEST_LDADD)
 
@@ -115,7 +113,7 @@ test_t_filterfile_CFLAGS = $(TEST_CFLAGS)
 test_t_posfile_SOURCES = test/t_posfile.c
 test_t_posfile_CFLAGS = $(TEST_CFLAGS)
 
-test_t_i2b_SOURCES = test/t_i2b.c src/i2b.c src/posfile.c src/bclfile.c src/filterfile.c src/array.c src/parse.c src/hts_addendum.c src/decode.c src/bamit.c src/hash_table.c src/seqchksum.c src/crc.c src/parse_bam.c src/bambi_utils.c
+test_t_i2b_SOURCES = test/t_i2b.c src/i2b.c src/posfile.c src/bclfile.c src/filterfile.c src/array.c src/parse.c src/decode.c src/bamit.c src/hash_table.c src/seqchksum.c src/crc.c src/parse_bam.c src/bambi_utils.c
 test_t_i2b_CFLAGS = $(TEST_CFLAGS)
 test_t_i2b_LDADD = $(TEST_LDADD)
 
@@ -127,7 +125,7 @@ test_t_seqchksum_SOURCES = test/t_seqchksum.c
 test_t_seqchksum_CFLAGS = $(TEST_CFLAGS)
 #test_t_seqchksum_LDADD = $(TEST_LDADD)
 
-test_t_adapters_SOURCES = test/t_adapters.c src/bamit.c
+test_t_adapters_SOURCES = test/t_adapters.c src/bamit.c src/bambi_utils.c
 test_t_adapters_CFLAGS = $(TEST_CFLAGS)
 test_t_adapters_LDADD = $(TEST_LDADD)
 

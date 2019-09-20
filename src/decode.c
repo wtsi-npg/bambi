@@ -34,7 +34,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <errno.h>
 #include <htslib/khash.h>
 #include <htslib/thread_pool.h>
-#include <cram/sam_header.h>
+#include <htslib/sam.h>
+#include <htslib/cram.h>
 #include <inttypes.h>
 
 #include "decode.h"
@@ -1021,18 +1022,22 @@ static void add_suffix(bam1_t *rec, char *suffix)
 /*
  * Add a new @RG line to the header
  */
-static void addNewRG(SAM_hdr *sh, char *entry, char *bcname, char *lib, char *sample, char *desc)
+static void addNewRG(sam_hdr_t *hdr, char *entry, char *bcname, char *lib, char *sample, char *desc)
 {
     assert(entry != NULL);
+    kstring_t newline;
     char *saveptr;
     char *p = strtok_r(entry,"\t",&saveptr);
+    if (p) p = strtok_r(NULL, "\t", &saveptr);
+    if (!p) die("addNewRG(): Can't parse entry: %s\n", entry);
     char *newtag = malloc(strlen(p)+1+strlen(bcname)+1);
     strcpy(newtag, p);
     strcat(newtag,"#");
     strcat(newtag, bcname);
-    sam_hdr_add(sh, "RG", "ID", newtag, NULL, NULL);
 
-    SAM_hdr_type *hdr = sam_hdr_find(sh, "RG", "ID", newtag);
+    ks_initialize(&newline);
+    kputs("@RG\t", &newline); kputs(newtag, &newline);
+
     while (1) {
         char *pu = NULL;
         char *t = strtok_r(NULL, ":", &saveptr);
@@ -1056,10 +1061,18 @@ static void addNewRG(SAM_hdr *sh, char *entry, char *bcname, char *lib, char *sa
         if (strcmp(t,"SM") == 0) {
             if (sample) v = sample;     // use sample name
         }
-        sam_hdr_update(sh, hdr, t, v, NULL);
+
+        kputs("\t", &newline);
+        kputs(t, &newline); 
+        kputs(":", &newline);
+        kputs(v, &newline);
+
         if (pu) free(pu);
     }
     free(newtag);
+
+    sam_hdr_add_lines(hdr, ks_str(&newline), 0);
+    ks_free(&newline);
 }
 
 /*
@@ -1068,50 +1081,41 @@ static void addNewRG(SAM_hdr *sh, char *entry, char *bcname, char *lib, char *sa
  *
  * And don't forget to add a @PG header
  */ 
-static void changeHeader(va_t *barcodeArray, bam_hdr_t *h, char *argv_list)
+static void changeHeader(va_t *barcodeArray, sam_hdr_t *sh, char *argv_list)
 {
-    SAM_hdr *sh = sam_hdr_parse_(h->text, h->l_text);
-    char **rgArray = malloc(sizeof(char*) * sh->nrg);
-    int nrg = sh->nrg;
     int i, n;
+    // int nrg = sam_hdr_nref(sh);     // number of RG lines in header;
+    int nrg = sam_hdr_count_lines(sh, "RG");
+    kstring_t **rgArray = malloc(sizeof(kstring_t *) * nrg);
 
-    sam_hdr_add_PG(sh, "bambi", "VN", bambi_version(), "CL", argv_list, NULL);
+    sam_hdr_add_pg(sh, "bambi", "VN", bambi_version(), "CL", argv_list, NULL);
 
-    // store the RG names
-    for (n=0; n < sh->nrg; n++) {
+    // store the RG records
+    for (n=0; n < nrg; n++) {
+        kstring_t *ks = smalloc(sizeof(kstring_t));;
+        ks_initialize(ks);
+
+        if (sam_hdr_find_line_pos(sh, "RG", n, ks) < 0) {
+            die("Can't read RG header line %d\n", n);
+        }
+
         // store the names and tags as a string <name>:<tag>:<val>:<tag>:<val>...
         // eg 1:PL:Illumina:PU:110608_HS19
 
-        // first pass to determine size of string required
-        int sz=strlen(sh->rg[n].name)+1;
-        SAM_hdr_tag *rgtag = sh->rg[n].tag;
-        while (rgtag) {
-            if (strncmp(rgtag->str,"ID:",3)) {  // ignore name
-                sz += 3 + strlen(rgtag->str) + 1;
-            }
-            rgtag = rgtag->next;
-        }
-        char *entry = malloc(sz+1);
+        rgArray[n] = ks;
 
-        // second pass to create string
-        strcpy(entry,sh->rg[n].name);
-        rgtag = sh->rg[n].tag;
-        while (rgtag) {
-            if (strncmp(rgtag->str,"ID:",3)) {  // ignore name
-                strcat(entry,"\t");
-                strcat(entry,rgtag->str);
-            }
-            rgtag = rgtag->next;
-        }
-        rgArray[n] = entry;
     }
 
     // Remove the existing RG lines
-    sh = sam_hdr_del(sh, "RG", NULL, NULL);
+//    if (sam_hdr_remove_except(sh, "RG", NULL, NULL)) die("sam_hdr_remove_except() failed in changeHeader()");
+    if (sam_hdr_remove_except(sh, "RG", "ID", "fred")) die("sam_hdr_remove_except() failed in changeHeader()");
+    for (n=0; n < nrg; n++) {
+        sam_hdr_remove_line_pos(sh, "RG", n);
+    }
 
     // add the new RG lines
     for (n=0; n<nrg; n++) {
-        char *entry = strdup(rgArray[n]);
+        char *entry = strdup(ks_str(rgArray[n]));
         addNewRG(sh, entry, "0", NULL, NULL, NULL);
         free(entry);
 
@@ -1119,22 +1123,17 @@ static void changeHeader(va_t *barcodeArray, bam_hdr_t *h, char *argv_list)
         for (i=1; i < barcodeArray->end; i++) {
             bc_details_t *bcd = barcodeArray->entries[i];
 
-            char *entry = strdup(rgArray[n]);
+            char *entry = strdup(ks_str(rgArray[n]));
             addNewRG(sh, entry, bcd->name, bcd->lib, bcd->sample, bcd->desc);
             free(entry);
         }
     }
 
     for (n=0; n<nrg; n++) {
-        free(rgArray[n]);
+        ks_free(rgArray[n]); free(rgArray[n]);
     }
     free(rgArray);
 
-    free(h->text);
-    sam_hdr_rebuild(sh);
-    h->text = strdup(sam_hdr_str(sh));
-    h->l_text = sam_hdr_length(sh);
-    sam_hdr_free(sh);
 }
 
 /*
@@ -1248,7 +1247,7 @@ static va_t *loadTemplate(BAMit_t *bit, char *qname)
 
     while (BAMit_hasnext(bit) && strcmp(bam_get_qname(BAMit_peek(bit)),qname) == 0) {
         bam1_t *rec = bam_init1();
-        bam_copy1(rec,BAMit_next(bit));
+        if (!bam_copy1(rec,BAMit_next(bit))) die("bam_copy1() failed in loadTemplate()");
         va_push(recordSet,rec);
     }
 
@@ -1452,11 +1451,12 @@ static int processTemplatesThreads(hts_tpool *pool, BAMit_t *bam_in, BAMit_t *ba
         memcpy(qname, bam_get_qname(rec), rec->core.l_qname);
         while (BAMit_hasnext(bam_in) && strcmp(bam_get_qname(BAMit_peek(bam_in)),qname) == 0) {
             if (job_data->nrec < job_data->record_set->end) {
-                bam_copy1(job_data->record_set->entries[job_data->nrec], BAMit_next(bam_in));
+                if (!bam_copy1(job_data->record_set->entries[job_data->nrec], BAMit_next(bam_in)))
+                    die("bam_copy1() failed in processTemplatesThreads()");
             } else {
                 bam1_t *rec = bam_init1();
                 if (!rec) { die("Out of memory"); }
-                bam_copy1(rec, BAMit_next(bam_in));
+                if (!bam_copy1(rec, BAMit_next(bam_in))) die("bam_copy1() failed in processTemplatesThreads() [2]");
                 va_push(job_data->record_set, rec);
             }
             job_data->nrec++;
@@ -1636,7 +1636,7 @@ static int decode(decode_opts_t* opts)
         bam_out = BAMit_open(opts->output_name, 'w', opts->output_fmt, opts->compression_level, hts_threads.pool ? &hts_threads : NULL);
         if (!bam_out) break;
         // copy input to output header
-        bam_hdr_destroy(bam_out->h); bam_out->h = bam_hdr_dup(bam_in->h);
+        sam_hdr_destroy(bam_out->h); bam_out->h = sam_hdr_dup(bam_in->h);
 
         // Change header by adding PG and RG lines
         changeHeader(barcodeArray, bam_out->h, opts->argv_list);

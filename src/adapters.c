@@ -33,7 +33,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <errno.h>
 #include <htslib/thread_pool.h>
 #include <htslib/hfile.h>
-#include <cram/sam_header.h>
 #include <inttypes.h>
 #include <math.h>
 #include <pthread.h>
@@ -625,17 +624,9 @@ static void updateRecord(bam1_t *rec, adapter_t *adapter)
 /*
  * Rewrite BAM header (with new PG line)
  */ 
-static void changeHeader(bam_hdr_t *h, char *argv_list)
+static void changeHeader(bam_hdr_t *hdr, char *argv_list)
 {
-    SAM_hdr *sh = sam_hdr_parse_(h->text, h->l_text);
-
-    sam_hdr_add_PG(sh, "bambi", "VN", bambi_version(), "CL", argv_list, NULL);
-
-    free(h->text);
-    sam_hdr_rebuild(sh);
-    h->text = strdup(sam_hdr_str(sh));
-    h->l_text = sam_hdr_length(sh);
-    sam_hdr_free(sh);
+    sam_hdr_add_pg(hdr, "bambi", "VN", bambi_version(), "CL", argv_list, NULL);
 }
 
 /*
@@ -775,7 +766,7 @@ static va_t *loadTemplate(BAMit_t *bit, char *qname)
 
     while (BAMit_hasnext(bit) && strcmp(bam_get_qname(BAMit_peek(bit)),qname) == 0) {
         bam1_t *rec = bam_init1();
-        bam_copy1(rec,BAMit_next(bit));
+        if (!bam_copy1(rec,BAMit_next(bit))) die("bam_copy1() failed in loadTemplate()");
         va_push(recordSet,rec);
     }
 
@@ -920,11 +911,12 @@ static int processTemplatesThreads(hts_tpool *pool, BAMit_t *bam_in, BAMit_t *ba
         memcpy(qname, bam_get_qname(rec), rec->core.l_qname);
         while (BAMit_hasnext(bam_in) && strcmp(bam_get_qname(BAMit_peek(bam_in)),qname) == 0) {
             if (job_data->nrec < job_data->record_set->end) {
-                bam_copy1(job_data->record_set->entries[job_data->nrec], BAMit_next(bam_in));
+                if (!bam_copy1(job_data->record_set->entries[job_data->nrec], BAMit_next(bam_in)))
+                    die("bam_copy1() failed in processTemplatesThreads()");
             } else {
                 bam1_t *rec = bam_init1();
                 if (!rec) { die("Out of memory"); }
-                bam_copy1(rec, BAMit_next(bam_in));
+                if (!bam_copy1(rec, BAMit_next(bam_in))) die("bam_copy1() failed in processTemplatesThreads() [2]");
                 va_push(job_data->record_set, rec);
             }
             job_data->nrec++;
