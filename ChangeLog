@@ -1,3 +1,8 @@
+	[0.12.2]
+	Uses new htslib header API (htslib >1.9)
+	i2b option to automatically fix corrupted CBCL blocks
+	standardise queryname format for NovaSeq (add prefix)
+
 	[0.12.1]
 	bug fix: spatial filter application dumped core when skipping tiles
 
