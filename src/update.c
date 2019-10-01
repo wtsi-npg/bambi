@@ -194,7 +194,7 @@ static void set_qname(bam1_t *rec, char *qname)
     int new_data_len = rec->l_data - old_len + new_len + extranul;
     if (possibly_expand_bam_data(rec, new_data_len - rec->l_data)) die("set_qname(): possibly_expand_bam_data() failed");
 
-    uint8_t *new_data = calloc(1, new_data_len);
+    uint8_t *new_data = calloc(1, rec->m_data);
     if (!new_data) die("set_qname(): calloc() failed");
     memcpy(new_data, qname, new_len);
     uint8_t *p = new_data + new_len;
@@ -317,12 +317,9 @@ static int update(opts_t* opts)
 
     // Read and process each record in the input BAM
     while (BAMit_hasnext(bam_in)) {
-        rec = bam_init1();
-        rec = bam_copy1(rec,BAMit_next(bam_in));
-        if (!rec) die("update(): bam_copy1() failed");
+        rec = BAMit_next(bam_in);
         if (updateRecord(rec, bam_out, opts, RGhash)) { retcode = 1; break; }
         if (sam_write1(bam_out->f, bam_out->h, rec) < 0) die("Failed to write record\n");
-        bam_destroy1(rec);
     }
 
     // tidy up after us
