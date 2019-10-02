@@ -168,10 +168,7 @@ static inline int realloc_bam_data(bam1_t *b, size_t desired)
 
 static inline int possibly_expand_bam_data(bam1_t *b, size_t bytes) {
     uint32_t new_len = b->l_data + bytes;
-
-    if (new_len > INT32_MAX || new_len < b->l_data) {
-        return -1;
-    }
+    if (new_len > INT32_MAX) return -1;
     if (new_len <= b->m_data) return 0;
     return do_realloc_bam_data(b, new_len);
 }
@@ -192,7 +189,11 @@ static void set_qname(bam1_t *rec, char *qname)
     int extranul = (new_len%4 != 0) ? (4 - new_len%4) : 0;
 
     int new_data_len = rec->l_data - old_len + new_len + extranul;
-    if (possibly_expand_bam_data(rec, new_data_len - rec->l_data)) die("set_qname(): possibly_expand_bam_data() failed");
+    if (new_data_len > rec->l_data) {
+        if (possibly_expand_bam_data(rec, new_data_len - rec->l_data)) {
+            die("set_qname(): possibly_expand_bam_data() failed");
+        }
+    }
 
     uint8_t *new_data = calloc(1, rec->m_data);
     if (!new_data) die("set_qname(): calloc() failed");
