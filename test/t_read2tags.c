@@ -24,6 +24,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdio.h>
 
 #include "bambi.h"
+#include "bamit.h"
+#include <htslib/kstring.h>
 
 #define xMKNAME(d,f) #d f
 #define MKNAME(d,f) xMKNAME(d,f)
@@ -240,27 +242,36 @@ void setup_test_10(int* argc, char*** argv, char *outputfile)
     (*argv)[(*argc)++] = strdup("--replace");
 }
 
-void checkFiles(char *tmpdir, char *gotfile, char *expectfile, int verbose)
+void checkFiles(char *gotfile, char *expectfile, int verbose)
 {
-    char cmd[1024];
+    BAMit_t *bgot = BAMit_open(gotfile, 'r', NULL, 0, NULL);
+    BAMit_t *bexp = BAMit_open(expectfile, 'r', NULL, 0, NULL);
+    bam1_t *got_rec, *exp_rec;
 
-    if (verbose) fprintf(stderr,"\nComparing headers: %s with %s\n", gotfile, expectfile);
-    // compare headers
-    sprintf(cmd,"samtools view -H %s/%s |grep -v ^@PG |sort | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' | sed s:/tmp/bambi[^/]*:/tmp/xyzzy:g > %s/got.txt", tmpdir, gotfile, tmpdir);
-    if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
-    sprintf(cmd,"samtools view -H %s | grep -v ^@PG| sort | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' | sed s:/tmp/bambi[^/]*:/tmp/xyzzy:g > %s/expect.txt", expectfile, tmpdir);
-    if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
-    sprintf(cmd,"diff %s/got.txt %s/expect.txt", tmpdir, tmpdir);
-    if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
+    int c = sam_hdr_count_lines(bgot->h, "RG");
+    if (c != sam_hdr_count_lines(bexp->h, "RG")) { failure++; return; }
 
-    // compare records
-    if (verbose) fprintf(stderr,"\nComparing records: %s with %s\n", gotfile, expectfile);
-    sprintf(cmd,"samtools view %s/%s > %s/got.txt", tmpdir, gotfile, tmpdir);
-    if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
-    sprintf(cmd,"samtools view %s > %s/expect.txt", expectfile, tmpdir);
-    if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
-    sprintf(cmd,"diff %s/got.txt %s/expect.txt", tmpdir, tmpdir);
-    if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
+    for (int n=0; n < c; n++) {
+        kstring_t ks_got; ks_initialize(&ks_got);
+        kstring_t ks_exp; ks_initialize(&ks_exp);
+        sam_hdr_find_line_pos(bgot->h, "RG", n, &ks_got);
+        sam_hdr_find_line_pos(bexp->h, "RG", n, &ks_exp);
+        if (strcmp(ks_str(&ks_got), ks_str(&ks_exp))) { failure++; return; }
+        ks_free(&ks_got); ks_free(&ks_exp);
+    }
+
+    while ((exp_rec = BAMit_next(bexp)) != NULL) {
+        got_rec = BAMit_next(bgot);
+        if (!got_rec) { fprintf(stderr, "%s ended too soon\n", gotfile); failure++; return; }
+        if (memcmp(got_rec->data, exp_rec->data, got_rec->l_data)) {
+            failure++;
+            break;
+        }
+    }
+
+    BAMit_free(bexp);
+    BAMit_free(bgot);
+    return;
 }
 
 int main(int argc, char**argv)
@@ -300,70 +311,70 @@ int main(int argc, char**argv)
     sprintf(outputfile,"%s/read2tags_1.bam", TMPDIR);
     setup_test_1(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
-    checkFiles(TMPDIR,"read2tags_1.bam",MKNAME(DATA_DIR,"/out/read2tags_1.bam"),verbose);
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_1.bam"),verbose);
     free_args(argv_1);
 
     // overlapping reads
     sprintf(outputfile,"%s/read2tags_2.bam", TMPDIR);
     setup_test_2(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
-    checkFiles(TMPDIR,"read2tags_2.bam",MKNAME(DATA_DIR,"/out/read2tags_2.bam"),verbose);
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_2.bam"),verbose);
     free_args(argv_1);
 
     // remove first record
     sprintf(outputfile,"%s/read2tags_3.bam", TMPDIR);
     setup_test_3(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
-    checkFiles(TMPDIR,"read2tags_3.bam",MKNAME(DATA_DIR,"/out/read2tags_3.bam"),verbose);
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_3.bam"),verbose);
     free_args(argv_1);
 
     // remove second record
     sprintf(outputfile,"%s/read2tags_4.bam", TMPDIR);
     setup_test_4(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
-    checkFiles(TMPDIR,"read2tags_4.bam",MKNAME(DATA_DIR,"/out/read2tags_4.bam"),verbose);
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_4.bam"),verbose);
     free_args(argv_1);
 
     // handle single reads
     sprintf(outputfile,"%s/read2tags_5.bam", TMPDIR);
     setup_test_5(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
-    checkFiles(TMPDIR,"read2tags_5.bam",MKNAME(DATA_DIR,"/out/read2tags_5.bam"),verbose);
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_5.bam"),verbose);
     free_args(argv_1);
 
     // specify duplicate tags
     sprintf(outputfile,"%s/read2tags_6.bam", TMPDIR);
     setup_test_6(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
-    checkFiles(TMPDIR,"read2tags_6.bam",MKNAME(DATA_DIR,"/out/read2tags_6.bam"),verbose);
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_6.bam"),verbose);
     free_args(argv_1);
 
     // use --replace option
     sprintf(outputfile,"%s/read2tags_7.bam", TMPDIR);
     setup_test_7(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
-    checkFiles(TMPDIR,"read2tags_7.bam",MKNAME(DATA_DIR,"/out/read2tags_7.bam"),verbose);
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_7.bam"),verbose);
     free_args(argv_1);
 
     // use --merge option
     sprintf(outputfile,"%s/read2tags_8.bam", TMPDIR);
     setup_test_8(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
-    checkFiles(TMPDIR,"read2tags_8.bam",MKNAME(DATA_DIR,"/out/read2tags_8.bam"),verbose);
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_8.bam"),verbose);
     free_args(argv_1);
 
     // use --merge option with duplicate tags
     sprintf(outputfile,"%s/read2tags_9.bam", TMPDIR);
     setup_test_9(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
-    checkFiles(TMPDIR,"read2tags_9.bam",MKNAME(DATA_DIR,"/out/read2tags_9.bam"),verbose);
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_9.bam"),verbose);
     free_args(argv_1);
 
     // use --replace option with duplicate tags
     sprintf(outputfile,"%s/read2tags_10.bam", TMPDIR);
     setup_test_10(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
-    checkFiles(TMPDIR,"read2tags_10.bam",MKNAME(DATA_DIR,"/out/read2tags_10.bam"),verbose);
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_10.bam"),verbose);
     free_args(argv_1);
 
 

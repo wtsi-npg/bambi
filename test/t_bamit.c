@@ -69,11 +69,6 @@ void icheckEqual(char *name, int expected, int actual)
     }
 }
 
-void dumpRec(bam1_t *rec)
-{
-    fprintf(stderr,"mpos: %d  pos: %d  qname: %s  flag: %d\n", rec->core.mpos, rec->core.pos, bam_get_qname(rec), rec->core.flag);
-}
-
 int main(int argc, char**argv)
 {
     int n;
