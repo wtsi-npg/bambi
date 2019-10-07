@@ -642,12 +642,6 @@ int main(int argc, char**argv)
     int argc_1;
     char** argv_1;
 
-    // check if we have samtools
-    if (system("which samtools") != 0) {
-        fprintf(stderr,"samtools not found. Tests cannot be run\n");
-        return EXIT_FAILURE;
-    }
-
     // test parseLaneList()
     ia_t *lanes = parseLaneList("5");
     if (lanes->end != 1) {
