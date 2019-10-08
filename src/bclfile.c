@@ -309,7 +309,7 @@ int bclfile_seek_cluster(bclfile_t *bcl, int cluster)
     return 0;
 }
 
-int bclfile_seek_tile(bclfile_t *bcl, int tile, filter_t *filter, int next_tile)
+int bclfile_seek_tile(bclfile_t *bcl, int tile, filter_t *filter, int next_tile, bool fix_blocks)
 {
     off_t offset;
     tilerec_t *ti = NULL;
@@ -377,7 +377,12 @@ int bclfile_seek_tile(bclfile_t *bcl, int tile, filter_t *filter, int next_tile)
         fprintf(stderr,"compressed_blocksize %d   uncompressed_blocksize %d\n", ti->compressed_blocksize, ti->uncompressed_blocksize);
         fprintf(stderr,"file: %s\nsurface %d\n", bcl->filename, bcl->surface);
         store_msg(&bcl->errmsg, "uncompressBlock() somehow failed in bclfile_seek_tile()");
-        return r;
+        if (fix_blocks) {
+            memset(uncompressed_block, 0, ti->uncompressed_blocksize);
+            r = 0;
+        } else {
+            return r;
+        }
     }
 
     bcl->bases_size = ti->uncompressed_blocksize * 2;   // NovaSeq stores 2 bases and 2 quals per byte
@@ -442,11 +447,11 @@ int bclfile_quality(bclfile_t *bcl, int cluster)
     return bcl->quals[cluster];
 }
 
-int bclfile_load_tile(bclfile_t *bcl, int tile, filter_t *filter, int next_tile)
+int bclfile_load_tile(bclfile_t *bcl, int tile, filter_t *filter, int next_tile, bool fix_blocks)
 {
     int retval = 1;
 
-    if (bcl->machine_type == MT_NOVASEQ) retval = bclfile_seek_tile(bcl, tile, filter, next_tile);
+    if (bcl->machine_type == MT_NOVASEQ) retval = bclfile_seek_tile(bcl, tile, filter, next_tile, fix_blocks);
     else if (bcl->machine_type == MT_NEXTSEQ) retval = bclfile_seek_cluster(bcl, tile);
 
     return retval;

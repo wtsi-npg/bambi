@@ -25,7 +25,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <unistd.h>
 #include <assert.h>
 
+#include <htslib/kstring.h>
+
 #include "array.h"
+#include "bamit.h"
 
 #define xMKNAME(d,f) #d f
 #define MKNAME(d,f) xMKNAME(d,f)
@@ -525,6 +528,33 @@ void novaseq_test(int* argc, char*** argv, char *outputfile, bool verbose)
     assert(*argc<100);
 }
 
+void novaseq2_test(int* argc, char*** argv, char *outputfile, bool verbose)
+{
+    *argc = 0;
+    *argv = (char**)calloc(sizeof(char*), 100);
+    (*argv)[(*argc)++] = strdup("bambi");
+    (*argv)[(*argc)++] = strdup("i2b");
+    (*argv)[(*argc)++] = strdup("-i");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/novaseq_corrupt/Data/Intensities"));
+    (*argv)[(*argc)++] = strdup("-o");
+    (*argv)[(*argc)++] = strdup(outputfile);
+    (*argv)[(*argc)++] = strdup("--lane");
+    (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("--no-filter");
+    (*argv)[(*argc)++] = strdup("--library-name");
+    (*argv)[(*argc)++] = strdup("TestLibrary");
+    (*argv)[(*argc)++] = strdup("--sample-alias");
+    (*argv)[(*argc)++] = strdup("TestSample");
+    (*argv)[(*argc)++] = strdup("--study-name");
+    (*argv)[(*argc)++] = strdup("Study TestStudy");
+    (*argv)[(*argc)++] = strdup("--run-start-date");
+    (*argv)[(*argc)++] = strdup("2011-03-23T00:00:00+0000");
+    (*argv)[(*argc)++] = strdup("--fix-blocks");
+    if (verbose) (*argv)[(*argc)++] = strdup("--verbose");
+
+    assert(*argc<100);
+}
+
 void free_args(char **argv)
 {
     for (int n=0; n<100; n++) free(argv[n]);
@@ -557,48 +587,41 @@ void icheckEqual(char *name, int expected, int actual)
     }
 }
 
-void checkFiles(char *name, char *outputfile, char *fname)
+void checkFiles(char *gotfile, char *expectfile, int verbose)
 {
-    char command[1024];
+    int f = failure;
+    BAMit_t *bgot = BAMit_open(gotfile, 'r', NULL, 0, NULL);
+    BAMit_t *bexp = BAMit_open(expectfile, 'r', NULL, 0, NULL);
+    bam1_t *got_rec, *exp_rec;
 
-    sprintf(command,"samtools view -H %s | grep @RG > %s.got.txt", outputfile, outputfile);
-    if (system(command)) { fprintf(stderr,"samtools failed\n"); failure++; }
-    sprintf(command, "samtools view -H %s | grep @RG > %s.expected.txt", fname, outputfile);
-    if (system(command)) { fprintf(stderr,"samtools failed\n"); failure++; }
-    sprintf(command,"diff %s.got.txt %s.expected.txt", outputfile, outputfile);
-    int result = system(command);
-    if (result) {
-        fprintf(stderr, "%s: test 1 failed\n", name);
-        failure++;
-    } else {
-        success++;
+    int c = sam_hdr_count_lines(bgot->h, "RG");
+    if (c != sam_hdr_count_lines(bexp->h, "RG")) { failure++; return; }
+
+    for (int n=0; n < c; n++) {
+        kstring_t ks_got; ks_initialize(&ks_got);
+        kstring_t ks_exp; ks_initialize(&ks_exp);
+        sam_hdr_find_line_pos(bgot->h, "RG", n, &ks_got);
+        sam_hdr_find_line_pos(bexp->h, "RG", n, &ks_exp);
+        if (strcmp(ks_str(&ks_got), ks_str(&ks_exp))) { failure++; return; }
+        ks_free(&ks_got); ks_free(&ks_exp);
     }
 
-    sprintf(command,"samtools view %s | head | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > %s.got.txt",outputfile,outputfile);
-    if (system(command)) { fprintf(stderr,"samtools failed\n"); failure++; }
-    sprintf(command,"samtools view %s | head | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > %s.expected.txt", fname,outputfile);
-    if (system(command)) { fprintf(stderr,"samtools failed\n"); failure++; }
-    sprintf(command,"diff %s.got.txt %s.expected.txt", outputfile, outputfile);
-    result = system(command);
-    if (result) {
-        fprintf(stderr, "%s: test 2 failed\n", name);
-        failure++;
-    } else {
-        success++;
+    while ((exp_rec = BAMit_next(bexp)) != NULL) {
+        got_rec = BAMit_next(bgot);
+        if (!got_rec) { fprintf(stderr, "%s ended too soon\n", gotfile); failure++; return; }
+        if (memcmp(got_rec->data, exp_rec->data, got_rec->l_data)) {
+            failure++;
+            break;
+        }
     }
 
-    sprintf(command,"samtools view %s | tail | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > %s.got.txt", outputfile,outputfile);
-    if (system(command)) { fprintf(stderr,"samtools failed\n"); failure++; }
-    sprintf(command,"samtools view %s | tail | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' > %s.expected.txt", fname,outputfile);
-    if (system(command)) { fprintf(stderr,"samtools failed\n"); failure++; }
-    sprintf(command,"diff %s.got.txt %s.expected.txt", outputfile, outputfile);
-    result = system(command);
-    if (result) {
-        fprintf(stderr, "%s: test 3 failed\n", name);
-        failure++;
-    } else {
-        success++;
+    if (failure > f && verbose) {
+        fprintf(stderr, "checkFiles(%s,%s) failed\n", gotfile, expectfile);
     }
+
+    BAMit_free(bexp);
+    BAMit_free(bgot);
+    return;
 }
 
 void compare_metrics(const char *name, const char *expected, const char *result)
@@ -651,12 +674,6 @@ int main(int argc, char**argv)
     int argc_1;
     char** argv_1;
 
-    // check if we have samtools
-    if (system("which samtools") != 0) {
-        fprintf(stderr,"samtools not found. Tests cannot be run\n");
-        return EXIT_FAILURE;
-    }
-
     // test parseLaneList()
     ia_t *lanes = parseLaneList("5");
     if (lanes->end != 1) {
@@ -685,7 +702,7 @@ int main(int argc, char**argv)
     snprintf(outputfile, filename_len, "%s/i2b_1.bam", TMPDIR);
     setup_simple_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1, argv_1+1);
-    checkFiles("Simple test", outputfile, MKNAME(DATA_DIR,"/out/test1.bam"));
+    checkFiles(outputfile, MKNAME(DATA_DIR,"/out/test1.bam"), verbose);
     free_args(argv_1);
 
     //
@@ -696,7 +713,7 @@ int main(int argc, char**argv)
     snprintf(outputfile, filename_len, "%s/i2b_m.bam", TMPDIR);
     setup_multiple_lane_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1, argv_1+1);
-    checkFiles("Multiple lane test", outputfile, MKNAME(DATA_DIR,"/out/i2b_m.bam"));
+    checkFiles(outputfile, MKNAME(DATA_DIR,"/out/i2b_m.bam"), verbose);
     free_args(argv_1);
 
     //
@@ -707,7 +724,7 @@ int main(int argc, char**argv)
     snprintf(outputfile, filename_len, "%s/i2b_2.bam", TMPDIR);
     setup_readgroup_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
-    checkFiles("Read Group ID test", outputfile, MKNAME(DATA_DIR,"/out/test2.bam"));
+    checkFiles(outputfile, MKNAME(DATA_DIR,"/out/test2.bam"), verbose);
     free_args(argv_1);
 
     //
@@ -717,7 +734,7 @@ int main(int argc, char**argv)
     snprintf(outputfile, filename_len, "%s/i2b_4.bam", TMPDIR);
     setup_cyclerange_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
-    checkFiles("Cycle Range test", outputfile, MKNAME(DATA_DIR,"/out/test4.bam"));
+    checkFiles(outputfile, MKNAME(DATA_DIR,"/out/test4.bam"), verbose);
     free_args(argv_1);
 
     //
@@ -739,7 +756,7 @@ int main(int argc, char**argv)
     snprintf(outputfile, filename_len, "%s/i2b_6.bam", TMPDIR);
     setup_dualindex_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
-    checkFiles("Dual Index test", outputfile, MKNAME(DATA_DIR,"/out/test6.bam"));
+    checkFiles(outputfile, MKNAME(DATA_DIR,"/out/test6.bam"), verbose);
     free_args(argv_1);
 
     //
@@ -749,7 +766,7 @@ int main(int argc, char**argv)
     snprintf(outputfile, filename_len, "%s/i2b_7.bam", TMPDIR);
     setup_tags_test(&argc_1, &argv_1, outputfile, verbose, false, NULL);
     main_i2b(argc_1-1,argv_1+1);
-    checkFiles("Multiple barcode tags test", outputfile, MKNAME(DATA_DIR,"/out/test7.bam"));
+    checkFiles(outputfile, MKNAME(DATA_DIR,"/out/test7.bam"), verbose);
     free_args(argv_1);
 
     //
@@ -760,7 +777,7 @@ int main(int argc, char**argv)
     snprintf(metricsfile, filename_len, "%s/i2b_7_decode.bam.metrics", TMPDIR);
     setup_tags_test(&argc_1, &argv_1, outputfile, verbose, true, metricsfile);
     main_i2b(argc_1-1,argv_1+1);
-    checkFiles("Multiple barcode tags test with decode", outputfile, MKNAME(DATA_DIR,"/out/test7_decode.sam"));
+    checkFiles(outputfile, MKNAME(DATA_DIR,"/out/test7_decode.sam"), verbose);
     compare_metrics("Multiple barcode tags test with decode", MKNAME(DATA_DIR,"/out/test7_decode.bam.metrics"), metricsfile);
     free_args(argv_1);
 
@@ -771,7 +788,7 @@ int main(int argc, char**argv)
     snprintf(outputfile, filename_len, "%s/i2b_8.bam", TMPDIR);
     no_separator_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
-    checkFiles("separator test", outputfile, MKNAME(DATA_DIR,"/out/test8.bam"));
+    checkFiles(outputfile, MKNAME(DATA_DIR,"/out/test8.bam"), verbose);
     free_args(argv_1);
 
     //
@@ -781,7 +798,7 @@ int main(int argc, char**argv)
     snprintf(outputfile, filename_len, "%s/i2b_9.bam", TMPDIR);
     separator_test(&argc_1, &argv_1, outputfile, verbose, false, NULL);
     main_i2b(argc_1-1,argv_1+1);
-    checkFiles("separator test", outputfile, MKNAME(DATA_DIR,"/out/test9.bam"));
+    checkFiles(outputfile, MKNAME(DATA_DIR,"/out/test9.bam"), verbose);
     free_args(argv_1);
 
     //
@@ -792,7 +809,7 @@ int main(int argc, char**argv)
     snprintf(metricsfile, filename_len, "%s/i2b_9_decode.bam.metrics", TMPDIR);
     separator_test(&argc_1, &argv_1, outputfile, verbose, true, metricsfile);
     main_i2b(argc_1-1,argv_1+1);
-    checkFiles("separator test with decode", outputfile, MKNAME(DATA_DIR,"/out/test9_decode.sam"));
+    checkFiles(outputfile, MKNAME(DATA_DIR,"/out/test9_decode.sam"), verbose);
     compare_metrics("separator test with decode", MKNAME(DATA_DIR,"/out/test9_decode.bam.metrics"), metricsfile);
     snprintf(metricsfile, filename_len, "%s/i2b_9_decode.bam.metrics.hops", TMPDIR);
     compare_metrics("separator test with decode", MKNAME(DATA_DIR,"/out/test9_decode.bam.metrics.hops"), metricsfile);
@@ -805,7 +822,7 @@ int main(int argc, char**argv)
     snprintf(outputfile, filename_len, "%s/i2b_10.bam", TMPDIR);
     consecutive_index_test(&argc_1, &argv_1, outputfile, verbose, false, NULL);
     main_i2b(argc_1-1,argv_1+1);
-    checkFiles("consecutive index test", outputfile, MKNAME(DATA_DIR,"/out/test10.bam"));
+    checkFiles(outputfile, MKNAME(DATA_DIR,"/out/test10.bam"), verbose);
     free_args(argv_1);
 
     //
@@ -816,7 +833,7 @@ int main(int argc, char**argv)
     snprintf(metricsfile, filename_len, "%s/i2b_10.bam.metrics", TMPDIR);
     consecutive_index_test(&argc_1, &argv_1, outputfile, verbose, true, metricsfile);
     main_i2b(argc_1-1,argv_1+1);
-    checkFiles("consecutive index test", outputfile, MKNAME(DATA_DIR,"/out/test10_decode.sam"));
+    checkFiles(outputfile, MKNAME(DATA_DIR,"/out/test10_decode.sam"), verbose);
     compare_metrics("consecutive index test", MKNAME(DATA_DIR,"/out/test10_decode.bam.metrics"), metricsfile);
     snprintf(metricsfile, filename_len, "%s/i2b_10.bam.metrics.hops", TMPDIR);
     compare_metrics("consecutive index test", MKNAME(DATA_DIR,"/out/test10_decode.bam.metrics.hops"), metricsfile);
@@ -829,7 +846,17 @@ int main(int argc, char**argv)
     snprintf(outputfile, filename_len, "%s/novaseq_1.sam", TMPDIR);
     novaseq_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
-    checkFiles("NovaSeq test", outputfile, MKNAME(DATA_DIR,"/out/novaseq_1.sam"));
+    checkFiles(outputfile, MKNAME(DATA_DIR,"/out/novaseq_1.sam"), verbose);
+    free_args(argv_1);
+
+    //
+    // novaseq test with corrupt cbcl file
+    //
+    if (verbose) fprintf(stderr,"\n===> NovaSeq with corrupt cbcl file test\n");
+    snprintf(outputfile, filename_len, "%s/novaseq_2.sam", TMPDIR);
+    novaseq2_test(&argc_1, &argv_1, outputfile, verbose);
+    main_i2b(argc_1-1,argv_1+1);
+    checkFiles(outputfile, MKNAME(DATA_DIR,"/out/novaseq_2.sam"), verbose);
     free_args(argv_1);
 
     free(outputfile);

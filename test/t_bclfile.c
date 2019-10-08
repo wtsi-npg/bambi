@@ -98,7 +98,7 @@ int main(int argc, char**argv)
         fprintf(stderr,"Error opening file: %s\n", bclfile->errmsg);
         failure++;
     }
-    bclfile_load_tile(bclfile,1101,NULL,-1);
+    bclfile_load_tile(bclfile,1101,NULL,-1,false);
     icheckEqual("machine type", MT_NOVASEQ, bclfile->machine_type);
     icheckEqual("version", 1, bclfile->version);
     icheckEqual("header_size", 65, bclfile->header_size);

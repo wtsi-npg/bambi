@@ -124,9 +124,9 @@ test_t_i2b_SOURCES = test/t_i2b.c src/i2b.c src/posfile.c src/bclfile.c src/filt
 test_t_i2b_CFLAGS = $(TEST_CFLAGS)
 test_t_i2b_LDADD = $(TEST_LDADD)
 
-test_t_sf_SOURCES = test/t_sf.c
+test_t_sf_SOURCES = test/t_sf.c src/bamit.c src/array.c src/bambi_utils.c
 test_t_sf_CFLAGS = $(TEST_CFLAGS)
-#test_t_sf_LDADD = $(TEST_LDADD)
+test_t_sf_LDADD = $(TEST_LDADD)
 
 test_t_seqchksum_SOURCES = test/t_seqchksum.c
 test_t_seqchksum_CFLAGS = $(TEST_CFLAGS)

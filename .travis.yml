@@ -21,20 +21,18 @@ env:
   - P=`pwd`
   - HTSLIB=$P/htslib
   - HTSDIR=$HTSLIB/b
-  - SAMTOOLSDIR=$P/samtools
-  - PATH=$SAMTOOLSDIR:$PATH
+  - HTSLIB_BRANCH=develop
   - DISTCHECK_CONFIGURE_FLAGS=--with-htslib=$HTSDIR
 
 install:
-- .travis/clone ${HTSREPO:-git://github.com/samtools/htslib.git} $HTSLIB $HTSLIB_BRANCH
-- .travis/clone ${HTSREPO:-git://github.com/samtools/samtools.git} $SAMTOOLSDIR $SAMTOOLS_BRANCH
-- sudo apt-get install -y gdb  # install gdb
+- git clone --branch $HTSLIB_BRANCH git://github.com/samtools/htslib.git $HTSLIB
 
 before_script:
 - (cd $HTSLIB && autoreconf && mkdir b && ./configure --prefix=$HTSDIR && make && make install)
-- (cd $SAMTOOLSDIR && autoconf && make)
 
-script: autoreconf -i && ./configure -V && ./configure --with-htslib=$HTSDIR && make && make test/t_adapters && test/t_adapters && make check ; cat ./test-suite.log ; make distcheck
+script:
+  - autoreconf -i && ./configure -V && ./configure --with-htslib=$HTSDIR
+  - make && make check && make distcheck
 
 after_success:
   - make dist
@@ -43,8 +41,6 @@ after_success:
   - shasum -a 256 $DIST_FILE > $SHA256_FILE
 
 after_failure:
-- COREFILE=$(find . -maxdepth 1 -name "core*" | head -n 1) # find core file
-- if [[ -f "$COREFILE" ]]; then gdb -c "$COREFILE" test/t_i2b -ex "thread apply all bt" -ex "set pagination 0" -batch; fi
 
 deploy:
   provider: releases

@@ -160,12 +160,6 @@ static int do_realloc_bam_data(bam1_t *b, size_t desired)
     return 0;
 }
 
-static inline int realloc_bam_data(bam1_t *b, size_t desired)
-{
-    if (desired <= b->m_data) return 0;
-    return do_realloc_bam_data(b, desired);
-}
-
 static inline int possibly_expand_bam_data(bam1_t *b, size_t bytes) {
     uint32_t new_len = b->l_data + bytes;
     if (new_len > INT32_MAX) return -1;

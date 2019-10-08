@@ -166,6 +166,7 @@ typedef struct {
     bool change_read_name;
     bool convert_low_quality;
     int max_low_quality_to_convert;
+    bool fix_blocks;
 } opts_t;
 
 /*
@@ -490,10 +491,10 @@ static void usage(FILE *write_to)
 "       --barcode-tag                   comma separated list of tag names for barcode sequences. [default: " DEFAULT_BARCODE_TAG "]\n"
 "       --quality-tag                   comma separated list of tag name for barcode qualities. [default: " DEFAULT_QUALITY_TAG "]\n"
 "       --sec-barcode-tag               DEPRECATED: Tag name for second barcode sequence. [default: null]\n"
-"       --sec-quality-tag               DEPRACATED: Tag name for second barcode quality. [default: null]\n"
+"       --sec-quality-tag               DEPRECATED: Tag name for second barcode quality. [default: null]\n"
 "       --bc-read                       comma separated list of Which reads (1 or 2) should the barcode sequences and qualities be added to?\n"
 "                                       [default: 1]\n"
-"       --sec-bc-read                   DEPRACATED: Which read (1 or 2) should the second barcode sequence and quality be added to?\n"
+"       --sec-bc-read                   DEPRECATED: Which read (1 or 2) should the second barcode sequence and quality be added to?\n"
 "                                       [default: bc-read]\n"
 "       --first-cycle                   First cycle for each standard (non-index) read. Comma separated list.\n"
 "       --final-cycle                   Last cycle for each standard (non-index) read. Comma separated list.\n"
@@ -503,6 +504,7 @@ static void usage(FILE *write_to)
 "  -S   --no-index-separator            Do NOT separate dual indexes with a '" INDEX_SEPARATOR "' character. Just concatenate instead.\n"
 "  -v   --verbose                       verbose output\n"
 "  -t   --threads                       maximum number of threads to use [default: " DEFAULT_MAX_THREADS "]\n"
+"       --fix-blocks                    fix corrupted cbcl blocks and continue instead of aborting.\n"
 "       --output-fmt                    [sam/bam/cram] [default: bam]\n"
 "       --compression-level             [0..9]\n"
 "Barcode decoding options:\n"
@@ -574,6 +576,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
         { "min-mismatch-delta",         1, 0, 0 },
         { "change-read-name",           0, 0, 0 },
         { "ignore-pf",                  0, 0, 0 },
+        { "fix-blocks",                 0, 0, 0 },
         { NULL, 0, NULL, 0 }
     };
 
@@ -656,6 +659,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
                         set_decode_opt_barcode_tag_name(opts->decode_opts, optarg);
                         opts->decode_calls_tag = optarg;
                     } else if (strcmp(arg, "convert-low-quality") == 0)          opts->convert_low_quality = true;
+                    else if (strcmp(arg, "fix-blocks") == 0)                   opts->fix_blocks = true;
                     else if (strcmp(arg, "max-low-quality-to-convert") == 0)   opts->max_low_quality_to_convert = atoi(optarg);
                     else if (strcmp(arg, "max-no-calls") == 0)                 set_decode_opt_max_no_calls(opts->decode_opts, atoi(optarg));
                     else if (strcmp(arg, "max-mismatches") == 0)               set_decode_opt_max_mismatches(opts->decode_opts, atoi(optarg));
@@ -978,28 +982,46 @@ static char *getId(opts_t *opts)
     char *instrument = NULL;
     char *experiment = NULL;
     char *computer = NULL;
+    char *flowcell = NULL;
     char *id = NULL;
 
-    doc = opts->basecallsConfig ? opts->basecallsConfig : opts->intensityConfig;
-
-    runid = getXMLVal(doc, "//RunParameters/RunFolderId");
-    instrument = getXMLVal(doc, "//RunParameters/Instrument");
-
-    if (instrument && runid) {
-        id = calloc(1, strlen(instrument) + strlen(runid) + 2);
-        sprintf(id, "%s_%s", instrument, runid);
-    }
-
-    if (!id) {
-        experiment = getXMLVal(opts->parametersConfig, "//Setup/ExperimentName");
-        computer = getXMLVal(opts->parametersConfig, "//Setup/ComputerName");
-        if (experiment && computer) {
-            id = calloc(1, strlen(experiment) + strlen(computer) + 10);
-            sprintf(id, "%s_%s", computer, experiment);
+    if (machineType==MT_NOVASEQ) {
+        doc = opts->runinfoConfig;
+        if (!doc) die("getId(): Can't find the RunInfo.xml config file");
+        instrument = getXMLVal(doc, "//RunInfo/Run/Instrument");
+        runid = getXMLAttr(doc, "//RunInfo/Run", "Number");
+        flowcell = getXMLVal(doc, "//RunInfo/Run/Flowcell");
+        if (instrument && runid && flowcell) {
+            id = calloc(1, strlen(instrument) + strlen(runid) + strlen(flowcell) + 3);
+            sprintf(id, "%s:%s:%s", instrument, runid, flowcell);
+            free(instrument); free(runid); free(flowcell);
+        } else {
+            die("getId(): can't read data: %s:%s:%s", instrument?instrument:"NULL", runid?runid:"NULL", flowcell?flowcell:"NULL");
         }
-    }
+    } else {
+        // for everything NOT a novaseq...
 
-    free(instrument); free(runid); free(experiment); free(computer);
+        doc = opts->basecallsConfig ? opts->basecallsConfig : opts->intensityConfig;
+
+        runid = getXMLVal(doc, "//RunParameters/RunFolderId");
+        instrument = getXMLVal(doc, "//RunParameters/Instrument");
+
+        if (instrument && runid) {
+            id = calloc(1, strlen(instrument) + strlen(runid) + 2);
+            sprintf(id, "%s_%s", instrument, runid);
+        }
+
+        if (!id) {
+            experiment = getXMLVal(opts->parametersConfig, "//Setup/ExperimentName");
+            computer = getXMLVal(opts->parametersConfig, "//Setup/ComputerName");
+            if (experiment && computer) {
+                id = calloc(1, strlen(experiment) + strlen(computer) + 10);
+                sprintf(id, "%s_%s", computer, experiment);
+            }
+        }
+
+        free(instrument); free(runid); free(experiment); free(computer);
+    }
 
     return id;
 }
@@ -1508,12 +1530,11 @@ static void *bcl_thread(void *arg)
     switch (machineType) {
         case MT_NEXTSEQ:
             assert(o->tileIndex);
-            if (bcl) bclfile_load_tile(bcl, findClusterNumber(o->tile, o->tileIndex), o->filter, -1);
+            if (bcl) bclfile_load_tile(bcl, findClusterNumber(o->tile, o->tileIndex), o->filter, -1, o->opts->fix_blocks);
             break;
         case MT_NOVASEQ:
             if (bcl) {
-                bclfile_load_tile(bcl, o->tile, o->filter, o->next_tile);
-                if (bcl->errmsg) bcl = NULL;
+                if (bclfile_load_tile(bcl, o->tile, o->filter, o->next_tile, o->opts->fix_blocks)) bcl = NULL;
             }
             break;
         default:
