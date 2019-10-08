@@ -49,7 +49,7 @@ BAMit_t *BAMit_open(char *fname, char mode, char *fmt, char compression_level,
     samFile *f = NULL;
     sam_hdr_t *h = NULL;
     htsFormat *format = NULL;
-    char m[] = "xbC";
+    char m[5];
 
     if (fmt) {
         format = calloc(1,sizeof(htsFormat));
@@ -58,6 +58,7 @@ BAMit_t *BAMit_open(char *fname, char mode, char *fmt, char compression_level,
             exit(1);
         }
     }
+    sam_open_mode(m+1, fname, NULL);    // set type (sam/bam/cram) from filename
     m[0] = mode;
     m[2] = compression_level;
     f = hts_open_format(fname, m, format);

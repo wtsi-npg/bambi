@@ -20,6 +20,7 @@ src_bambi_SOURCES = src/bambi.c \
                     src/seqchksum.h \
                     src/adapters.c \
                     src/adapters.h \
+                    src/update.c \
                     src/bclfile.c \
                     src/bclfile.h \
                     src/filterfile.c \
@@ -58,7 +59,8 @@ TESTS = test/t_array \
         test/t_read2tags \
         test/t_sf \
         test/t_seqchksum \
-        test/t_adapters
+        test/t_adapters \
+        test/t_update
 
 dist_doc_DATA = README.md LICENSE
 
@@ -74,10 +76,15 @@ check_PROGRAMS = test/t_read2tags \
                  test/t_i2b \
                  test/t_sf \
                  test/t_seqchksum \
-                 test/t_adapters
+                 test/t_adapters \
+                 test/t_update
 
 TEST_CFLAGS = -I$(top_srcdir)/src $(XML_CFLAGS) -DDATA_DIR=$(top_srcdir)/test/data
 TEST_LDADD = $(HTSLIB_LIBS) -lm
+
+test_t_update_SOURCES = test/t_update.c src/update.c src/bamit.c src/parse.c src/bambi_utils.c src/array.c src/hash_table.c
+test_t_update_CFLAGS = $(TEST_CFLAGS)
+test_t_update_LDADD = $(TEST_LDADD)
 
 test_t_read2tags_SOURCES = test/t_read2tags.c src/read2tags.c src/array.c src/bamit.c src/parse.c src/bambi_utils.c
 test_t_read2tags_CFLAGS = $(TEST_CFLAGS)

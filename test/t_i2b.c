@@ -589,6 +589,7 @@ void icheckEqual(char *name, int expected, int actual)
 
 void checkFiles(char *gotfile, char *expectfile, int verbose)
 {
+    int f = failure;
     BAMit_t *bgot = BAMit_open(gotfile, 'r', NULL, 0, NULL);
     BAMit_t *bexp = BAMit_open(expectfile, 'r', NULL, 0, NULL);
     bam1_t *got_rec, *exp_rec;
@@ -612,6 +613,10 @@ void checkFiles(char *gotfile, char *expectfile, int verbose)
             failure++;
             break;
         }
+    }
+
+    if (failure > f && verbose) {
+        fprintf(stderr, "checkFiles(%s,%s) failed\n", gotfile, expectfile);
     }
 
     BAMit_free(bexp);
@@ -851,7 +856,7 @@ int main(int argc, char**argv)
     snprintf(outputfile, filename_len, "%s/novaseq_2.sam", TMPDIR);
     novaseq2_test(&argc_1, &argv_1, outputfile, verbose);
     main_i2b(argc_1-1,argv_1+1);
-    checkFiles("NovaSeq test", outputfile, MKNAME(DATA_DIR,"/out/novaseq_2.sam"));
+    checkFiles(outputfile, MKNAME(DATA_DIR,"/out/novaseq_2.sam"), verbose);
     free_args(argv_1);
 
     free(outputfile);
