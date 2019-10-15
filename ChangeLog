@@ -1,3 +1,8 @@
+	[0.13.0]
+	new update command: rewrites querynames in a standard format
+	output file type will match output file extension (not default to bam)
+	removed reliance on samtools for tests
+
 	[0.12.2]
 	Uses new htslib header API (htslib >1.9)
 	i2b option to automatically fix corrupted CBCL blocks
