@@ -24,6 +24,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdio.h>
 #include <string.h>
 
+#include "bamit.h"
+#include <htslib/kstring.h>
+
 #define xMKNAME(d,f) #d f
 #define MKNAME(d,f) xMKNAME(d,f)
 
@@ -37,27 +40,36 @@ const char * bambi_version(void)
 int success = 0;
 int failure = 0;
 
-void checkFiles(char *tmpdir, char *gotfile, char *expectfile, int verbose)
+void checkFiles(char *gotfile, char *expectfile, int verbose)
 {
-    char cmd[1024];
+    BAMit_t *bgot = BAMit_open(gotfile, 'r', NULL, 0, NULL);
+    BAMit_t *bexp = BAMit_open(expectfile, 'r', NULL, 0, NULL);
+    bam1_t *got_rec, *exp_rec;
 
-    if (verbose) fprintf(stderr,"\nComparing headers: %s with %s\n", gotfile, expectfile);
-    // compare headers
-    sprintf(cmd,"samtools view -H %s |grep -v ^@PG |sort | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' | sed s:/tmp/bambi[^/]*:/tmp/xyzzy:g > %s/got.txt", gotfile, tmpdir);
-    if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
-    sprintf(cmd,"samtools view -H %s | grep -v ^@PG| sort | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' | sed s:/tmp/bambi[^/]*:/tmp/xyzzy:g > %s/expect.txt", expectfile, tmpdir);
-    if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
-    sprintf(cmd,"diff %s/got.txt %s/expect.txt", tmpdir, tmpdir);
-    if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
+    int c = sam_hdr_count_lines(bgot->h, "RG");
+    if (c != sam_hdr_count_lines(bexp->h, "RG")) { failure++; return; }
 
-    // compare records
-    if (verbose) fprintf(stderr,"\nComparing records: %s with %s\n", gotfile, expectfile);
-    sprintf(cmd,"samtools view %s > %s/got.txt", gotfile, tmpdir);
-    if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
-    sprintf(cmd,"samtools view %s > %s/expect.txt", expectfile, tmpdir);
-    if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
-    sprintf(cmd,"diff %s/got.txt %s/expect.txt", tmpdir, tmpdir);
-    if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
+    for (int n=0; n < c; n++) {
+        kstring_t ks_got; ks_initialize(&ks_got);
+        kstring_t ks_exp; ks_initialize(&ks_exp);
+        sam_hdr_find_line_pos(bgot->h, "RG", n, &ks_got);
+        sam_hdr_find_line_pos(bexp->h, "RG", n, &ks_exp);
+        if (strcmp(ks_str(&ks_got), ks_str(&ks_exp))) { failure++; return; }
+        ks_free(&ks_got); ks_free(&ks_exp);
+    }
+
+    while ((exp_rec = BAMit_next(bexp)) != NULL) {
+        got_rec = BAMit_next(bgot);
+        if (!got_rec) { fprintf(stderr, "%s ended too soon\n", gotfile); failure++; return; }
+        if (memcmp(got_rec->data, exp_rec->data, got_rec->l_data)) {
+            failure++;
+            break;
+        }
+    }
+
+    BAMit_free(bexp);
+    BAMit_free(bgot);
+    return;
 }
 
 void checkFilterFiles(char *prog, char *tmpdir, char *gotfile, char *expectfile)
@@ -120,7 +132,7 @@ int main(int argc, char**argv)
     if (verbose) fprintf(stderr,"Applying filter\n");
     snprintf(cmd, sizeof(cmd), "%s -a --verbose -F %s -o %s %s", prog, filterfile, outputfile, MKNAME(DATA_DIR,"/sf.bam"));
     if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
-    else checkFiles(TMPDIR, outputfile, MKNAME(DATA_DIR,"/out/sf_filtered.bam"), verbose);
+    else checkFiles(outputfile, MKNAME(DATA_DIR,"/out/sf_filtered.bam"), verbose);
 
     printf("spatial_filter tests: %s\n", failure ? "FAILED" : "Passed");
     return failure ? EXIT_FAILURE : EXIT_SUCCESS;

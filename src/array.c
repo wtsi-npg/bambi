@@ -46,6 +46,7 @@ void ia_push(ia_t *ia, int i)
 
 void ia_free(ia_t *ia)
 {
+    if (!ia) return;
     free(ia->entries);
     free(ia);
 }

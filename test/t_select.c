@@ -25,6 +25,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdarg.h>
 
 #include "bambi.h"
+#include "bamit.h"
+#include <htslib/kstring.h>
 
 #define xMKNAME(d,f) #d f
 #define MKNAME(d,f) xMKNAME(d,f)
@@ -147,27 +149,36 @@ void setup_test_5(int* argc, char*** argv, char *outputfile, char *unalignedfile
     (*argv)[(*argc)++] = strdup(metricsfile);
 }
 
-void checkFiles(char *tmpdir, char *gotfile, char *expectfile, int verbose)
+void checkFiles(char *gotfile, char *expectfile, int verbose)
 {
-    char cmd[1024];
+    BAMit_t *bgot = BAMit_open(gotfile, 'r', NULL, 0, NULL);
+    BAMit_t *bexp = BAMit_open(expectfile, 'r', NULL, 0, NULL);
+    bam1_t *got_rec, *exp_rec;
 
-    if (verbose) fprintf(stderr,"\nComparing headers: %s with %s\n", gotfile, expectfile);
-    // compare headers
-    sprintf(cmd,"samtools view -H %s/%s |grep -v ^@PG |grep -v ^@SQ|sort | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' | sed s:/tmp/bambi[^/]*:/tmp/xyzzy:g > %s/got.txt", tmpdir, gotfile, tmpdir);
-    if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
-    sprintf(cmd,"samtools view -H %s | grep -v ^@PG| grep -v ^@SQ|sort | perl -n -e 'chomp; @x=split /\t/;@y=sort @x; print join \",\",@y; print \"\n\";' | sed s:/tmp/bambi[^/]*:/tmp/xyzzy:g > %s/expect.txt", expectfile, tmpdir);
-    if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
-    sprintf(cmd,"diff %s/got.txt %s/expect.txt", tmpdir, tmpdir);
-    if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
+    int c = sam_hdr_count_lines(bgot->h, "RG");
+    if (c != sam_hdr_count_lines(bexp->h, "RG")) { failure++; return; }
 
-    // compare records
-    if (verbose) fprintf(stderr,"\nComparing records: %s with %s\n", gotfile, expectfile);
-    sprintf(cmd,"samtools view %s/%s > %s/got.txt", tmpdir, gotfile, tmpdir);
-    if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
-    sprintf(cmd,"samtools view %s > %s/expect.txt", expectfile, tmpdir);
-    if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
-    sprintf(cmd,"diff %s/got.txt %s/expect.txt", tmpdir, tmpdir);
-    if (system(cmd)) { fprintf(stderr,"Command failed: %s\n",cmd); failure++; }
+    for (int n=0; n < c; n++) {
+        kstring_t ks_got; ks_initialize(&ks_got);
+        kstring_t ks_exp; ks_initialize(&ks_exp);
+        sam_hdr_find_line_pos(bgot->h, "RG", n, &ks_got);
+        sam_hdr_find_line_pos(bexp->h, "RG", n, &ks_exp);
+        if (strcmp(ks_str(&ks_got), ks_str(&ks_exp))) { failure++; return; }
+        ks_free(&ks_got); ks_free(&ks_exp);
+    }
+
+    while ((exp_rec = BAMit_next(bexp)) != NULL) {
+        got_rec = BAMit_next(bgot);
+        if (!got_rec) { fprintf(stderr, "%s ended too soon\n", gotfile); failure++; return; }
+        if (memcmp(got_rec->data, exp_rec->data, got_rec->l_data)) {
+            failure++;
+            break;
+        }
+    }
+
+    BAMit_free(bexp);
+    BAMit_free(bgot);
+    return;
 }
 
 void checkJSONFiles(char *tmpdir, char *gotfile, char *expectfile)
@@ -223,8 +234,10 @@ int main(int argc, char**argv)
     setup_test_1(&argc_1, &argv_1, outputfile, metricsfile);
     main_select(argc_1-1, argv_1+1);
 
-    checkFiles(TMPDIR,"select_1.bam",MKNAME(DATA_DIR,"/out/select_1.bam"),verbose);
-    checkFiles(TMPDIR,"select_1_human.bam",MKNAME(DATA_DIR,"/out/select_1_human.bam"),verbose);
+    strcpy(outputfile, TMPDIR); strcat(outputfile,"/"); strcat(outputfile, "select_1.bam");
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/select_1.bam"),verbose);
+    strcpy(outputfile, TMPDIR); strcat(outputfile,"/"); strcat(outputfile, "select_1_human.bam");
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/select_1_human.bam"),verbose);
 
     checkJSONFiles(TMPDIR,metricsfile,MKNAME(DATA_DIR,"/out/select_1_metrics.json"));
     free_args(argv_1);
@@ -237,9 +250,11 @@ int main(int argc, char**argv)
     setup_test_2(&argc_1, &argv_1, outputfile, unalignedfile);
     main_select(argc_1-1, argv_1+1);
 
-    checkFiles(TMPDIR,"select_2.bam",MKNAME(DATA_DIR,"/out/select_2.bam"),verbose);
-    checkFiles(TMPDIR,"select_2_human.bam",MKNAME(DATA_DIR,"/out/select_2_human.bam"),verbose);
-    checkFiles(TMPDIR,"select_2_unaligned.bam",MKNAME(DATA_DIR,"/out/select_2_unaligned.bam"),verbose);
+    strcpy(outputfile, TMPDIR); strcat(outputfile,"/"); strcat(outputfile, "select_2.bam");
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/select_2.bam"),verbose);
+    strcpy(outputfile, TMPDIR); strcat(outputfile,"/"); strcat(outputfile, "select_2_human.bam");
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/select_2_human.bam"),verbose);
+    checkFiles(unalignedfile,MKNAME(DATA_DIR,"/out/select_2_unaligned.bam"),verbose);
     free_args(argv_1);
 
     // single read data test
@@ -250,9 +265,11 @@ int main(int argc, char**argv)
     setup_test_3(&argc_1, &argv_1, outputfile, unalignedfile);
     main_select(argc_1-1, argv_1+1);
 
-    checkFiles(TMPDIR,"select_3.bam",MKNAME(DATA_DIR,"/out/select_3.bam"),verbose);
-    checkFiles(TMPDIR,"select_3_human.bam",MKNAME(DATA_DIR,"/out/select_3_human.bam"),verbose);
-    checkFiles(TMPDIR,"select_3_unaligned.bam",MKNAME(DATA_DIR,"/out/select_3_unaligned.bam"),verbose);
+    strcpy(outputfile, TMPDIR); strcat(outputfile,"/"); strcat(outputfile, "select_3.bam");
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/select_3.bam"),verbose);
+    strcpy(outputfile, TMPDIR); strcat(outputfile,"/"); strcat(outputfile, "select_3_human.bam");
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/select_3_human.bam"),verbose);
+    checkFiles(unalignedfile,MKNAME(DATA_DIR,"/out/select_3_unaligned.bam"),verbose);
     free_args(argv_1);
 
 
@@ -264,9 +281,11 @@ int main(int argc, char**argv)
     setup_test_4(&argc_1, &argv_1, outputfile, unalignedfile);
     main_select(argc_1-1, argv_1+1);
 
-    checkFiles(TMPDIR,"select_4.bam",MKNAME(DATA_DIR,"/out/select_sup.bam"),verbose);
-    checkFiles(TMPDIR,"select_4_human.bam",MKNAME(DATA_DIR,"/out/select_sup_human.bam"),verbose);
-    checkFiles(TMPDIR,"select_4_unaligned.bam",MKNAME(DATA_DIR,"/out/select_sup_unaligned.bam"),verbose);
+    strcpy(outputfile, TMPDIR); strcat(outputfile,"/"); strcat(outputfile, "select_4.bam");
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/select_sup.bam"),verbose);
+    strcpy(outputfile, TMPDIR); strcat(outputfile,"/"); strcat(outputfile, "select_4_human.bam");
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/select_sup_human.bam"),verbose);
+    checkFiles(unalignedfile,MKNAME(DATA_DIR,"/out/select_sup_unaligned.bam"),verbose);
     free_args(argv_1);
 
 
