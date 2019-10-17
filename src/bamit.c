@@ -49,7 +49,7 @@ BAMit_t *BAMit_open(char *fname, char mode, char *fmt, char compression_level,
     samFile *f = NULL;
     sam_hdr_t *h = NULL;
     htsFormat *format = NULL;
-    char m[5];
+    char m[5] = "xbCx";
 
     if (fmt) {
         format = calloc(1,sizeof(htsFormat));
