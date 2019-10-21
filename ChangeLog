@@ -1,3 +1,6 @@
+	[0.13.1]
+	bug fix: restore default output format to BAM
+
 	[0.13.0]
 	new update command: rewrites querynames in a standard format
 	output file type will match output file extension (not default to bam)
