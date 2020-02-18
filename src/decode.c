@@ -1584,7 +1584,8 @@ size_t find_longest_barcode_name(va_t *barcodeArray)
 
 int get_barcode_metadata(va_t *barcodeArray, int idx,
                          const char **name_out, const char **lib_out,
-                         const char **sample_out, const char **desc_out) {
+                         const char **sample_out, const char **desc_out,
+                         const char **seq_out) {
     bc_details_t *barcode;
     if (!barcodeArray || idx >= barcodeArray->end) return -1;
     barcode = barcodeArray->entries[idx];
@@ -1592,6 +1593,7 @@ int get_barcode_metadata(va_t *barcodeArray, int idx,
     if (lib_out)    *lib_out    = barcode->lib;
     if (sample_out) *sample_out = barcode->sample;
     if (desc_out)   *desc_out   = barcode->desc;
+    if (seq_out)    *seq_out    = barcode->seq;
     return 0;
 }
 

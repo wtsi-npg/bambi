@@ -595,20 +595,20 @@ void checkFiles(char *gotfile, char *expectfile, int verbose)
     bam1_t *got_rec, *exp_rec;
 
     int c = sam_hdr_count_lines(bgot->h, "RG");
-    if (c != sam_hdr_count_lines(bexp->h, "RG")) { failure++; return; }
+    if (c != sam_hdr_count_lines(bexp->h, "RG")) { failure++; c = 0; }
 
     for (int n=0; n < c; n++) {
         kstring_t ks_got; ks_initialize(&ks_got);
         kstring_t ks_exp; ks_initialize(&ks_exp);
         sam_hdr_find_line_pos(bgot->h, "RG", n, &ks_got);
         sam_hdr_find_line_pos(bexp->h, "RG", n, &ks_exp);
-        if (strcmp(ks_str(&ks_got), ks_str(&ks_exp))) { failure++; return; }
+        if (strcmp(ks_str(&ks_got), ks_str(&ks_exp))) { failure++; c = 0; }
         ks_free(&ks_got); ks_free(&ks_exp);
     }
 
     while ((exp_rec = BAMit_next(bexp)) != NULL) {
         got_rec = BAMit_next(bgot);
-        if (!got_rec) { fprintf(stderr, "%s ended too soon\n", gotfile); failure++; return; }
+        if (!got_rec) { fprintf(stderr, "%s ended too soon\n", gotfile); failure++; break; }
         if (memcmp(got_rec->data, exp_rec->data, got_rec->l_data)) {
             failure++;
             break;
