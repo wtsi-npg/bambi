@@ -51,7 +51,8 @@ size_t find_longest_barcode_name(va_t *barcodeArray);
 // Get barcode metadata.  Returns -1 if idx is off the end of barcodeArray, else 0
 int get_barcode_metadata(va_t *barcodeArray, int idx,
                          const char **name_out, const char **lib_out,
-                         const char **sample_out, const char **desc_out);
+                         const char **sample_out, const char **desc_out,
+                         const char **seq_out);
 
 // Make a copy of a barcode array
 va_t *copy_barcode_array(va_t *barcode_array);

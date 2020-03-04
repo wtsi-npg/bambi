@@ -898,8 +898,8 @@ static int addHeader(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
         char *pu = malloc(strlen(opts->platform_unit) + longest_name + 2);
         if (!id || !pu) die("Out of memory");
         for (int idx = 0; ; idx++) {
-            const char *name = NULL, *lib = NULL, *sample = NULL, *desc = NULL;
-            if (get_barcode_metadata(opts->barcodeArray, idx, &name, &lib, &sample, &desc) < 0) break;
+          const char *name = NULL, *lib = NULL, *sample = NULL, *desc = NULL, *seq = NULL;
+          if (get_barcode_metadata(opts->barcodeArray, idx, &name, &lib, &sample, &desc, &seq) < 0) break;
             if (idx == 0) {
                 lib    = opts->library_name;
                 sample = opts->sample_alias;
@@ -917,6 +917,7 @@ static int addHeader(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
                         "CN", opts->sequencing_centre,
                         "PL", opts->platform,
                         (desc ? "DS" : NULL), (desc ? desc : NULL),
+                        (seq  ? "BC" : NULL), (seq ? seq : NULL),
                         NULL);
         }
         free(id);
@@ -2515,7 +2516,7 @@ static int createBAM(samFile *output_file, bam_hdr_t *output_header, hts_tpool *
         if (!tag_hops) die("Out of memory");
         barcodeHash = make_barcode_hash(opts->barcodeArray);
         longest_barcode_name = find_longest_barcode_name(opts->barcodeArray);
-        if (get_barcode_metadata(opts->barcodeArray, 0, &opts->unmatched_barcode_name, NULL, NULL, NULL) < 0) {
+        if (get_barcode_metadata(opts->barcodeArray, 0, &opts->unmatched_barcode_name, NULL, NULL, NULL, NULL) < 0) {
             opts->unmatched_barcode_name = "0";
         }
     }
