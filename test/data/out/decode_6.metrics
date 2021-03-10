@@ -1,0 +1,11 @@
+##
+# BARCODE_TAG_NAME=BC MAX_MISMATCHES=1 MIN_MISMATCH_DELTA=1 MAX_NO_CALLS=2 
+##
+# ID:bambi VN:12.34 (htslib 1.11-94-g7152cb4) CL:bambi decode -i ./test/data/decode_6.sam -o /tmp/bambi.fMV6yI/decode_6.sam --output-fmt sam --input-fmt sam --barcode-file ./test/data/decode_6.tag --metrics-file /tmp/bambi.fMV6yI/decode_6.metrics --ignore-pf
+
+##
+BARCODE	BARCODE_NAME	LIBRARY_NAME	SAMPLE_NAME	DESCRIPTION	READS	PERFECT_MATCHES	ONE_MISMATCH_MATCHES	PCT_MATCHES	RATIO_THIS_BARCODE_TO_BEST_BARCODE_PCT
+ACGT	1				2	1	1	0.182	0.400
+TATG	2				5	5	0	0.455	1.000
+CATG	3				1	1	0	0.091	0.200
+NNNN					3	0	1	0.273	0.600
