@@ -633,7 +633,7 @@ int writeMetrics(va_t *barcodeArray, HashTable *tagHopHash, decode_opts_t *opts)
      * Now write tag hop metrics file - if there are any
      */
 
-    if (opts->idx2_len) {
+    if (opts->idx1_len && opts->idx2_len) {
         char *metrics_hops_name = malloc(strlen(opts->metrics_name)+6);
         strcpy(metrics_hops_name, opts->metrics_name);
         strcat(metrics_hops_name, ".hops");
@@ -968,7 +968,7 @@ char *findBarcodeName(char *barcode, va_t *barcodeArray, HashTable *barcodeHash,
     } else {
         bcd = findBestMatch(barcode, barcodeArray, barcodeHash, opts);
         if (isUpdateMetrics) updateMetrics(bcd, barcode, isPf);
-        if ((bcd == barcodeArray->entries[0]) && opts->idx2_len) {
+        if ((bcd == barcodeArray->entries[0]) && opts->idx1_len && opts->idx2_len) {
             bc_details_t *tag_hop = check_tag_hopping(barcode, barcodeArray, tagHopHash, opts);
             if (isUpdateMetrics && tag_hop) updateMetrics(tag_hop, barcode, isPf);
         }
