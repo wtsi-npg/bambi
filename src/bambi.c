@@ -39,6 +39,7 @@ int main_spatial_filter(int argc, char *argv[]);
 int main_seqchksum(int argc, char *argv[]);
 int main_adapters(int argc, char *argv[]);
 int main_update(int argc, char *argv[]);
+int main_substitution_analysis(int argc, char *argv[]);
 
 const char *bambi_version()
 {
@@ -64,6 +65,7 @@ static void usage(FILE *fp)
 "     seqchksum      calculate checksums for a bam file\n"
 "     adapters       find and remove adapters\n"
 "     update         update an existing BAM/SAM/CRAM file\n"
+"     substitution_analysis   produce a substitution analysis table\n"
 "\n"
 "bambi <command> for help on a particular command\n"
 "\n");
@@ -93,6 +95,7 @@ int main(int argc, char *argv[])
     else if (strcmp(argv[1], "seqchksum") == 0) ret = main_seqchksum(argc-1, argv+1);
     else if (strcmp(argv[1], "adapters") == 0) ret = main_adapters(argc-1, argv+1);
     else if (strcmp(argv[1], "update") == 0) ret = main_update(argc-1, argv+1);
+    else if (strcmp(argv[1], "substitution_analysis") == 0) ret = main_substitution_analysis(argc-1, argv+1);
     else if (strcmp(argv[1], "--version") == 0) {
         printf( "bambi %s\n"
                 "Using htslib %s\n"

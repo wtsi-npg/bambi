@@ -327,11 +327,11 @@ bam1_t *parse_bam_readinfo( BAMit_t *fp,
         }
     }
 
-    *bam_lane = lane;
-    *bam_tile = tile;
-    *bam_x = x;
-    *bam_y = y;
-    *bam_read = read;
+    if (bam_lane) *bam_lane = lane;
+    if (bam_tile) *bam_tile = tile;
+    if (bam_x) *bam_x = x;
+    if (bam_y) *bam_y = y;
+    if (bam_read) *bam_read = read;
     if (bam_offset) *bam_offset = offset;
     return bam;
 }
