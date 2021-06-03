@@ -117,32 +117,6 @@ static char *uncompressBlock(char* abSrc, int nLenSrc, char* abDst, int nLenDst 
     return msg;
 }
 
-#if 0
-// libdeflate version
-#include <libdeflate.h>
-static char *uncompressBlock(char* abSrc, int nLenSrc, char* abDst, int nLenDst )
-{
-    char *msg = NULL;
-    size_t actualOut;
-
-    if (nLenDst == 0) return 0;
-
-    int nErr;
-    struct libdeflate_decompressor *compressor = libdeflate_alloc_decompressor();
-    //LIBDEFLATEAPI *compressor = libdeflate_alloc_decompressor();
-
-        nErr = libdeflate_gzip_decompress(compressor, abSrc, nLenSrc, abDst, nLenDst, &actualOut);
-        if (nErr != LIBDEFLATE_SUCCESS) {
-            char buff[64];
-            sprintf(buff, "%02x %02x %02x %02x %02x", (uint8_t)abSrc[0], (uint8_t)abSrc[1], (uint8_t)abSrc[2], (uint8_t)abSrc[3], (uint8_t)abSrc[4]);
-            store_msg(&msg, "inflate() returned %d for data %s", nErr, buff);
-        }
-
-    libdeflate_free_decompressor(compressor);
-    return msg;
-}
-#endif
-
 static off_t find_tile_offset(bclfile_t *bcl, int tile, tilerec_t **ti_out)
 {
     off_t offset = bcl->header_size;
@@ -208,7 +182,7 @@ static int checkBclFile(char *fname, int verbose)
     bclfile_t *bcl;
     bcl = bclfile_open(fname, mt, tile);
     if (bcl->errmsg) {
-        display("File: %s\t%s\n", fname, bcl->errmsg);
+        display("Can't open File: %s\t%s\n", fname, bcl->errmsg);
         ret = 1;
     }
 
@@ -234,18 +208,15 @@ static int checkBclFile(char *fname, int verbose)
                 tilerec_t *tile = bcl->tiles->entries[n];
                 if (verbose) display("  %3d %6d %d\t%d\t%d\t", n, tile->tilenum, tile->nclusters, tile->uncompressed_blocksize, tile->compressed_blocksize);
                 char *msg = checkTile(bcl,tile->tilenum);
-                if (msg) ret = 1;
-                if (verbose) {
-                    if (msg) display("***FAIL***  %s\n", msg);
-                    else     display("Ok\n");
+                if (msg) {
+                    display("Failed Tile %6d for file %s: %s\n", tile->tilenum, fname, msg);
+                    ret = 1;
+                } else {
+                    if (verbose) display("Ok\n");
                 }
                 free(msg);
             }
         }
-    }
-
-    if (!verbose && ret != 0) {
-        display("Failed %s check: %s\n", (ret==1 ? "Header" : "Tile"), fname);
     }
 
     bclfile_close(bcl);
@@ -343,7 +314,7 @@ int main(int argc, char *argv[])
     if (optind >= argc) Usage(stderr);
 
     if (isDirectory(argv[optind])) r = checkRunFolder(argv[optind]);
-    else                           r = checkBclFile(argv[optind], 1);
+    else                           r = checkBclFile(argv[optind], check_opts_verbose);
 
     return r;
 }
