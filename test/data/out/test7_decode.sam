@@ -1,15 +1,15 @@
 @HD	VN:1.5	SO:unsorted
-@RG	ID:1#0	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#0	LB:TestLibrary	PG:SCS	SM:TestSample	CN:SC	PL:ILLUMINA	DS:Study TestStudy
-@RG	ID:1#1	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#1	LB:TestLibrary1	PG:SCS	SM:TestSample1	CN:SC	PL:ILLUMINA	DS:Study TestStudy
-@RG	ID:1#2	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#2	LB:TestLibrary2	PG:SCS	SM:TestSample2	CN:SC	PL:ILLUMINA	DS:Study TestStudy
-@RG	ID:1#3	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#3	LB:TestLibrary3	PG:SCS	SM:TestSample3	CN:SC	PL:ILLUMINA	DS:Study TestStudy
-@RG	ID:1#4	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#4	LB:TestLibrary4	PG:SCS	SM:TestSample4	CN:SC	PL:ILLUMINA	DS:Study TestStudy
-@RG	ID:1#5	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#5	LB:TestLibrary5	PG:SCS	SM:TestSample5	CN:SC	PL:ILLUMINA	DS:Study TestStudy
-@RG	ID:1#6	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#6	LB:TestLibrary6	PG:SCS	SM:TestSample6	CN:SC	PL:ILLUMINA	DS:Study TestStudy
-@RG	ID:1#7	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#7	LB:TestLibrary7	PG:SCS	SM:TestSample7	CN:SC	PL:ILLUMINA	DS:Study TestStudy
-@RG	ID:1#8	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#8	LB:TestLibrary8	PG:SCS	SM:TestSample8	CN:SC	PL:ILLUMINA	DS:Study TestStudy
-@RG	ID:1#9	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#9	LB:TestLibrary9	PG:SCS	SM:TestSample9	CN:SC	PL:ILLUMINA	DS:Study TestStudy
-@RG	ID:1#10	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#10	LB:TestLibrary10	PG:SCS	SM:TestSample10	CN:SC	PL:ILLUMINA	DS:Study TestStudy
+@RG	ID:1#0	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#0	LB:TestLibrary	PG:SCS	SM:TestSample	CN:SC	PL:ILLUMINA	DS:Study TestStudy	BC:NNNNN
+@RG	ID:1#1	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#1	LB:TestLibrary1	PG:SCS	SM:TestSample1	CN:SC	PL:ILLUMINA	DS:Study TestStudy	BC:AACCG
+@RG	ID:1#2	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#2	LB:TestLibrary2	PG:SCS	SM:TestSample2	CN:SC	PL:ILLUMINA	DS:Study TestStudy	BC:CCTCA
+@RG	ID:1#3	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#3	LB:TestLibrary3	PG:SCS	SM:TestSample3	CN:SC	PL:ILLUMINA	DS:Study TestStudy	BC:GGACA
+@RG	ID:1#4	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#4	LB:TestLibrary4	PG:SCS	SM:TestSample4	CN:SC	PL:ILLUMINA	DS:Study TestStudy	BC:TAATT
+@RG	ID:1#5	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#5	LB:TestLibrary5	PG:SCS	SM:TestSample5	CN:SC	PL:ILLUMINA	DS:Study TestStudy	BC:TGGAC
+@RG	ID:1#6	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#6	LB:TestLibrary6	PG:SCS	SM:TestSample6	CN:SC	PL:ILLUMINA	DS:Study TestStudy	BC:GTTAC
+@RG	ID:1#7	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#7	LB:TestLibrary7	PG:SCS	SM:TestSample7	CN:SC	PL:ILLUMINA	DS:Study TestStudy	BC:CTACG
+@RG	ID:1#8	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#8	LB:TestLibrary8	PG:SCS	SM:TestSample8	CN:SC	PL:ILLUMINA	DS:Study TestStudy	BC:TCTCC
+@RG	ID:1#9	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#9	LB:TestLibrary9	PG:SCS	SM:TestSample9	CN:SC	PL:ILLUMINA	DS:Study TestStudy	BC:CGCCT
+@RG	ID:1#10	DT:2011-03-23T00:00:00+0000	PU:160919_hiseq2500_4966_FC_1#10	LB:TestLibrary10	PG:SCS	SM:TestSample10	CN:SC	PL:ILLUMINA	DS:Study TestStudy	BC:AGGTG
 @PG	ID:SCS	VN:2.0.12.0	PN:HiSeq Control Software	DS:Controlling software on instrument
 @PG	ID:basecalling	PP:SCS	VN:Unknown	PN:Unknown	DS:Basecalling Package
 @PG	ID:bambi	PP:basecalling	VN:12.34	CL:bambi i2b -i test/data/160919_hiseq2500_4966_FC/Data/Intensities -o /tmp/bambi.3bdOh3/i2b_7_decode.bam --lane 1 --first-tile 1101 --tile-limit 1 --library-name TestLibrary --sample-alias TestSample --study-name Study TestStudy --run-start-date 2011-03-23T00:00:00+0000 --verbose --first-cycle 1,30 --final-cycle 2,32 --first-index-cycle 3,6,11 --final-index-cycle 5,10,12 --barcode-tag b1,b2,b3 --quality-tag q1,q2,q3 --barcode-file test/data/160919_hiseq2500_4966_FC/barcodes_i2 --barcode-tag-name b2 --metrics-file /tmp/bambi.3bdOh3/i2b_7_decode.bam.metrics	PN:bambi	DS:Convert Illumina BCL to BAM or SAM file

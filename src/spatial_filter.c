@@ -1146,7 +1146,7 @@ static void writeFilter(opts_t *s, RegionTable_t *rtsArray)
 	if (!fp) die("Can't open filter file %s: %s\n", s->filters->entries[0], strerror(errno));
 
 	strncpy(Fheader.region_magic, REGION_MAGIC, sizeof(Fheader.region_magic));
-	strncpy(Fheader.cmdLine, s->argv_list, sizeof(Fheader.cmdLine));
+	strncpy(Fheader.cmdLine, s->argv_list, sizeof(Fheader.cmdLine)-1);
     if (hwrite(fp, &Fheader, sizeof(Fheader)) < 0) die("writeFheader() failed\n");;
 
     for (int lane=1; lane < SF_MAX_LANES; lane++) {

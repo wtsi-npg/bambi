@@ -1,0 +1,50 @@
+name: testing_and_building_repo
+on: [push, pull_request]
+jobs:
+  build: 
+    strategy:
+      matrix:
+        os: ['ubuntu-18.04']
+
+    runs-on: ${{matrix.os}} 
+    name: Workflow on ${{ matrix.os }} 
+    steps:
+    - uses: actions/checkout@v2 
+      with:
+        fetch-depth: '0'
+
+    - name: install libgd-dev and liblzma-dev
+      run:
+          sudo apt-get install -y libgd-dev liblzma-dev  libcurl4-openssl-dev
+
+    - name: clone samtools branch
+      run: |
+           export HTSLIB=${{ github.workspace }}/htslib
+           git clone --branch $HTSLIB_BRANCH git://github.com/samtools/htslib.git $HTSLIB
+      env:
+        HTSLIB_BRANCH: develop
+
+    - name: make HTSLIB
+      run: |
+          export HTSLIB=${{ github.workspace }}/htslib
+          export HTSDIR=${{ github.workspace }}/htslib/b
+          cd $HTSLIB
+          git submodule update --init --recursive
+          (autoreconf && mkdir b && ./configure --prefix=$HTSDIR && make && make install)
+          
+    - name: make and configure
+      run: |
+          export HTSDIR=${{ github.workspace }}/htslib/b
+          autoreconf -i
+          ./configure --with-htslib=$HTSDIR
+          make 
+          make check 
+          #make distcheck #TODO
+
+    # running ./Build dist and exporting files
+    - name: run ./Build dist  
+      run: |
+          make dist
+          export DIST_FILE=$(ls bambi-*.tar.gz)
+          export SHA256_FILE=$DIST_FILE.sha256
+          shasum -a 256 $DIST_FILE > $SHA256_FILE

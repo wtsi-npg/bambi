@@ -160,6 +160,58 @@ void setup_test_4(int* argc, char*** argv, char *outputfile, char* metricsfile,
     }
 }
 
+void setup_test_5(int* argc, char*** argv, char *outputfile, char* metricsfile,
+                  int threads)
+{
+    *argc = 15 + (threads ? 2 : 0);
+    *argv = (char**)calloc(sizeof(char*), *argc);
+    (*argv)[0] = strdup("bambi");
+    (*argv)[1] = strdup("decode");
+    (*argv)[2] = strdup("-i");
+    (*argv)[3] = strdup(MKNAME(DATA_DIR,"/decode_5.sam"));
+    (*argv)[4] = strdup("-o");
+    (*argv)[5] = strdup(outputfile);
+    (*argv)[6] = strdup("--output-fmt");
+    (*argv)[7] = strdup("sam");
+    (*argv)[8] = strdup("--input-fmt");
+    (*argv)[9] = strdup("sam");
+    (*argv)[10] = strdup("--barcode-file");
+    (*argv)[11] = strdup(MKNAME(DATA_DIR,"/decode_5.tag"));
+    (*argv)[12] = strdup("--metrics-file");
+    (*argv)[13] = strdup(metricsfile);
+    (*argv)[14] = strdup("--ignore-pf");
+    if (threads) {
+        (*argv)[15] = strdup("--threads");
+        (*argv)[16] = itoa(threads);
+    }
+}
+
+void setup_test_6(int* argc, char*** argv, char *outputfile, char* metricsfile,
+                  int threads)
+{
+    *argc = 15 + (threads ? 2 : 0);
+    *argv = (char**)calloc(sizeof(char*), *argc);
+    (*argv)[0] = strdup("bambi");
+    (*argv)[1] = strdup("decode");
+    (*argv)[2] = strdup("-i");
+    (*argv)[3] = strdup(MKNAME(DATA_DIR,"/decode_6.sam"));
+    (*argv)[4] = strdup("-o");
+    (*argv)[5] = strdup(outputfile);
+    (*argv)[6] = strdup("--output-fmt");
+    (*argv)[7] = strdup("sam");
+    (*argv)[8] = strdup("--input-fmt");
+    (*argv)[9] = strdup("sam");
+    (*argv)[10] = strdup("--barcode-file");
+    (*argv)[11] = strdup(MKNAME(DATA_DIR,"/decode_6.tag"));
+    (*argv)[12] = strdup("--metrics-file");
+    (*argv)[13] = strdup(metricsfile);
+    (*argv)[14] = strdup("--ignore-pf");
+    if (threads) {
+        (*argv)[15] = strdup("--threads");
+        (*argv)[16] = itoa(threads);
+    }
+}
+
 void free_argv(int argc, char *argv[])
 {
     for (int n=0; n < argc; free(argv[n++]));
@@ -376,6 +428,67 @@ int main(int argc, char**argv)
         } else {
             success++;
         }
+    }
+
+    // --dual-tag option with missing first tag
+    for (int threads = 0; threads <= NTHREADS; threads += NTHREADS) {
+        int argc_5;
+        char** argv_5;
+        int result;
+        snprintf(outputfile, max_path_length,"%s/decode_5%s.sam",TMPDIR, threads ? "threads" : "");
+        snprintf(metricsfile, max_path_length, "%s/decode_5%s.metrics", TMPDIR, threads ? "threads" : "");
+        setup_test_5(&argc_5, &argv_5, outputfile, metricsfile, threads);
+        main_decode(argc_5-1, argv_5+1);
+        free_argv(argc_5,argv_5);
+
+        snprintf(cmd, sizeof(cmd), "diff -I ID:bambi %s %s", outputfile, MKNAME(DATA_DIR,"/out/decode_5.sam"));
+        result = system(cmd);
+        if (result) {
+            fprintf(stderr, "test 5 failed at SAM file diff\n");
+            failure++;
+        } else {
+            success++;
+        }
+
+        snprintf(cmd, sizeof(cmd), "diff -I ID:bambi %s %s", metricsfile, MKNAME(DATA_DIR,"/out/decode_5.metrics"));
+        result = system(cmd);
+        if (result) {
+            fprintf(stderr, "test 5 failed at metrics file diff\n");
+            failure++;
+        } else {
+            success++;
+        }
+    }
+
+    // --dual-tag option with missing second tag
+    for (int threads = 0; threads <= NTHREADS; threads += NTHREADS) {
+        int argc_6;
+        char** argv_6;
+        int result;
+        snprintf(outputfile, max_path_length,"%s/decode_6%s.sam",TMPDIR, threads ? "threads" : "");
+        snprintf(metricsfile, max_path_length, "%s/decode_6%s.metrics", TMPDIR, threads ? "threads" : "");
+        setup_test_6(&argc_6, &argv_6, outputfile, metricsfile, threads);
+        main_decode(argc_6-1, argv_6+1);
+        free_argv(argc_6,argv_6);
+
+        snprintf(cmd, sizeof(cmd), "diff -I ID:bambi %s %s", outputfile, MKNAME(DATA_DIR,"/out/decode_6.sam"));
+        result = system(cmd);
+        if (result) {
+            fprintf(stderr, "test 5 failed at SAM file diff\n");
+            failure++;
+        } else {
+            success++;
+        }
+
+        snprintf(cmd, sizeof(cmd), "diff -I ID:bambi %s %s", metricsfile, MKNAME(DATA_DIR,"/out/decode_6.metrics"));
+        result = system(cmd);
+        if (result) {
+            fprintf(stderr, "test 5 failed at metrics file diff\n");
+            failure++;
+        } else {
+            success++;
+        }
+
     }
 
     free(metricsfile);
