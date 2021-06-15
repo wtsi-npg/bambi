@@ -1,3 +1,9 @@
+	[0.14.0]
+	new substitution_analysis command
+	minor changes to handle barcode files containing dual tags with only one tag such as "-ACGT" and "ACGT-"
+	bcl_check: improved error handling
+	include BC: tag (barcode) in RG (read group) header lines
+
 	[0.13.1]
 	bug fix: restore default output format to BAM
 
