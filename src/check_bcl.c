@@ -271,6 +271,8 @@ static void recurseThroughDirectory(char *dirname, hts_tpool *p, hts_tpool_proce
             ) {
                 if (check_opts_verbose) display("%s\n",fullname);
                 hts_tpool_dispatch(p, q, checkBclFileThread, fullname);
+            } else {
+                free(fullname);
             }
         }
     }
