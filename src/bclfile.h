@@ -39,6 +39,7 @@ typedef struct {
     FILE *fhandle;
     gzFile gzhandle;
     char *errmsg;
+    int is_open;
     int is_cached;
     uint32_t total_clusters;
     int current_base;
