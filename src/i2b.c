@@ -135,6 +135,7 @@ typedef struct {
     char *output_fmt;
     char compression_level;
     bool no_filter;
+    bool ignore_missing;
     char *read_group_id;
     char *sample_alias;
     char *library_name;
@@ -476,6 +477,7 @@ static void usage(FILE *write_to)
 "  -l   --lane                          Lane number(s). May be a comma separated list or range, or both (eg '1-4,6,8'). Required.\n"
 "  -o   --output-file                   Output file name. May be '-' for stdout. Required\n"
 "       --no-filter                     Do not filter cluster [default: false]\n"
+"       --ignore-missing                Ignore missing BCL files and carry on [default: false]\n"
 "       --read-group-id                 ID used to link RG header record with RG tag in SAM record. [default: '1']\n"
 "       --library-name                  The name of the sequenced library. [default: 'unknown']\n"
 "       --sample-alias                  The name of the sequenced sample. [default: same as library name]\n"
@@ -543,6 +545,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
         { "threads",                    1, 0, 't' },
         { "queue-len",                  1, 0, 'q' },
         { "no-filter",                  0, 0, 0 },
+        { "ignore-missing",             0, 0, 0 },
         { "read-group-id",              1, 0, 0 },
         { "output-fmt",                 1, 0, 0 },
         { "compression-level",          1, 0, 0 },
@@ -628,6 +631,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
                          if (strcmp(arg, "output-fmt") == 0)                   opts->output_fmt = strdup(optarg);
                     else if (strcmp(arg, "compression-level") == 0)            opts->compression_level = *optarg;
                     else if (strcmp(arg, "no-filter") == 0)                    opts->no_filter = true;
+                    else if (strcmp(arg, "ignore-missing") == 0)               opts->ignore_missing = true;
                     else if (strcmp(arg, "read-group-id") == 0)                opts->read_group_id = strdup(optarg);
                     else if (strcmp(arg, "library-name") == 0)                 opts->library_name = strdup(optarg);
                     else if (strcmp(arg, "sample-alias") == 0)                 opts->sample_alias = strdup(optarg);
@@ -742,7 +746,9 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
     else                             opts->lane = fillLaneList(opts->basecalls_dir);
 
     if (opts->verbose) {
-        fprintf(stderr,"Lanes specified: %s\n", ia_join(opts->lane,","));
+        char *lanes = ia_join(opts->lane,",");
+        fprintf(stderr,"Lanes specified: %s\n", lanes);
+        free(lanes);
     }
 
     // rationalise directories
@@ -1522,7 +1528,7 @@ static void *bcl_thread(void *arg)
     }
     if (!bcl) {
         bcl = openBclFile(o->opts->basecalls_dir, o->lane, o->tile, o->cycle, o->surface, o->tileIndex, o->filter);
-        if (bcl->errmsg) { display("%s", bcl->errmsg); bcl = NULL; }
+        if (bcl->errmsg) { display("%s", bcl->errmsg); /* JSL bcl = NULL; */ }
         if (o->bcl_cache) {
             if (bcl) insert_bclfile_to_cache(bcl, o->bcl_cache, o->lane, o->cycle, o->surface);
         }
@@ -1531,10 +1537,10 @@ static void *bcl_thread(void *arg)
     switch (machineType) {
         case MT_NEXTSEQ:
             assert(o->tileIndex);
-            if (bcl) bclfile_load_tile(bcl, findClusterNumber(o->tile, o->tileIndex), o->filter, -1, o->opts->fix_blocks);
+            if (bcl->is_open) bclfile_load_tile(bcl, findClusterNumber(o->tile, o->tileIndex), o->filter, -1, o->opts->fix_blocks);
             break;
         case MT_NOVASEQ:
-            if (bcl) {
+            if (bcl->is_open) {
                 if (bclfile_load_tile(bcl, o->tile, o->filter, o->next_tile, o->opts->fix_blocks)) bcl = NULL;
             }
             break;
@@ -1542,10 +1548,10 @@ static void *bcl_thread(void *arg)
             break;
     }
 
-    if (!bcl) return NULL;
+// JSL    if (!bcl) return NULL;
 
     // Check BCL file and Filter have the same number of clusters
-    if (!bcl->pfFlag && bcl->total_clusters != o->filter->total_clusters) {
+    if (bcl->is_open && !bcl->pfFlag && bcl->total_clusters != o->filter->total_clusters) {
         die("Cluster mismatch: BCL file (%s): %d  Filter file: %d\n", bcl->filename, bcl->total_clusters, o->filter->total_clusters);
     }
 
@@ -1604,11 +1610,12 @@ static va_t *openBclFiles(va_t *cycleRange, opts_t *opts, int tile, int next_til
     for (int n=0; n < bclReadArray->end; n++) {
         bclReadArrayEntry_t *ra = bclReadArray->entries[n];
         for (int i = 0; i < ra->bclFileArray->end; i++) {
-            if (ra->bclFileArray->entries[i] == NULL) ++missing;
+            bclfile_t *bcl = ra->bclFileArray->entries[i];
+            if (!bcl->is_open) ++missing;
         }
     }
     if (pthread_mutex_unlock(&bcl_array_lock) < 0) die("Mutex unlock failed\n");
-    if (missing > 0) die("Missing %d bcl files\n", missing);
+    if (missing > 0 && !opts->ignore_missing) die("Missing %d bcl files\n", missing);
 
     return bclReadArray;
 }
@@ -1832,8 +1839,9 @@ static void bam_add_calls_quals(bam1_t *recs,
             bclfile_t *bcl2 = job->read_files[rd]->entries[cycle + 1];
 
             for (int cluster = cluster_from, i = rd; cluster < cluster_to; cluster++, i+=nreads) {
-                unsigned char bases = (L[(unsigned char) bcl1->bases[cluster]] << 4
-                                       | L[(unsigned char) bcl2->bases[cluster]]);
+                unsigned char base1 = bcl1->is_open ? L[(unsigned char) bcl1->bases[cluster]] : L['N'];
+                unsigned char base2 = bcl2->is_open ? L[(unsigned char) bcl2->bases[cluster]] : L['N'];
+                unsigned char bases = (base1 << 4 | base2);
                 recs[i].data[recs[i].l_data++] = bases;
             }
         }
@@ -1842,7 +1850,7 @@ static void bam_add_calls_quals(bam1_t *recs,
         if (cycle < job->read_files[rd]->end) {
             bclfile_t *bcl1 = job->read_files[rd]->entries[cycle];
             for (int cluster = cluster_from, i = rd; cluster < cluster_to; cluster++, i+=nreads) {
-                unsigned char base = L[(unsigned char) bcl1->bases[cluster]] << 4;
+                unsigned char base = bcl1->is_open ? L[(unsigned char) bcl1->bases[cluster]] << 4 : L['N'] << 4;
                 recs[i].data[recs[i].l_data++] = base;
             }
         }
@@ -1856,7 +1864,7 @@ static void bam_add_calls_quals(bam1_t *recs,
         for (cycle = 0; cycle < job->read_files[rd]->end; cycle++) {
             bclfile_t *bcl = job->read_files[rd]->entries[cycle];
             for (int cluster = cluster_from, i = rd; cluster < cluster_to; cluster++, i+=nreads) {
-                recs[i].data[recs[i].l_data++] = bcl->quals[cluster];
+                recs[i].data[recs[i].l_data++] = bcl->is_open ? bcl->quals[cluster] : 0;
             }
         }
     }
