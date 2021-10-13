@@ -33,7 +33,7 @@
 #
 # LICENSE
 #
-# Copyright (C) 2016, Genome Research Ltd.
+# Copyright (C) 2016-2021, Genome Research Ltd.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -58,60 +58,58 @@ AC_DEFUN([AX_WITH_HTSLIB], [
    saved_LIBS="$LIBS"
 
    AC_ARG_WITH([htslib],
-       [AS_HELP_STRING([--with-htslib[[=DIR]]], [select htslib directory])], [
-           AS_IF([test "x$with_htslib" != "xno"], [
-
-               AS_IF([test "x$with_htslib" = "xyes"], [
-                   AC_MSG_CHECKING([for packaged htslib])
-                   CPPFLAGS="-I/usr/include/htslib $CPPFLAGS"
-                   LDFLAGS="-L/usr/lib/htslib/externals $LDFLAGS"
-               ], [
-                   HTSLIB_HOME="$with_htslib"
-                   CPPFLAGS="-I$HTSLIB_HOME/include $CPPFLAGS"
-                   LDFLAGS="-L$HTSLIB_HOME/lib -Wl,-R$HTSLIB_HOME/lib $LDFLAGS"
-               ])
-
-               LIBS="-lhts -lz -ldl -lbz2 -llzma -lpthread -lcurl -lcrypto"
-
-               AC_MSG_CHECKING([checking htslib version])
-               AC_RUN_IFELSE([AC_LANG_PROGRAM([
-                #include "htslib/hts.h"
-                #include <stdlib.h>
-                #include <string.h>
-#include <stdio.h>
-               ], [
-                char *v=strdup(hts_version());
-                char *s = strtok(v,".-");
-                int n = atoi(s) * 100000;
-                s = strtok(NULL,".-");
-                if (s) n += atoi(s) * 1000;
-                s = strtok(NULL,".-");
-                if (s) n += atoi(s) * 10;
-printf("  n=%d   ",n);
-                if(n>=103010) return 0;
-                else exit(-1);
-               ])
-               ], [AC_MSG_RESULT([Ok])],
-                  [AC_MSG_ERROR([htslib version must be 1.3.1 or greater])]
+       [AS_HELP_STRING([--with-htslib[[=DIR]]], [select htslib directory])],
+                   [HTSLIB_HOME="$with_htslib"], [HTSLIB_HOME="/usr/local"]
                )
 
-               HTSLIB_CPPFLAGS="$CPPFLAGS"
-               HTSLIB_LDFLAGS="$LDFLAGS"
-               HTSLIB_LIBS="$LIBS"
+   CPPFLAGS="-I$HTSLIB_HOME/include $CPPFLAGS"
+   LDFLAGS=
 
-               CPPFLAGS="$saved_CPPFLAGS"
-               LDFLAGS="$saved_LDFLAGS"
-               LIBS="$saved_LIBS"
-
-               unset saved_CPPFLAGS
-               unset saved_LDFLAGS
-               unset saved_LIBS
-
-               AC_SUBST([HTSLIB_HOME])
-               AC_SUBST([HTSLIB_CPPFLAGS])
-               AC_SUBST([HTSLIB_LDFLAGS])
-               AC_SUBST([HTSLIB_LIBS])
-
-           ])
+   AC_MSG_CHECKING([checking htslib version])
+   AC_RUN_IFELSE([AC_LANG_PROGRAM([
+      #include <htslib/hts.h>
+      #include <stdio.h>
+     ],
+     [
+        printf("%d %d %d  ",
+	      HTS_VERSION/100000,
+	      (HTS_VERSION%100000)/100,
+	      HTS_VERSION%100);
+        if (HTS_VERSION >= 101000) return 0;
+        return -2;
    ])
+   ], [AC_MSG_RESULT([Ok])],
+      [
+      RES=$?
+      case $RES in
+      254)
+        AC_MSG_ERROR([Error $RES : htslib version must be 1.10 or greater])
+        ;;
+      *)
+        AC_MSG_ERROR([Error $RES : htslib not found])
+        ;;
+      esac
+      ]
+   )
+
+   LIBS="-lhts -lz -ldl -lbz2 -llzma -lpthread -lcrypto"
+   LDFLAGS="-L$HTSLIB_HOME/lib -Wl,-R$HTSLIB_HOME/lib $LDFLAGS"
+
+   HTSLIB_CPPFLAGS="$CPPFLAGS"
+   HTSLIB_LDFLAGS="$LDFLAGS"
+   HTSLIB_LIBS="$LIBS"
+
+   CPPFLAGS="$saved_CPPFLAGS"
+   LDFLAGS="$saved_LDFLAGS"
+   LIBS="$saved_LIBS"
+
+   unset saved_CPPFLAGS
+   unset saved_LDFLAGS
+   unset saved_LIBS
+
+   AC_SUBST([HTSLIB_HOME])
+   AC_SUBST([HTSLIB_CPPFLAGS])
+   AC_SUBST([HTSLIB_LDFLAGS])
+   AC_SUBST([HTSLIB_LIBS])
+
 ])
