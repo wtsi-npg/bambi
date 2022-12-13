@@ -4,7 +4,7 @@ jobs:
   build: 
     strategy:
       matrix:
-        os: ['ubuntu-18.04']
+        os: [ubuntu-latest]
 
     runs-on: ${{matrix.os}} 
     name: Workflow on ${{ matrix.os }} 
