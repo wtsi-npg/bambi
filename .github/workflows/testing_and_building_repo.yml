@@ -20,7 +20,7 @@ jobs:
     - name: clone samtools branch
       run: |
            export HTSLIB=${{ github.workspace }}/htslib
-           git clone --branch $HTSLIB_BRANCH git://github.com/samtools/htslib.git $HTSLIB
+           git clone --branch $HTSLIB_BRANCH https://github.com/samtools/htslib.git $HTSLIB
       env:
         HTSLIB_BRANCH: develop
 
