@@ -14,7 +14,9 @@ jobs:
         fetch-depth: '0'
 
     - name: install libgd-dev and liblzma-dev
-      run:
+      run: |
+          # https://github.com/actions/runner-images/issues/2139
+          sudo apt-get remove -y nginx libgd3
           sudo apt-get install -y libgd-dev liblzma-dev  libcurl4-openssl-dev
 
     - name: clone samtools branch
