@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunInfo xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" Version="3">
+	<Run Id="170407_A00103_0049_AH2CLFDMXX" Number="49">
+		<Flowcell>H2CLFDMXX</Flowcell>
+		<Instrument>A00103</Instrument>
+		<Date>4/7/2017 2:41:18 PM</Date>
+		<Reads>
+			<Read Number="1" NumCycles="318" IsIndexedRead="N"/>
+		</Reads>
+		<FlowcellLayout LaneCount="2" SurfaceCount="2" SwathCount="4" TileCount="88" FlowcellSide="1">
+			<TileSet TileNamingConvention="FourDigit">
+				<Tiles>
+					<Tile>1_1101</Tile>
+				</Tiles>
+			</TileSet>
+		</FlowcellLayout>
+		<AlignToPhiX/>
+		<ImageDimensions Width="3200" Height="3607"/>
+		<ImageChannels>
+			<Name>RED</Name>
+			<Name>GREEN</Name>
+		</ImageChannels>
+	</Run>
+</RunInfo>

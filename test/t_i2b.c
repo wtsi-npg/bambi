@@ -558,6 +558,32 @@ void novaseq_test(int* argc, char*** argv, char *outputfile, bool verbose)
     assert(*argc<100);
 }
 
+void novaseqX_test(int* argc, char*** argv, char *outputfile, bool verbose)
+{
+    *argc = 0;
+    *argv = (char**)calloc(sizeof(char*), 100);
+    (*argv)[(*argc)++] = strdup("bambi");
+    (*argv)[(*argc)++] = strdup("i2b");
+    (*argv)[(*argc)++] = strdup("-i");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/novaseqX/Data/Intensities"));
+    (*argv)[(*argc)++] = strdup("-o");
+    (*argv)[(*argc)++] = strdup(outputfile);
+    (*argv)[(*argc)++] = strdup("--lane");
+    (*argv)[(*argc)++] = strdup("1");
+    (*argv)[(*argc)++] = strdup("--no-filter");
+    (*argv)[(*argc)++] = strdup("--library-name");
+    (*argv)[(*argc)++] = strdup("TestLibrary");
+    (*argv)[(*argc)++] = strdup("--sample-alias");
+    (*argv)[(*argc)++] = strdup("TestSample");
+    (*argv)[(*argc)++] = strdup("--study-name");
+    (*argv)[(*argc)++] = strdup("Study TestStudy");
+    (*argv)[(*argc)++] = strdup("--run-start-date");
+    (*argv)[(*argc)++] = strdup("2011-03-23T00:00:00+0000");
+    if (verbose) (*argv)[(*argc)++] = strdup("--verbose");
+
+    assert(*argc<100);
+}
+
 void novaseq_missing_test(int* argc, char*** argv, char *outputfile, bool verbose)
 {
     *argc = 0;
@@ -936,6 +962,17 @@ int main(int argc, char**argv)
     main_i2b(argc_1-1,argv_1+1);
     checkFiles(outputfile, MKNAME(DATA_DIR,"/out/novaseq_2.sam"), verbose);
     free_args(argv_1);
+
+    //
+    // novaseqX test
+    //
+    if (verbose) fprintf(stderr,"\n===> NovaSeqX test\n");
+    snprintf(outputfile, filename_len, "%s/novaseq_1.sam", TMPDIR);
+    novaseqX_test(&argc_1, &argv_1, outputfile, verbose);
+    main_i2b(argc_1-1,argv_1+1);
+    checkFiles(outputfile, MKNAME(DATA_DIR,"/out/novaseqX_1.sam"), verbose);
+    free_args(argv_1);
+
 
     free(outputfile);
     free(metricsfile);

@@ -809,6 +809,9 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
     if (!opts->run_start_date) {
         opts->run_start_date = getXMLVal(opts->parametersConfig, "//RunParameters/RunStartDate");
     }
+    if (!opts->run_start_date) {
+        opts->run_start_date = getXMLVal(opts->runinfoConfig, "//RunInfo/Run/Date");
+    }
 
     if (!opts->run_start_date) {
         fprintf(stderr, "No run-start-date given, and none found in config files\n");
@@ -892,6 +895,7 @@ static int addHeader(samFile *output_file, bam_hdr_t *output_header, opts_t *opt
     version = getXMLAttr(opts->parametersConfig, "/ImageAnalysis/Run/Software", "Version");
     if (!version) version = getXMLAttr(opts->intensityConfig, "/ImageAnalysis/Run/Software", "Version");
     if (!version) version = getXMLVal(opts->parametersConfig, "//ApplicationVersion");
+    if (!version) version = getXMLVal(opts->parametersConfig, "//SystemSuiteVersion");
     if (!version) { fprintf(stderr,"Can't find program version anywhere\n"); return 1; }
 
     // Add header line
