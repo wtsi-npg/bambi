@@ -32,7 +32,7 @@ jobs:
           export HTSDIR=${{ github.workspace }}/htslib/b
           cd $HTSLIB
           git submodule update --init --recursive
-          (autoreconf && mkdir b && ./configure --prefix=$HTSDIR && make && make install)
+          (autoreconf -i && mkdir b && ./configure --prefix=$HTSDIR && make && make install)
           
     - name: make and configure
       run: |
