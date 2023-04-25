@@ -159,8 +159,8 @@ static void locs_load(posfile_t *posfile, filter_t *filter)
         dy = *(float *)(buffer+i+4);
         if (filter && f >= filter->total_clusters) break;
         if (!filter || (filter->buffer[f] & 0x01)) {
-            posfile->x[j] = 10 * dx + 1000.5;
-            posfile->y[j] = 10 * dy + 1000.5;
+            posfile->x[j] = 10 * dx + 1000.49;
+            posfile->y[j] = 10 * dy + 1000.49;
             j++;
         }
     }
