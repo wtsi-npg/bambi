@@ -92,6 +92,7 @@ bclfile_t *bclfile_init(void)
     bclfile->fhandle = NULL;
     bclfile->gzhandle = NULL;
     bclfile->is_cached = 0;
+    bclfile->is_open = 0;
     bclfile->machine_type = MT_UNKNOWN;
     bclfile->current_base = 0;
     bclfile->filename = NULL;
@@ -137,6 +138,7 @@ static bclfile_t *_bclfile_open_miseq(char *fname)
     free(buffer);
     bcl->base_ptr = 0;
     bcl->bases_size = bcl->total_clusters;
+    bcl->is_open = 1;
     return bcl;
 }
 
@@ -168,6 +170,7 @@ static bclfile_t *_bclfile_open_hiseqx(char *fname)
     free(buffer);
     bcl->base_ptr = 0;
     bcl->bases_size = bcl->total_clusters;
+    bcl->is_open = 1;
     return bcl;
 }
 
@@ -273,6 +276,7 @@ static bclfile_t *_bclfile_open_novaseq(char *fname, int tile)
         }
     }
 #endif
+    bcl->is_open = 1;
     return bcl;
 }
 

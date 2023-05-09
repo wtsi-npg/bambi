@@ -1,26 +1,28 @@
 name: testing_and_building_repo
-on: [push, pull_request]
+on: [push, pull_request, workflow_dispatch]
 jobs:
   build: 
     strategy:
       matrix:
-        os: ['ubuntu-18.04']
+        os: [ubuntu-latest]
 
     runs-on: ${{matrix.os}} 
     name: Workflow on ${{ matrix.os }} 
     steps:
-    - uses: actions/checkout@v2 
+    - uses: actions/checkout@v3
       with:
         fetch-depth: '0'
 
     - name: install libgd-dev and liblzma-dev
-      run:
+      run: |
+          # https://github.com/actions/runner-images/issues/2139
+          sudo apt-get remove -y nginx libgd3
           sudo apt-get install -y libgd-dev liblzma-dev  libcurl4-openssl-dev
 
     - name: clone samtools branch
       run: |
            export HTSLIB=${{ github.workspace }}/htslib
-           git clone --branch $HTSLIB_BRANCH git://github.com/samtools/htslib.git $HTSLIB
+           git clone --branch $HTSLIB_BRANCH https://github.com/samtools/htslib.git $HTSLIB
       env:
         HTSLIB_BRANCH: develop
 
@@ -30,7 +32,7 @@ jobs:
           export HTSDIR=${{ github.workspace }}/htslib/b
           cd $HTSLIB
           git submodule update --init --recursive
-          (autoreconf && mkdir b && ./configure --prefix=$HTSDIR && make && make install)
+          (autoreconf -i && mkdir b && ./configure --prefix=$HTSDIR && make && make install)
           
     - name: make and configure
       run: |

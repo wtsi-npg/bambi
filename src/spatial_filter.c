@@ -33,9 +33,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sys/stat.h>
 #include <stdarg.h>
 #include <getopt.h>
+#include <limits.h>
+
+#ifdef HAVE_LIBGD
 #include <gd.h>
 #include <gdfonts.h>
-#include <limits.h>
+#endif
 
 #include "htslib/sam.h"
 #include "htslib/hfile.h"
@@ -164,7 +167,9 @@ enum colours { COLOUR_LEVEL_0,
                COLOUR_HIGH_QUAL,
                N_COLOURS };
 
+#ifdef HAVE_LIBGD
 static int *colour_table = NULL;
+#endif
 
 typedef struct {
 	va_t *filters;
@@ -492,6 +497,7 @@ static void free_opts(opts_t *opts)
 /*
  * initialise tileviz image
  */
+#ifdef HAVE_LIBGD
 static gdImagePtr initImage(int width, int height, char *base, int type, int read, int cycle, int length)
 {
     gdImagePtr im = gdImageCreate(width, height);
@@ -537,10 +543,12 @@ static gdImagePtr initImage(int width, int height, char *base, int type, int rea
 
     return im;
 }
+#endif
 
 /*
  * generate the tileviz report as a HTML file
  */
+#ifdef HAVE_LIBGD
 static void report(opts_t *opts, Header *hdr)
 {
     char *base;
@@ -631,10 +639,12 @@ static void report(opts_t *opts, Header *hdr)
 
     return;
 }
+#endif
 
 /*
  * generate tileviz images
 */
+#ifdef HAVE_LIBGD
 static void tileviz(opts_t *opts, Header *hdr, RegionTable_t rts)
 {
     int num_surfs = 1;
@@ -855,6 +865,7 @@ static void tileviz(opts_t *opts, Header *hdr, RegionTable_t rts)
     
     return;
 }
+#endif
 
 /*
  * setup a mapping between each potential region and the observed regions
@@ -1570,12 +1581,14 @@ static void calculateFilter(opts_t *opts)
     }
     writeFilter(opts, rtsArray);
 
+#ifdef HAVE_LIBGD
     if (opts->tileviz) {
         for (int n=1; n < SF_MAX_LANES; n++) {
             if (LaneArray[n]) tileviz(opts, LaneArray[n], rtsArray[n]);
         }
     }
-    
+#endif
+
     for (int lane=1; lane < SF_MAX_LANES; lane++) {
 	    if (LaneArray[lane]) freeRTS(opts, LaneArray[lane], rtsArray[lane]);
     }
@@ -1826,6 +1839,12 @@ opts_t* spatial_filter_parse_args(int argc, char *argv[])
 	if (opts->calculate) {
    	    if (opts->region_size < 1) die("Error: invalid region size\n");
     }
+
+#ifndef HAVE_LIBGD
+    if (opts->tileviz) {
+        die("The tileviz option is not supported, because the GD library was not found\n");
+    }
+#endif
 
     if (!opts->calculate && opts->tileviz) display("Warning: no tileviz images will be produced\n");
 
