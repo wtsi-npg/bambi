@@ -1,0 +1,8 @@
+Acknowledgments
+We are grateful to Illumina Inc. for giving us, over the years, early access 
+to the sample example output of new models of Illumina sequencing instruments, 
+which helped us to adjust our pipelines in an appropriate fashion. In particular, 
+we acknowledge that some test data in this repository were provided by the company.  
+We are grateful to Illumina for granting us the right to use a small subset
+of this data here.
+
