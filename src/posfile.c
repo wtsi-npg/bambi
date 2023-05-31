@@ -2,7 +2,7 @@
 
    Functions to read and parse an Illumina pos, locs, or clocs file.
 
-    Copyright (C) 2016 Genome Research Ltd.
+    Copyright (C) 2016-2023 Genome Research Ltd.
 
     Author: Jennifer Liddle <js10@sanger.ac.uk>
 
@@ -159,8 +159,9 @@ static void locs_load(posfile_t *posfile, filter_t *filter)
         dy = *(float *)(buffer+i+4);
         if (filter && f >= filter->total_clusters) break;
         if (!filter || (filter->buffer[f] & 0x01)) {
-            posfile->x[j] = 10 * dx + 1000.5;
-            posfile->y[j] = 10 * dy + 1000.5;
+            // leaving dx,dy as floats would lose us precision, so force to doubles
+            posfile->x[j] = 10 * (double)dx + 1000.5;
+            posfile->y[j] = 10 * (double)dy + 1000.5;
             j++;
         }
     }

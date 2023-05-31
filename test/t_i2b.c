@@ -579,6 +579,8 @@ void novaseqX_test(int* argc, char*** argv, char *outputfile, bool verbose)
     (*argv)[(*argc)++] = strdup("Study TestStudy");
     (*argv)[(*argc)++] = strdup("--run-start-date");
     (*argv)[(*argc)++] = strdup("2011-03-23T00:00:00+0000");
+    (*argv)[(*argc)++] = strdup("--min-default-quality");
+    (*argv)[(*argc)++] = strdup("2");
     if (verbose) (*argv)[(*argc)++] = strdup("--verbose");
 
     assert(*argc<100);
