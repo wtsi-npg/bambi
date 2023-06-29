@@ -1,6 +1,6 @@
 /*  i2b.c -- index i2br subcommand.
 
-    Copyright (C) 2016 Genome Research Ltd.
+    Copyright (C) 2016-2023 Genome Research Ltd.
 
     Author: Jennifer Liddle <js10@sanger.ac.uk>
 
@@ -55,6 +55,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define DEFAULT_MAX_BARCODES 10
 #define QUEUELEN "1000000"
 #define CLUSTERS_PER_THREAD 25000
+
+#define max(a, b) ( (a>=b) ? a : b )
 
 // BCL file cache
 KHASH_MAP_INIT_INT(bcl_cache, bclfile_t *);
@@ -168,6 +170,7 @@ typedef struct {
     bool convert_low_quality;
     int max_low_quality_to_convert;
     bool fix_blocks;
+    int nocall_quality;
 } opts_t;
 
 /*
@@ -502,6 +505,8 @@ static void usage(FILE *write_to)
 "       --final-cycle                   Last cycle for each standard (non-index) read. Comma separated list.\n"
 "       --first-index-cycle             First cycle for each index read. Comma separated list.\n"
 "       --final-index-cycle             Last cycle for each index read. Comma separated list.\n"
+"       --nocall-quality                The minimum quality value to be written to the output file\n"
+"                                       Set to '2' to match Illumina's BCL Convert software [default: 0]\n"
 "  -q   --queue-len                     Size of output record queue (number of records) [default " QUEUELEN "]\n"
 "  -S   --no-index-separator            Do NOT separate dual indexes with a '" INDEX_SEPARATOR "' character. Just concatenate instead.\n"
 "  -v   --verbose                       verbose output\n"
@@ -574,6 +579,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
         { "barcode-tag-name",           1, 0, 0 },
         { "convert-low-quality",        0, 0, 0 },
         { "max-low-quality-to-convert", 1, 0, 0 },
+        { "nocall-quality",             1, 0, 0 },
         { "max-no-calls",               1, 0, 0 },
         { "max-mismatches",             1, 0, 0 },
         { "min-mismatch-delta",         1, 0, 0 },
@@ -602,6 +608,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
     opts->decode_opts = decode_init_opts(argc - 1, argv + 1);
     opts->decode_tags = false;
     opts->decode_calls_tag = NULL;
+    opts->nocall_quality = 0;
 
     int opt;
     int option_index = 0;
@@ -665,6 +672,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
                     } else if (strcmp(arg, "convert-low-quality") == 0)          opts->convert_low_quality = true;
                     else if (strcmp(arg, "fix-blocks") == 0)                   opts->fix_blocks = true;
                     else if (strcmp(arg, "max-low-quality-to-convert") == 0)   opts->max_low_quality_to_convert = atoi(optarg);
+                    else if (strcmp(arg, "nocall-quality") == 0)          opts->nocall_quality = atoi(optarg);
                     else if (strcmp(arg, "max-no-calls") == 0)                 set_decode_opt_max_no_calls(opts->decode_opts, atoi(optarg));
                     else if (strcmp(arg, "max-mismatches") == 0)               set_decode_opt_max_mismatches(opts->decode_opts, atoi(optarg));
                     else if (strcmp(arg, "min-mismatch-delta") == 0)           set_decode_opt_min_mismatch_delta(opts->decode_opts, atoi(optarg));
@@ -1868,7 +1876,8 @@ static void bam_add_calls_quals(bam1_t *recs,
         for (cycle = 0; cycle < job->read_files[rd]->end; cycle++) {
             bclfile_t *bcl = job->read_files[rd]->entries[cycle];
             for (int cluster = cluster_from, i = rd; cluster < cluster_to; cluster++, i+=nreads) {
-                recs[i].data[recs[i].l_data++] = bcl->is_open ? bcl->quals[cluster] : 0;
+                int q = bcl->is_open ? bcl->quals[cluster] : 0;
+                recs[i].data[recs[i].l_data++] = max(q, job->opts->nocall_quality);
             }
         }
     }
