@@ -2012,7 +2012,7 @@ static char **decode_tags(bam1_t *recs,
  */
 static void bam_write_barcode_tag(bam1_t *recs, struct barcode_bcl_files *bcls,
                                   int cluster_from, int cluster_to, int rd,
-                                  int nrecs, int nreads, bool calls_not_quals,
+                                  int nrecs, int nreads, bool calls_not_quals, int nocall_quality,
                                   const char *separator, size_t separator_len) {
      // Add tag type and 'Z'
     for (int i = rd; i < nrecs; i += nreads) {
@@ -2043,7 +2043,7 @@ static void bam_write_barcode_tag(bam1_t *recs, struct barcode_bcl_files *bcls,
             for (int cycle = 0; cycle < bcl_files->end; cycle++) {
                 bclfile_t *bcl = bcl_files->entries[cycle];
                 for (int cluster = cluster_from, i = rd; cluster < cluster_to; cluster++, i+=nreads) {
-                    recs[i].data[recs[i].l_data++] = bcl->quals[cluster] + 33;
+                    recs[i].data[recs[i].l_data++] = max(nocall_quality, bcl->quals[cluster]) + 33;
                 }
             }
         }
@@ -2086,6 +2086,7 @@ static void bam_add_barcode_tags(bam1_t *recs,
                                       job->bc_calls_tags[rd]->entries[bc_tag],
                                       cluster_from, cluster_to,
                                       rd, nrecs, nreads, true,
+                                      job->opts->nocall_quality,
                                       INDEX_SEPARATOR,
                                       job->opts->separator ? index_separator_len : 0);
                 bc_tag++;
@@ -2097,6 +2098,7 @@ static void bam_add_barcode_tags(bam1_t *recs,
                                       job->bc_quals_tags[rd]->entries[bq_tag],
                                       cluster_from, cluster_to,
                                       rd, nrecs, nreads, false,
+                                      job->opts->nocall_quality,
                                       QUAL_SEPARATOR,
                                       job->opts->separator ? qual_separator_len : 0);
                 bq_tag++;
