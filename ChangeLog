@@ -1,3 +1,6 @@
+    [0.16.1]
+    Bug fix: make the --nocall-quality option apply to QT tags too.
+
     [0.16.0]
     Fixed bug in read_names caused by overflow of 'float' by changing to 'double'
     Added --nocall-quality option for NovaSeqX
