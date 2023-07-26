@@ -47,6 +47,6 @@ jobs:
           set -x
           docker build --rm \
             --file docker/Dockerfile \
-            --build-arg HTSLIB_BRANCH=1.17 \
+            --build-arg HTSLIB_BRANCH=1.18 \
             --tag bambi .
           docker run bambi bambi --version
