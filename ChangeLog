@@ -1,5 +1,5 @@
-    [0.16.1]
-    Bug fix: make the --nocall-quality option apply to QT tags too.
+    [0.17.0]
+    Change the --nocall-quality option from an integer to boolean, and ensure it applies to QT tags.
 
     [0.16.0]
     Fixed bug in read_names caused by overflow of 'float' by changing to 'double'
