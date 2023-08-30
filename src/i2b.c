@@ -55,8 +55,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define DEFAULT_MAX_BARCODES 10
 #define QUEUELEN "1000000"
 #define CLUSTERS_PER_THREAD 25000
-
-#define max(a, b) ( (a>=b) ? a : b )
+#define NOCALL_QUALITY_VALUE 2
 
 // BCL file cache
 KHASH_MAP_INIT_INT(bcl_cache, bclfile_t *);
@@ -170,7 +169,7 @@ typedef struct {
     bool convert_low_quality;
     int max_low_quality_to_convert;
     bool fix_blocks;
-    int nocall_quality;
+    bool nocall_quality;
 } opts_t;
 
 /*
@@ -505,8 +504,7 @@ static void usage(FILE *write_to)
 "       --final-cycle                   Last cycle for each standard (non-index) read. Comma separated list.\n"
 "       --first-index-cycle             First cycle for each index read. Comma separated list.\n"
 "       --final-index-cycle             Last cycle for each index read. Comma separated list.\n"
-"       --nocall-quality                The minimum quality value to be written to the output file\n"
-"                                       Set to '2' to match Illumina's BCL Convert software [default: 0]\n"
+"       --nocall-quality                Set quality to '2' for all bases that are 'N'\n"
 "  -q   --queue-len                     Size of output record queue (number of records) [default " QUEUELEN "]\n"
 "  -S   --no-index-separator            Do NOT separate dual indexes with a '" INDEX_SEPARATOR "' character. Just concatenate instead.\n"
 "  -v   --verbose                       verbose output\n"
@@ -579,7 +577,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
         { "barcode-tag-name",           1, 0, 0 },
         { "convert-low-quality",        0, 0, 0 },
         { "max-low-quality-to-convert", 1, 0, 0 },
-        { "nocall-quality",             1, 0, 0 },
+        { "nocall-quality",             0, 0, 0 },
         { "max-no-calls",               1, 0, 0 },
         { "max-mismatches",             1, 0, 0 },
         { "min-mismatch-delta",         1, 0, 0 },
@@ -608,7 +606,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
     opts->decode_opts = decode_init_opts(argc - 1, argv + 1);
     opts->decode_tags = false;
     opts->decode_calls_tag = NULL;
-    opts->nocall_quality = 0;
+    opts->nocall_quality = false;
 
     int opt;
     int option_index = 0;
@@ -672,7 +670,7 @@ static opts_t* i2b_parse_args(int argc, char *argv[])
                     } else if (strcmp(arg, "convert-low-quality") == 0)          opts->convert_low_quality = true;
                     else if (strcmp(arg, "fix-blocks") == 0)                   opts->fix_blocks = true;
                     else if (strcmp(arg, "max-low-quality-to-convert") == 0)   opts->max_low_quality_to_convert = atoi(optarg);
-                    else if (strcmp(arg, "nocall-quality") == 0)          opts->nocall_quality = atoi(optarg);
+                    else if (strcmp(arg, "nocall-quality") == 0)          opts->nocall_quality = true;
                     else if (strcmp(arg, "max-no-calls") == 0)                 set_decode_opt_max_no_calls(opts->decode_opts, atoi(optarg));
                     else if (strcmp(arg, "max-mismatches") == 0)               set_decode_opt_max_mismatches(opts->decode_opts, atoi(optarg));
                     else if (strcmp(arg, "min-mismatch-delta") == 0)           set_decode_opt_min_mismatch_delta(opts->decode_opts, atoi(optarg));
@@ -1876,8 +1874,16 @@ static void bam_add_calls_quals(bam1_t *recs,
         for (cycle = 0; cycle < job->read_files[rd]->end; cycle++) {
             bclfile_t *bcl = job->read_files[rd]->entries[cycle];
             for (int cluster = cluster_from, i = rd; cluster < cluster_to; cluster++, i+=nreads) {
-                int q = bcl->is_open ? bcl->quals[cluster] : 0;
-                recs[i].data[recs[i].l_data++] = max(q, job->opts->nocall_quality);
+                int q = 0;
+                if (bcl->is_open) {
+                    if (job->opts->nocall_quality && (bcl->bases[cluster] == 'N')) {
+                        q = NOCALL_QUALITY_VALUE;
+                    } else {
+                        q = bcl->quals[cluster];
+                    }
+                }
+                    
+                recs[i].data[recs[i].l_data++] = q;
             }
         }
     }
@@ -1950,7 +1956,11 @@ static void get_barcodes(char *buffer, unsigned int bc_len,
             for (int cycle = 0; cycle < bcl_files->end; cycle++,pos++) {
                 bclfile_t *bcl = bcl_files->entries[cycle];
                 for (int cluster = cluster_from, i = pos; cluster < cluster_to; cluster++, i += bc_len) {
-                    buffer[i] = bcl->quals[cluster] > max_low_qual ? bcl->bases[cluster] : 'N';
+                    if (bcl->quals[cluster] <= max_low_qual) {
+                        buffer[i] = 'N';
+                    } else {
+                        buffer[i] = bcl->bases[cluster];
+                    }
                 }
             }
         }
@@ -2012,8 +2022,9 @@ static char **decode_tags(bam1_t *recs,
  */
 static void bam_write_barcode_tag(bam1_t *recs, struct barcode_bcl_files *bcls,
                                   int cluster_from, int cluster_to, int rd,
-                                  int nrecs, int nreads, bool calls_not_quals, int nocall_quality,
-                                  const char *separator, size_t separator_len) {
+                                  int nrecs, int nreads, bool calls_not_quals,
+                                  const char *separator, size_t separator_len,
+                                  bool nocall_quality) {
      // Add tag type and 'Z'
     for (int i = rd; i < nrecs; i += nreads) {
         memcpy(&recs[i].data[recs[i].l_data], bcls->tag, 2);
@@ -2043,7 +2054,9 @@ static void bam_write_barcode_tag(bam1_t *recs, struct barcode_bcl_files *bcls,
             for (int cycle = 0; cycle < bcl_files->end; cycle++) {
                 bclfile_t *bcl = bcl_files->entries[cycle];
                 for (int cluster = cluster_from, i = rd; cluster < cluster_to; cluster++, i+=nreads) {
-                    recs[i].data[recs[i].l_data++] = max(nocall_quality, bcl->quals[cluster]) + 33;
+                    int q = bcl->quals[cluster];
+                    if (nocall_quality && (bcl->bases[cluster] == 'N')) q = NOCALL_QUALITY_VALUE;
+                    recs[i].data[recs[i].l_data++] = q + 33;
                 }
             }
         }
@@ -2086,9 +2099,9 @@ static void bam_add_barcode_tags(bam1_t *recs,
                                       job->bc_calls_tags[rd]->entries[bc_tag],
                                       cluster_from, cluster_to,
                                       rd, nrecs, nreads, true,
-                                      job->opts->nocall_quality,
                                       INDEX_SEPARATOR,
-                                      job->opts->separator ? index_separator_len : 0);
+                                      job->opts->separator ? index_separator_len : 0,
+                                      job->opts->nocall_quality);
                 bc_tag++;
             }
 
@@ -2098,9 +2111,9 @@ static void bam_add_barcode_tags(bam1_t *recs,
                                       job->bc_quals_tags[rd]->entries[bq_tag],
                                       cluster_from, cluster_to,
                                       rd, nrecs, nreads, false,
-                                      job->opts->nocall_quality,
                                       QUAL_SEPARATOR,
-                                      job->opts->separator ? qual_separator_len : 0);
+                                      job->opts->separator ? qual_separator_len : 0,
+                                      job->opts->nocall_quality);
                 bq_tag++;
             }
         }
