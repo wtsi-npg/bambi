@@ -477,7 +477,6 @@ void separator_test(int* argc, char*** argv, char *outputfile, bool verbose, boo
     (*argv)[(*argc)++] = strdup("--quality-tag");
     (*argv)[(*argc)++] = strdup("q1,q2,q1");
     (*argv)[(*argc)++] = strdup("--nocall-quality");
-    (*argv)[(*argc)++] = strdup("2");
     if (decode) {
         (*argv)[(*argc)++] = strdup("--barcode-file");
         (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/160919_hiseq2500_4966_FC/barcodes_i1i3_sep"));
@@ -582,7 +581,6 @@ void novaseqX_test(int* argc, char*** argv, char *outputfile, bool verbose)
     (*argv)[(*argc)++] = strdup("--run-start-date");
     (*argv)[(*argc)++] = strdup("2011-03-23T00:00:00+0000");
     (*argv)[(*argc)++] = strdup("--nocall-quality");
-    (*argv)[(*argc)++] = strdup("2");
     if (verbose) (*argv)[(*argc)++] = strdup("--verbose");
 
     assert(*argc<100);
@@ -702,8 +700,8 @@ void checkFiles(char *gotfile, char *expectfile, int verbose)
         }
     }
 
-    if (failure > f && verbose) {
-        fprintf(stderr, "checkFiles(%s,%s) failed\n", gotfile, expectfile);
+    if (failure > f) {
+        fprintf(stderr, "ERROR: checkFiles(%s,%s) failed\n", gotfile, expectfile);
     }
 
     BAMit_free(bexp);
