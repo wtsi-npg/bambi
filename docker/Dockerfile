@@ -64,10 +64,8 @@ COPY --from=bambi_build /tmp/usr/local /usr/local
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && \
     apt-get install -qq -y --no-install-recommends \
-      bzip2 \
       libbz2-1.0 \
       libcurl4 \
-      libtool \
       libgd3 \
       liblzma5 \
       libxml2 \
