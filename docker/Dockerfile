@@ -65,14 +65,14 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && \
     apt-get install -qq -y --no-install-recommends \
       bzip2 \
-      libbz2-dev \
-      libcurl4-openssl-dev \
+      libbz2-1.0 \
+      libcurl4 \
       libtool \
-      libgd-dev \
-      liblzma-dev \
-      libxml2-dev \
-      libz-dev \
-      libssl-dev \
+      libgd3 \
+      liblzma5 \
+      libxml2 \
+      libz1 \
+      libssl3 \
     && \
     apt-get remove -q -y unattended-upgrades && \
     apt-get autoremove -q -y && \
