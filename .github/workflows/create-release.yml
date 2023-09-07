@@ -47,10 +47,13 @@ jobs:
             --platform linux/amd64 \
             --progress plain \
             --load \
-            --label "uk.ac.sanger.repository=$GIT_URL" \
-            --label "uk.ac.sanger.commit=$GIT_COMMIT" \
-            --tag "ghcr.io/$REPOSITORY_OWNER/$IMAGE_NAME:$RELEASE_VERSION" \
-            --tag "ghcr.io/$REPOSITORY_OWNER/$IMAGE_NAME:latest" \
+            --label "org.opencontainers.image.title=bambi" \
+            --label "org.opencontainers.image.source=${GIT_URL}" \
+            --label "org.opencontainers.image.revision=${GIT_COMMIT}" \
+            --label "org.opencontainers.image.version=${RELEASE_VERSION}" \
+            --label "org.opencontainers.image.created=$(date --utc --iso-8601=seconds)" \
+            --tag "ghcr.io/$REPOSITORY_OWNER/${IMAGE_NAME}:${RELEASE_VERSION}" \
+            --tag "ghcr.io/$REPOSITORY_OWNER/${IMAGE_NAME}:latest" \
             .
 
       - name: "Push image to registry"

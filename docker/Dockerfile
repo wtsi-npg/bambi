@@ -22,7 +22,11 @@ RUN apt-get update && \
     git clone --depth 1 --branch "${HTSLIB_BRANCH}" https://github.com/samtools/htslib.git "${HTSLIB}" && \
     cd "${HTSLIB}" && \
     git submodule update --init --recursive && \
-    mkdir -p /tmp/usr/local && autoreconf -i && ./configure --prefix=/tmp/usr/local && make && make install
+    mkdir -p /tmp/usr/local && \
+    autoreconf -i && \
+    ./configure --prefix=/tmp/usr/local && \
+    make && \
+    make install
 
 FROM debian:bookworm AS bambi_build
 
