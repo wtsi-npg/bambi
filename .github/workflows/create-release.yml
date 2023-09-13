@@ -26,6 +26,9 @@ jobs:
         run: git fetch --tags --force
 
       - name: "Get release variables"
+        # RELEASE_VERSION assignment must match the command used in autoconf's
+        # configure.ac file. On update, care should be taken to maintain both
+        # sides congruent.
         run: |
           echo 'RELEASE_VERSION='$(git describe --always --tags --dirty) >> $GITHUB_ENV
           echo 'GIT_URL='$(git remote get-url origin) >> $GITHUB_ENV
