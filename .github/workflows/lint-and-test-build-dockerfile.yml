@@ -1,4 +1,4 @@
-name: "lint and test-build Dockerfile"
+name: "Lint and test-build Dockerfile"
 
 on:
   push:
