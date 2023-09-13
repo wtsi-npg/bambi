@@ -1,0 +1,65 @@
+name: "Create release"
+
+on:
+  push:
+    tags:
+      - "**"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -l -e -o pipefail {0}
+    env:
+      IMAGE_NAME: bambi
+      REPOSITORY_OWNER: ${{ github.repository_owner }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: "Fetch Tags"
+        # Workaround for https://github.com/actions/checkout/issues/290
+        run: git fetch --tags --force
+
+      - name: "Get release variables"
+        # RELEASE_VERSION assignment must match the command used in autoconf's
+        # configure.ac file. On update, care should be taken to maintain both
+        # sides congruent.
+        run: |
+          echo 'RELEASE_VERSION='$(git describe --always --tags --dirty) >> $GITHUB_ENV
+          echo 'GIT_URL='$(git remote get-url origin) >> $GITHUB_ENV
+          echo 'GIT_COMMIT='$(git log --pretty=format:'%H' -n 1) >> $GITHUB_ENV
+
+      - name: "Login to Docker registry"
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "Build Docker image"
+        run: |
+          set -x
+          docker build --rm \
+            --file docker/Dockerfile \
+            --build-arg HTSLIB_BRANCH=1.18 \
+            --platform linux/amd64 \
+            --progress plain \
+            --load \
+            --label "org.opencontainers.image.title=bambi" \
+            --label "org.opencontainers.image.source=${GIT_URL}" \
+            --label "org.opencontainers.image.revision=${GIT_COMMIT}" \
+            --label "org.opencontainers.image.version=${RELEASE_VERSION}" \
+            --label "org.opencontainers.image.created=$(date --utc --iso-8601=seconds)" \
+            --tag "ghcr.io/$REPOSITORY_OWNER/${IMAGE_NAME}:${RELEASE_VERSION}" \
+            --tag "ghcr.io/$REPOSITORY_OWNER/${IMAGE_NAME}:latest" \
+            .
+
+      - name: "Push image to registry"
+        run: |
+            docker push "ghcr.io/$REPOSITORY_OWNER/$IMAGE_NAME:$RELEASE_VERSION"
+            docker push "ghcr.io/$REPOSITORY_OWNER/$IMAGE_NAME:latest"
