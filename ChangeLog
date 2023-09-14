@@ -1,3 +1,6 @@
+  [0.17.1]
+  Add docker tooling and image publishing
+
   [0.17.0]
   Change the --nocall-quality option from an integer to boolean, and ensure it applies to QT tags.
 
