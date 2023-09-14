@@ -1,0 +1,52 @@
+name: "Lint and test-build Dockerfile"
+
+on:
+  push:
+    branches:
+      - '**'
+
+jobs:
+  lint-docker:
+    runs-on: ubuntu-latest
+
+    continue-on-error: true
+
+    defaults:
+      run:
+        shell: "bash -l -e -o pipefail {0}"
+
+    steps:
+      - name: "Checkout code"
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: "Lint Dockerfile"
+        run: |
+          cat <<EOT >> .hadolint.yaml
+          ignored:
+            - DL3008
+          EOT
+          docker run --rm -i -v /"${PWD}"/.hadolint.yaml:/.config/hadolint.yaml ghcr.io/hadolint/hadolint < docker/Dockerfile
+
+  build-docker:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: "bash -l -e -o pipefail {0}"
+
+    steps:
+      - name: "Checkout code"
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: "Docker build"
+        run: |
+          set -x
+          docker build --rm \
+            --file docker/Dockerfile \
+            --build-arg HTSLIB_BRANCH=1.18 \
+            --tag bambi .
+          docker run bambi bambi --version
