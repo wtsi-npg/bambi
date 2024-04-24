@@ -1,4 +1,4 @@
-FROM debian:bookworm AS htslib_build
+FROM debian:12.5 AS htslib_build
 
 ARG HTSLIB_BRANCH
 
@@ -28,7 +28,7 @@ RUN apt-get update && \
     make && \
     make install
 
-FROM debian:bookworm AS bambi_build
+FROM debian:12.5 AS bambi_build
 
 COPY --from=htslib_build /tmp/usr/local /usr/local
 COPY . /usr/local/src/bambi
@@ -60,7 +60,7 @@ RUN apt-get update && \
     make CPPFLAGS="-I$PREFIX/include" LDFLAGS="-L$PREFIX/lib" && \
     make install prefix="$PREFIX"
 
-FROM debian:bookworm AS bambi
+FROM debian:12.5 AS bambi
 
 COPY --from=htslib_build /tmp/usr/local /usr/local
 COPY --from=bambi_build /tmp/usr/local /usr/local
