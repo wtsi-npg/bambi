@@ -1,6 +1,6 @@
-/*  test/t_select.c -- select test cases.
+/*  test/t_read2tags.c -- select test cases.
 
-    Copyright (C) 2016 Genome Research Ltd.
+    Copyright (C) 2024 Genome Research Ltd.
 
     Author: Jennifer Liddle <js10@sanger.ac.uk>
 
@@ -51,11 +51,13 @@ void setup_test_1(int* argc, char*** argv, char *outputfile)
     *argc = 0;
     *argv = (char**)calloc(sizeof(char*), 100);
     (*argv)[(*argc)++] = strdup("bambi");
-    (*argv)[(*argc)++] = strdup("select");
+    (*argv)[(*argc)++] = strdup("read2tags");
     (*argv)[(*argc)++] = strdup("-i");
     (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/read2tags.sam"));
     (*argv)[(*argc)++] = strdup("-o");
     (*argv)[(*argc)++] = strdup(outputfile);
+    (*argv)[(*argc)++] = strdup("--output-fmt");
+    (*argv)[(*argc)++] = strdup("sam");
     (*argv)[(*argc)++] = strdup("-t");
     (*argv)[(*argc)++] = strdup("Ba");
     (*argv)[(*argc)++] = strdup("-q");
@@ -69,11 +71,13 @@ void setup_test_2(int* argc, char*** argv, char *outputfile)
     *argc = 0;
     *argv = (char**)calloc(sizeof(char*), 100);
     (*argv)[(*argc)++] = strdup("bambi");
-    (*argv)[(*argc)++] = strdup("select");
+    (*argv)[(*argc)++] = strdup("read2tags");
     (*argv)[(*argc)++] = strdup("-i");
     (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/read2tags.sam"));
     (*argv)[(*argc)++] = strdup("-o");
     (*argv)[(*argc)++] = strdup(outputfile);
+    (*argv)[(*argc)++] = strdup("--output-fmt");
+    (*argv)[(*argc)++] = strdup("sam");
     (*argv)[(*argc)++] = strdup("-t");
     (*argv)[(*argc)++] = strdup("Ba,Bb");
     (*argv)[(*argc)++] = strdup("-q");
@@ -87,11 +91,13 @@ void setup_test_3(int* argc, char*** argv, char *outputfile)
     *argc = 0;
     *argv = (char**)calloc(sizeof(char*), 100);
     (*argv)[(*argc)++] = strdup("bambi");
-    (*argv)[(*argc)++] = strdup("select");
+    (*argv)[(*argc)++] = strdup("read2tags");
     (*argv)[(*argc)++] = strdup("-i");
     (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/read2tags.sam"));
     (*argv)[(*argc)++] = strdup("-o");
     (*argv)[(*argc)++] = strdup(outputfile);
+    (*argv)[(*argc)++] = strdup("--output-fmt");
+    (*argv)[(*argc)++] = strdup("sam");
     (*argv)[(*argc)++] = strdup("-t");
     (*argv)[(*argc)++] = strdup("Ba");
     (*argv)[(*argc)++] = strdup("-q");
@@ -107,11 +113,13 @@ void setup_test_4(int* argc, char*** argv, char *outputfile)
     *argc = 0;
     *argv = (char**)calloc(sizeof(char*), 100);
     (*argv)[(*argc)++] = strdup("bambi");
-    (*argv)[(*argc)++] = strdup("select");
+    (*argv)[(*argc)++] = strdup("read2tags");
     (*argv)[(*argc)++] = strdup("-i");
     (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/read2tags.sam"));
     (*argv)[(*argc)++] = strdup("-o");
     (*argv)[(*argc)++] = strdup(outputfile);
+    (*argv)[(*argc)++] = strdup("--output-fmt");
+    (*argv)[(*argc)++] = strdup("sam");
     (*argv)[(*argc)++] = strdup("-t");
     (*argv)[(*argc)++] = strdup("Ba");
     (*argv)[(*argc)++] = strdup("-q");
@@ -127,11 +135,13 @@ void setup_test_5(int* argc, char*** argv, char *outputfile)
     *argc = 0;
     *argv = (char**)calloc(sizeof(char*), 100);
     (*argv)[(*argc)++] = strdup("bambi");
-    (*argv)[(*argc)++] = strdup("select");
+    (*argv)[(*argc)++] = strdup("read2tags");
     (*argv)[(*argc)++] = strdup("-i");
     (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/read2tags_5.sam"));
     (*argv)[(*argc)++] = strdup("-o");
     (*argv)[(*argc)++] = strdup(outputfile);
+    (*argv)[(*argc)++] = strdup("--output-fmt");
+    (*argv)[(*argc)++] = strdup("sam");
     (*argv)[(*argc)++] = strdup("-t");
     (*argv)[(*argc)++] = strdup("Ba");
     (*argv)[(*argc)++] = strdup("-q");
@@ -145,11 +155,13 @@ void setup_test_6(int* argc, char*** argv, char *outputfile)
     *argc = 0;
     *argv = (char**)calloc(sizeof(char*), 100);
     (*argv)[(*argc)++] = strdup("bambi");
-    (*argv)[(*argc)++] = strdup("select");
+    (*argv)[(*argc)++] = strdup("read2tags");
     (*argv)[(*argc)++] = strdup("-i");
     (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/read2tags.sam"));
     (*argv)[(*argc)++] = strdup("-o");
     (*argv)[(*argc)++] = strdup(outputfile);
+    (*argv)[(*argc)++] = strdup("--output-fmt");
+    (*argv)[(*argc)++] = strdup("sam");
     (*argv)[(*argc)++] = strdup("-t");
     (*argv)[(*argc)++] = strdup("Ba,Ba");
     (*argv)[(*argc)++] = strdup("-q");
@@ -163,11 +175,13 @@ void setup_test_7(int* argc, char*** argv, char *outputfile)
     *argc = 0;
     *argv = (char**)calloc(sizeof(char*), 100);
     (*argv)[(*argc)++] = strdup("bambi");
-    (*argv)[(*argc)++] = strdup("select");
+    (*argv)[(*argc)++] = strdup("read2tags");
     (*argv)[(*argc)++] = strdup("-i");
     (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/read2tags.sam"));
     (*argv)[(*argc)++] = strdup("-o");
     (*argv)[(*argc)++] = strdup(outputfile);
+    (*argv)[(*argc)++] = strdup("--output-fmt");
+    (*argv)[(*argc)++] = strdup("sam");
     (*argv)[(*argc)++] = strdup("-t");
     (*argv)[(*argc)++] = strdup("BC");
     (*argv)[(*argc)++] = strdup("-q");
@@ -182,11 +196,13 @@ void setup_test_8(int* argc, char*** argv, char *outputfile)
     *argc = 0;
     *argv = (char**)calloc(sizeof(char*), 100);
     (*argv)[(*argc)++] = strdup("bambi");
-    (*argv)[(*argc)++] = strdup("select");
+    (*argv)[(*argc)++] = strdup("read2tags");
     (*argv)[(*argc)++] = strdup("-i");
     (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/read2tags.sam"));
     (*argv)[(*argc)++] = strdup("-o");
     (*argv)[(*argc)++] = strdup(outputfile);
+    (*argv)[(*argc)++] = strdup("--output-fmt");
+    (*argv)[(*argc)++] = strdup("sam");
     (*argv)[(*argc)++] = strdup("-t");
     (*argv)[(*argc)++] = strdup("BC");
     (*argv)[(*argc)++] = strdup("-q");
@@ -201,11 +217,13 @@ void setup_test_9(int* argc, char*** argv, char *outputfile)
     *argc = 0;
     *argv = (char**)calloc(sizeof(char*), 100);
     (*argv)[(*argc)++] = strdup("bambi");
-    (*argv)[(*argc)++] = strdup("select");
+    (*argv)[(*argc)++] = strdup("read2tags");
     (*argv)[(*argc)++] = strdup("-i");
     (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/read2tags.sam"));
     (*argv)[(*argc)++] = strdup("-o");
     (*argv)[(*argc)++] = strdup(outputfile);
+    (*argv)[(*argc)++] = strdup("--output-fmt");
+    (*argv)[(*argc)++] = strdup("sam");
     (*argv)[(*argc)++] = strdup("-t");
     (*argv)[(*argc)++] = strdup("BC");
     (*argv)[(*argc)++] = strdup("-q");
@@ -224,11 +242,13 @@ void setup_test_10(int* argc, char*** argv, char *outputfile)
     *argc = 0;
     *argv = (char**)calloc(sizeof(char*), 100);
     (*argv)[(*argc)++] = strdup("bambi");
-    (*argv)[(*argc)++] = strdup("select");
+    (*argv)[(*argc)++] = strdup("read2tags");
     (*argv)[(*argc)++] = strdup("-i");
     (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/read2tags.sam"));
     (*argv)[(*argc)++] = strdup("-o");
     (*argv)[(*argc)++] = strdup(outputfile);
+    (*argv)[(*argc)++] = strdup("--output-fmt");
+    (*argv)[(*argc)++] = strdup("sam");
     (*argv)[(*argc)++] = strdup("-t");
     (*argv)[(*argc)++] = strdup("BC");
     (*argv)[(*argc)++] = strdup("-q");
@@ -242,35 +262,117 @@ void setup_test_10(int* argc, char*** argv, char *outputfile)
     (*argv)[(*argc)++] = strdup("--replace");
 }
 
+void setup_test_11(int* argc, char*** argv, char *outputfile)
+{
+    *argc = 0;
+    *argv = (char**)calloc(sizeof(char*), 100);
+    (*argv)[(*argc)++] = strdup("bambi");
+    (*argv)[(*argc)++] = strdup("read2tags");
+    (*argv)[(*argc)++] = strdup("-i");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/read2tags.sam"));
+    (*argv)[(*argc)++] = strdup("-o");
+    (*argv)[(*argc)++] = strdup(outputfile);
+    (*argv)[(*argc)++] = strdup("--output-fmt");
+    (*argv)[(*argc)++] = strdup("sam");
+    (*argv)[(*argc)++] = strdup("-t");
+    (*argv)[(*argc)++] = strdup("Ba");
+    (*argv)[(*argc)++] = strdup("-q");
+    (*argv)[(*argc)++] = strdup("Qa");
+    (*argv)[(*argc)++] = strdup("-p");
+    (*argv)[(*argc)++] = strdup("1:2:1:1");
+}
+
+void setup_test_12(int* argc, char*** argv, char *outputfile)
+{
+    *argc = 0;
+    *argv = (char**)calloc(sizeof(char*), 100);
+    (*argv)[(*argc)++] = strdup("bambi");
+    (*argv)[(*argc)++] = strdup("read2tags");
+    (*argv)[(*argc)++] = strdup("-i");
+    (*argv)[(*argc)++] = strdup(MKNAME(DATA_DIR,"/read2tags.sam"));
+    (*argv)[(*argc)++] = strdup("-o");
+    (*argv)[(*argc)++] = strdup(outputfile);
+    (*argv)[(*argc)++] = strdup("--output-fmt");
+    (*argv)[(*argc)++] = strdup("sam");
+    (*argv)[(*argc)++] = strdup("-t");
+    (*argv)[(*argc)++] = strdup("Ba");
+    (*argv)[(*argc)++] = strdup("-q");
+    (*argv)[(*argc)++] = strdup("Qa");
+    (*argv)[(*argc)++] = strdup("-p");
+    (*argv)[(*argc)++] = strdup("2:1:1:1");
+}
+
 void checkFiles(char *gotfile, char *expectfile, int verbose)
 {
     BAMit_t *bgot = BAMit_open(gotfile, 'r', NULL, 0, NULL);
     BAMit_t *bexp = BAMit_open(expectfile, 'r', NULL, 0, NULL);
-    bam1_t *got_rec, *exp_rec;
+   // bam1_t *got_rec, *exp_rec;
 
-    int c = sam_hdr_count_lines(bgot->h, "RG");
-    if (c != sam_hdr_count_lines(bexp->h, "RG")) { failure++; return; }
+    int f = failure;
 
-    for (int n=0; n < c; n++) {
+    int c1 = sam_hdr_count_lines(bgot->h, "RG");
+    int c2 = sam_hdr_count_lines(bexp->h, "RG");
+    if (c1 != c2) {
+        failure++; 
+        if (verbose) fprintf(stderr, "RG lines: expected %d, got %d\n", c2, c1);
+    }
+
+    for (int n=0; n < c1; n++) {
         kstring_t ks_got; ks_initialize(&ks_got);
         kstring_t ks_exp; ks_initialize(&ks_exp);
         sam_hdr_find_line_pos(bgot->h, "RG", n, &ks_got);
         sam_hdr_find_line_pos(bexp->h, "RG", n, &ks_exp);
-        if (strcmp(ks_str(&ks_got), ks_str(&ks_exp))) { failure++; return; }
-        ks_free(&ks_got); ks_free(&ks_exp);
-    }
-
-    while ((exp_rec = BAMit_next(bexp)) != NULL) {
-        got_rec = BAMit_next(bgot);
-        if (!got_rec) { fprintf(stderr, "%s ended too soon\n", gotfile); failure++; return; }
-        if (memcmp(got_rec->data, exp_rec->data, got_rec->l_data)) {
-            failure++;
-            break;
+        if (strcmp(ks_str(&ks_got), ks_str(&ks_exp))) { 
+            if (verbose) fprintf(stderr, "RG %d: expected %s, got %s\n", n, ks_str(&ks_exp), ks_str(&ks_got));
+            failure++; 
+            break; 
         }
+        ks_free(&ks_got); ks_free(&ks_exp);
     }
 
     BAMit_free(bexp);
     BAMit_free(bgot);
+
+    FILE *getfp = fopen(gotfile, "r");
+    FILE *expfp = fopen(expectfile, "r");
+    char getline[2048];
+    char expline[2048];
+
+    if (!getfp) {
+        fprintf(stderr, "Can't open file %s\n", gotfile);
+        exit(1);
+    }
+
+    if (!expfp) {
+        fprintf(stderr, "Can't open file %s\n", expectfile);
+        exit(1);
+    }
+
+    // skip header
+    while (fgets(getline, 2047, getfp) > 0) {
+        if (getline[0] != '@') break;
+    }
+    while (fgets(expline, 2047, expfp) > 0) {
+        if (expline[0] != '@') break;
+    }
+
+    // compare read records
+    while (true) {
+        if (strcmp(getline,expline) != 0) {
+            fprintf(stderr, "Expected: %sFound   : %s\n", expline, getline);
+            failure++;
+        }
+        if (fgets(getline, 2047, getfp) == 0) break;
+        if (fgets(expline, 2047, expfp) == 0) break;
+    }
+
+    fclose(getfp); fclose(expfp);
+
+    if (verbose) {
+        if (f == failure) fprintf(stderr, " :\tpass\n");
+        else              fprintf(stderr, " :\t*** FAIL ***\n");
+    }
+
     return;
 }
 
@@ -308,75 +410,100 @@ int main(int argc, char**argv)
     char outputfile[1024];
 
     // minimal options
-    sprintf(outputfile,"%s/read2tags_1.bam", TMPDIR);
+    if (verbose) fprintf(stderr,"Test 1: minimal options\n");
+    sprintf(outputfile,"%s/read2tags_1.sam", TMPDIR);
     setup_test_1(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
-    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_1.bam"),verbose);
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_1.sam"),verbose);
     free_args(argv_1);
 
     // overlapping reads
-    sprintf(outputfile,"%s/read2tags_2.bam", TMPDIR);
+    if (verbose) fprintf(stderr,"Test 2: Overlapping reads\n");
+    sprintf(outputfile,"%s/read2tags_2.sam", TMPDIR);
     setup_test_2(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
-    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_2.bam"),verbose);
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_2.sam"),verbose);
     free_args(argv_1);
 
     // remove first record
-    sprintf(outputfile,"%s/read2tags_3.bam", TMPDIR);
+    if (verbose) fprintf(stderr,"Test 3: remove first record\n");
+    sprintf(outputfile,"%s/read2tags_3.sam", TMPDIR);
     setup_test_3(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
-    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_3.bam"),verbose);
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_3.sam"),verbose);
     free_args(argv_1);
 
     // remove second record
-    sprintf(outputfile,"%s/read2tags_4.bam", TMPDIR);
+    if (verbose) fprintf(stderr,"Test 4: remove second record\n");
+    sprintf(outputfile,"%s/read2tags_4.sam", TMPDIR);
     setup_test_4(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
-    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_4.bam"),verbose);
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_4.sam"),verbose);
     free_args(argv_1);
 
     // handle single reads
-    sprintf(outputfile,"%s/read2tags_5.bam", TMPDIR);
+    if (verbose) fprintf(stderr,"Test 5: handle single reads\n");
+    sprintf(outputfile,"%s/read2tags_5.sam", TMPDIR);
     setup_test_5(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
-    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_5.bam"),verbose);
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_5.sam"),verbose);
     free_args(argv_1);
 
     // specify duplicate tags
-    sprintf(outputfile,"%s/read2tags_6.bam", TMPDIR);
+    if (verbose) fprintf(stderr,"Test 6: specify duplicate tags\n");
+    sprintf(outputfile,"%s/read2tags_6.sam", TMPDIR);
     setup_test_6(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
-    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_6.bam"),verbose);
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_6.sam"),verbose);
     free_args(argv_1);
 
     // use --replace option
-    sprintf(outputfile,"%s/read2tags_7.bam", TMPDIR);
+    if (verbose) fprintf(stderr,"Test 7: use --replace option\n");
+    sprintf(outputfile,"%s/read2tags_7.sam", TMPDIR);
     setup_test_7(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
-    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_7.bam"),verbose);
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_7.sam"),verbose);
     free_args(argv_1);
 
     // use --merge option
-    sprintf(outputfile,"%s/read2tags_8.bam", TMPDIR);
+    if (verbose) fprintf(stderr,"Test 8: use --merge option\n");
+    sprintf(outputfile,"%s/read2tags_8.sam", TMPDIR);
     setup_test_8(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
-    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_8.bam"),verbose);
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_8.sam"),verbose);
     free_args(argv_1);
 
     // use --merge option with duplicate tags
-    sprintf(outputfile,"%s/read2tags_9.bam", TMPDIR);
+    if (verbose) fprintf(stderr,"Test 9: use --merge option with duplicate tags\n");
+    sprintf(outputfile,"%s/read2tags_9.sam", TMPDIR);
     setup_test_9(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
-    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_9.bam"),verbose);
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_9.sam"),verbose);
     free_args(argv_1);
 
     // use --replace option with duplicate tags
-    sprintf(outputfile,"%s/read2tags_10.bam", TMPDIR);
+    if (verbose) fprintf(stderr,"Test 10: use --replace option with duplicate tags\n");
+    sprintf(outputfile,"%s/read2tags_10.sam", TMPDIR);
     setup_test_10(&argc_1, &argv_1, outputfile);
     main_read2tags(argc_1-1, argv_1+1);
-    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_10.bam"),verbose);
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_10.sam"),verbose);
     free_args(argv_1);
 
+    // write tags to read 2 from read 1
+    if (verbose) fprintf(stderr,"Test 11: write tags to read 2 from read 1\n");
+    sprintf(outputfile,"%s/read2tags_11.sam", TMPDIR);
+    setup_test_11(&argc_1, &argv_1, outputfile);
+    main_read2tags(argc_1-1, argv_1+1);
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_11.sam"),verbose);
+    free_args(argv_1);
+
+    // write tags to read 1 from read 2
+    if (verbose) fprintf(stderr,"Test 12: write tags to read 1 from read 2\n");
+    sprintf(outputfile,"%s/read2tags_12.sam", TMPDIR);
+    setup_test_12(&argc_1, &argv_1, outputfile);
+    main_read2tags(argc_1-1, argv_1+1);
+    checkFiles(outputfile,MKNAME(DATA_DIR,"/out/read2tags_12.sam"),verbose);
+    free_args(argv_1);
 
     printf("read2tags tests: %s\n", failure ? "FAILED" : "Passed");
     return failure ? EXIT_FAILURE : EXIT_SUCCESS;
