@@ -1,3 +1,7 @@
+  [0.18.0]
+  Updated to handle NanoSeq
+  Removed the dependency on samtools from the unit tests
+
   [0.17.1]
   Add docker tooling and image publishing
 
