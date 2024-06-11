@@ -16,6 +16,7 @@ jobs:
     - name: install libgd-dev and liblzma-dev
       run: |
           # https://github.com/actions/runner-images/issues/2139
+          sudo apt-get update
           sudo apt-get remove -y nginx libgd3
           sudo apt-get install -y libgd-dev liblzma-dev  libcurl4-openssl-dev
 

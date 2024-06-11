@@ -45,7 +45,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  * position record
  */
 typedef struct {
-    int record;
+    int record_from;
+    int record_to;
     int from;
     int to;
 } pos_t;
@@ -129,30 +130,61 @@ static int bam_aux_cmp(const uint8_t *s, const uint8_t *d)
 
 /*
  * Parse a comma separated list of positions
- * Format is r:s:e,r:s:e,r:s:e,...
+ * Format is rf:rt:s:e,...
+ *     or is r:s:e,...      if rf and rt are the same
+ *     or is s:e,...        if rf and rt are both zero
  *
- * where r is record number (0, 1 or 2 and is optional)
+ * where rf is record number to read (0, 1 or 2 and is optional)
+ *       rt is record number to write (0, 1 or 2 and is optional)
  *       s is the start position in the read string
  *       e is the end position in the read string
  * start and end positions are 1 (not zero) based
  */
-static void parse_positions(va_t *poslist, char *args)
+static void parse_positions(va_t *poslist, char *arg_string)
 {
-    char *argstr = strdup(args);
+    char *argstr = strdup(arg_string);
     char *save_s;
     char *s = strtok_r(argstr,",",&save_s);
     while (s) {
         pos_t *pos = calloc(1, sizeof(pos_t));
         char *save_p;
-        char *p = strtok_r(s,":",&save_p); if (p) pos->record = atoi(p);
-        p = strtok_r(NULL,":",&save_p); if (p) pos->from = atoi(p);
-        p = strtok_r(NULL,":",&save_p); if (p) pos->to = atoi(p);
-        if (!p) {
-            // looks like s:e format
-            pos->to = pos->from; pos->from = pos->record; pos->record = 0;
+        int n = 0;  // number of position arguments
+        int args[4];
+
+        char *p = strtok_r(s,":",&save_p); if (p) args[n++] = atoi(p);
+        p = strtok_r(NULL,":",&save_p); if (p) args[n++] = atoi(p);
+        p = strtok_r(NULL,":",&save_p); if (p) args[n++] = atoi(p);
+        p = strtok_r(NULL,":",&save_p); if (p) args[n++] = atoi(p);
+
+        switch (n) {
+            case 2:     // s:e
+                pos->record_from = 0;
+                pos->record_to = 0;
+                pos->from = args[0];
+                pos->to = args[1];
+                break;
+            case 3:     // r:s:e
+                pos->record_from = args[0];
+                pos->record_to = args[0];
+                pos->from = args[1];
+                pos->to = args[2];
+                break;
+            case 4:     // rf:rt:s:e
+                pos->record_from = args[0];
+                pos->record_to = args[1];
+                pos->from = args[2];
+                pos->to = args[3];
+                break;
+            default:
+                fprintf(stderr, "Invalid pos format: %s\n", arg_string);
+                exit(1);
         }
-        if (pos->record < 0 || pos->record > 2 || pos->from == 0 || pos->to == 0 || pos->from > pos->to) {
-            fprintf(stderr,"Invalid pos argument: %s\n", args);
+
+        if (pos->record_from < 0 || pos->record_from > 2 || 
+            pos->record_to < 0 || pos->record_to > 2 ||
+            pos->from == 0 || pos->to == 0 || 
+            pos->from > pos->to) {
+            fprintf(stderr,"Invalid pos argument: %s\n", arg_string);
             exit(1);
         }
         va_push(poslist,pos);
@@ -169,6 +201,8 @@ static void usage(FILE *write_to)
     fprintf(write_to,
 "Usage: bambi read2tags [options]\n"
 "\n"
+"Convert portions of a read into tags\n"
+"\n"
 "Options:\n"
 "  -i   --input                 BAM file to read [default: stdin]\n"
 "  -o   --output                BAM file to output [default: stdout]\n"
@@ -178,13 +212,25 @@ static void usage(FILE *write_to)
 "                               [default: " DEFAULT_KEEP_TAGS "]\n"
 "  -d   --discard-tags          comma separated list of tags to discard when merging records\n"
 "                               [default: " DEFAULT_DISCARD_TAGS "]\n"
-"  -p   --positions             comma separated list of positions\n"
+"  -p   --positions             comma separated list of positions (see below)\n"
 "  -m   --merge                 merge duplicate tags\n"
 "  -r   --replace               replace duplicate tags\n"
 "  -v   --verbose               verbose output\n"
 "       --input-fmt             [sam/bam/cram] [default: bam]\n"
 "       --output-fmt            [sam/bam/cram] [default: bam]\n"
 "       --compression-level     [0..9]\n"
+"\n"
+" comma separated list of positions, where each position has the format:\n"
+"  Format is rf:rt:s:e,...\n"
+"      or is r:s:e,...      if rf and rt are the same\n"
+"      or is s:e,...        if rf and rt are both zero\n"
+"\n"
+"  where rf is record number to read (0, 1 or 2 and is optional)\n"
+"        rt is record number to write (0, 1 or 2 and is optional)\n"
+"        s is the start position in the read string\n"
+"        e is the end position in the read string\n"
+"  start and end positions are 1 (not zero) based\n"
+"\n"
 );
 }
 
@@ -447,17 +493,25 @@ static void shuffle(char *s)
 /*
  * add a new tag to our taglist, or append to existing tag
  */
-static void add_or_update(va_t *va, char *tag, char *data)
+static void add_or_update(va_t *va, char *tag, char *data, int r)
 {
     int n;
+    char recno = r + '0';
+    char key[4];
+
+    key[0] = recno;
+    key[1] = tag[0];
+    key[2] = tag[1];
+    key[3] = 0;
+
     for (n=0; n < va->end; n++) {
-        if (strncmp(tag,va->entries[n],2) == 0) break;
+        if (strncmp(key,va->entries[n],3) == 0) break;
     }
 
     if (n == va->end) {
         // add new tag
-        char *e = calloc(1, strlen(tag) + 1 + strlen(data) + 1);
-        strcpy(e, tag);
+        char *e = calloc(1, strlen(key) + 1 + strlen(data) + 1);
+        strcpy(e, key);
         strcat(e, ":");
         strcat(e, data);
         va_push(va,e);
@@ -507,31 +561,43 @@ static void add_tag(bam1_t *rec, char *tag, char *data, opts_t *opts)
 }
 
 /*
- * Process one record
+ * Process records
  */
-static bam1_t *process_record(bam1_t *rec, opts_t *opts)
+static void process_records(bam1_t *rec1, bam1_t *rec2, bam1_t **newrec, bam1_t **newrec2,  opts_t *opts)
 {
     pos_t *pos;
-    int recno = -1;
-    char *tag_data = calloc(1, rec->core.l_qseq+1);
-    char *qtag_data = calloc(1, rec->core.l_qseq+1);
+    int readno1 = -1;
+    int readno2 = -1;
+    char *tag_data = calloc(1, rec1->core.l_qseq+1);
+    char *qtag_data = calloc(1, rec1->core.l_qseq+1);
     va_t *new_tags = va_init(10,free);
     va_t *new_qtags = va_init(10,free);
 
-    if (!(rec->core.flag & BAM_FPAIRED)) recno = 0;
-    if (rec->core.flag & BAM_FREAD1) recno = 1;
-    if (rec->core.flag & BAM_FREAD2) recno = 2;
+    if (!(rec1->core.flag & BAM_FPAIRED)) readno1 = 0;
+    if (rec1->core.flag & BAM_FREAD1) readno1 = 1;
+    if (rec1->core.flag & BAM_FREAD2) readno1 = 2;
 
-    char *seq = get_read(rec);
-    char *quality = get_quality(rec);
+    if (rec2) {
+    if (!(rec2->core.flag & BAM_FPAIRED)) readno2 = 0;
+    if (rec2->core.flag & BAM_FREAD1) readno2 = 1;
+    if (rec2->core.flag & BAM_FREAD2) readno2 = 2;
+    }
 
     /*
      * first pass - copy sections of read into tags
      */
     for (int n=0; n < opts->poslist->end; n++) {
         pos = opts->poslist->entries[n];
-        if (pos->record == recno) {
+        if ( (pos->record_from == readno1) || (pos->record_from == readno2) ) {
+            bam1_t *rec = NULL;
+            if (pos->record_from == readno1) rec = rec1;
+            if (pos->record_from == readno2) rec = rec2;
+
             if (pos->from <= rec->core.l_qseq) {
+                
+                char *seq = get_read(rec);
+                char *quality = get_quality(rec);
+
                 int from = (pos->from > rec->core.l_qseq) ? rec->core.l_qseq : pos->from;
                 int to = (pos->to > rec->core.l_qseq) ? rec->core.l_qseq : pos->to;
                 int len = to - from + 1;
@@ -539,52 +605,82 @@ static bam1_t *process_record(bam1_t *rec, opts_t *opts)
                 // copy data from read
                 memset(tag_data,0,rec->core.l_qseq+1);
                 memcpy(tag_data, seq + from - 1, len);
-                add_or_update(new_tags, opts->taglist->entries[n], tag_data);
+                add_or_update(new_tags, opts->taglist->entries[n], tag_data, pos->record_to);
 
                 // copy data from quality
                 memset(qtag_data,0,rec->core.l_qseq+1);
                 memcpy(qtag_data, quality + from - 1, len);
-                add_or_update(new_qtags, opts->qtaglist->entries[n], qtag_data);
+                add_or_update(new_qtags, opts->qtaglist->entries[n], qtag_data, pos->record_to);
 
+                free(seq); free(quality);
             }
         }
     }
 
     // add new tags
     for (int n=0; n < new_tags->end; n++) {
-        char *tag = new_tags->entries[n]; tag[2] = 0;
+        bam1_t *rec = NULL;
+        int readno = (*(char*)(new_tags->entries[n]) - '0');
+        char *tag = new_tags->entries[n]+1; tag[2] = 0;
         char *data = tag+3;
-        add_tag(rec, tag, data, opts);
+        if (readno == readno1) rec = rec1;
+        else                   rec = rec2;
+        if (rec) add_tag(rec, tag, data, opts);
     }
 
     // add new quality tags
     for (int n=0; n < new_qtags->end; n++) {
-        char *tag = new_qtags->entries[n]; tag[2] = 0;
+        bam1_t *rec = NULL;
+        int readno = (*(char*)(new_qtags->entries[n]) - '0');
+        char *tag = new_qtags->entries[n]+1; tag[2] = 0;
         char *data = tag+3;
-        add_tag(rec, tag, data, opts);
+        if (readno == readno1) rec = rec1;
+        else                   rec = rec2;
+        if (rec) add_tag(rec, tag, data, opts);
     }
 
     /*
      * second pass - mark sections of read as deleted
      */
+    char *seq = NULL;
+    char *quality = NULL;
+    char *seq1 = get_read(rec1);
+    char *quality1 = get_quality(rec1);
+    char *seq2 = rec2 ? get_read(rec2) : NULL;
+    char *quality2 = rec2 ? get_quality(rec2) : NULL;
+
     for (int n=0; n < opts->poslist->end; n++) {
+        bam1_t *rec = NULL;
         pos = opts->poslist->entries[n];
-        if (pos->record == recno) {
-            if (pos->from <= rec->core.l_qseq) {
-                int from = (pos->from > rec->core.l_qseq) ? rec->core.l_qseq : pos->from;
-                int to = (pos->to > rec->core.l_qseq) ? rec->core.l_qseq : pos->to;
-                int len = to - from + 1;
-                memset(seq + from - 1, 1, len);       // mark as deleted
-                memset(quality + from - 1, 1, len);   // mark as deleted
-            }
+        if (pos->record_from == readno1) { rec = rec1; seq = seq1; quality = quality1; }
+        if (pos->record_from == readno2) { rec = rec2; seq = seq2; quality = quality2; }
+
+        if (rec && (pos->from <= rec->core.l_qseq)) {
+            int from = (pos->from > rec->core.l_qseq) ? rec->core.l_qseq : pos->from;
+            int to = (pos->to > rec->core.l_qseq) ? rec->core.l_qseq : pos->to;
+            int len = to - from + 1;
+            memset(seq + from - 1, 1, len);       // mark as deleted
+            memset(quality + from - 1, 1, len);   // mark as deleted
         }
     }
-    shuffle(seq); shuffle(quality); // physically remove 'marked as deleted' bytes
-    bam1_t *newrec = make_new_rec(rec, seq, quality);
 
-    free(tag_data); free(qtag_data); free(quality); free(seq);
+    shuffle(seq1); shuffle(quality1); // physically remove 'marked as deleted' bytes
+    bam1_t *nr = make_new_rec(rec1, seq1, quality1);
+    *newrec = nr;
+    free(seq1); free(quality1);
+
+    if (rec2) {
+        shuffle(seq2); shuffle(quality2); // physically remove 'marked as deleted' bytes
+        nr = make_new_rec(rec2, seq2, quality2);
+        *newrec2 = nr;
+        free(seq2); free(quality2);
+    } else {
+        *newrec2 = NULL;
+    }
+
+    free(tag_data); free(qtag_data);
     va_free(new_tags); va_free(new_qtags);
-    return newrec;
+    return;
 }
 
 /*
@@ -712,10 +808,12 @@ static bam1_t *merge_records(bam1_t *r1, bam1_t *r2, opts_t *opts)
  */
 static int write_record(BAMit_t *bam, bam1_t *rec)
 {
-    int r = sam_write1(bam->f, bam->h, rec);
-    if (r < 0) {
-        fprintf(stderr,"sam_write1() failed\n");
-        return -1;
+    if (rec) {
+        int r = sam_write1(bam->f, bam->h, rec);
+        if (r < 0) {
+            fprintf(stderr,"sam_write1() failed\n");
+            return -1;
+        }
     }
     return 0;
 }
@@ -731,6 +829,10 @@ int process(opts_t* opts)
     int retcode = 0;
     int nrec = 0;
     int r;
+    bam1_t *newrec = NULL;
+    bam1_t *newrec2= NULL;
+    bam1_t *rec = NULL;
+    bam1_t *rec2 = NULL;
 
     BAMit_t *bam_in = BAMit_open(opts->in_file, 'r', opts->input_fmt, 0, NULL);
     BAMit_t *bam_out = BAMit_open(opts->out_file, 'w', opts->output_fmt, opts->compression_level, NULL);
@@ -745,28 +847,38 @@ int process(opts_t* opts)
     }
 
     while (BAMit_hasnext(bam_in)) {
-        bam1_t *rec = BAMit_next(bam_in);
-        if (invalid_record(rec,++nrec)) return -1;
-        bam1_t *newrec = process_record(rec,opts);
+        bam1_t *r = BAMit_next(bam_in);
+        if (invalid_record(r,++nrec)) return -1;
+        rec = bam_dup1(r);
 
-        bam1_t *rec2 = BAMit_peek(bam_in);
-        if (rec2 && strcmp(bam_get_qname(rec), bam_get_qname(rec2)) == 0) {
-            rec2 = BAMit_next(bam_in);
-            if (invalid_record(rec2,++nrec)) return -1;
-            bam1_t *newrec2 = process_record(rec2,opts);
-            if ((newrec->core.l_qseq == 0) || (newrec2->core.l_qseq == 0)) {
-                bam1_t *merged_rec = merge_records(newrec, newrec2, opts);
-                if (write_record(bam_out, merged_rec)) return -1;
-                bam_destroy1(merged_rec);
-            } else {
-                if (write_record(bam_out, newrec)) return -1;
-                if (write_record(bam_out, newrec2)) return -1;
-            }
-            bam_destroy1(newrec2);
+        r = BAMit_peek(bam_in);
+        if (r && strcmp(bam_get_qname(rec), bam_get_qname(r)) == 0) {
+            r = BAMit_next(bam_in);
+            if (invalid_record(r,++nrec)) return -1;
+            rec2 = bam_dup1(r);
         } else {
-            if (write_record(bam_out,newrec)) return -1;
+            rec2 = NULL;
         }
+
+        process_records(rec, rec2, &newrec, &newrec2, opts);
+
+        //newrec = process_record(rec,opts);
+        //newrec2 = NULL;
+        //if (rec2) newrec2 = process_record(rec2,opts);
+
+        if (newrec2 && ( (newrec->core.l_qseq == 0) || (newrec2->core.l_qseq == 0)) ) {
+            bam1_t *merged_rec = merge_records(newrec, newrec2, opts);
+            if (write_record(bam_out, merged_rec)) return -1;
+            bam_destroy1(merged_rec);
+        } else {
+            if (write_record(bam_out, newrec)) return -1;
+            if (write_record(bam_out, newrec2)) return -1;
+        }
+
+        bam_destroy1(rec);
+        bam_destroy1(rec2);
         bam_destroy1(newrec);
+        bam_destroy1(newrec2);
     }
 
     // tidy up after us
