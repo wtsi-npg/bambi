@@ -704,6 +704,7 @@ static void split_index(char *seq, size_t seq_len, int dual_tag, char **idx1_ptr
 /*
  * Read the barcode file into an array
  */
+#define BARCODEFILE_BSIZ 16384
 va_t *loadBarcodeFile(decode_opts_t *opts)
 {
     int lineno = 0;
@@ -724,8 +725,8 @@ va_t *loadBarcodeFile(decode_opts_t *opts)
         return NULL;
     }
     
-    char buf[8192];
-    size_t n = 8192;
+    char buf[BARCODEFILE_BSIZ];
+    size_t n = BARCODEFILE_BSIZ;
     lineno++;
     if (0 >= hgets(buf,n,fh)) {    // burn first line which is a header
         fprintf(stderr,"ERROR: problem reading barcode file\n");
