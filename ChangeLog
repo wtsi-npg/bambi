@@ -1,3 +1,9 @@
+
+  [0.18.1]
+  Increased BarcodeFile decode buffer to 16384 for long study descriptions
+  Added dependabot.yml to auto-update GitHub actions
+  Updated image labels
+
   [0.18.0]
   Updated to handle NanoSeq
   Removed the dependency on samtools from the unit tests
