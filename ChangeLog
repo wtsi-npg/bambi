@@ -1,4 +1,6 @@
 
+  [0.18.1]
+  Increased BarcodeFile decode buffer to 16384 for long study descriptions
   Added dependabot.yml to auto-update GitHub actions
   Updated image labels
 
